@@ -1,0 +1,37 @@
+# Environment
+.env
+.env.*
+!.env.example
+
+# Node / NestJS
+node_modules/
+dist/
+coverage/
+
+# Java
+target/
+.gradle/
+build/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# C#
+bin/
+obj/
+
+# IntelliJ
+.idea/
+
+# VS Code
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

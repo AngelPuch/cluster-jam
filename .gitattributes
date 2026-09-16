@@ -1,0 +1,11 @@
+# Automatically normalize text files
+* text=auto
+
+# Unix scripts must use LF
+*.sh text eol=lf
+*.bash text eol=lf
+
+# Windows scripts use CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
