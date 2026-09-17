@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { HealthModule } from './interfaces/http/health/health.module';
+import { DatabaseModule } from './infrastructure/database/typeorm.module';
 
 @Module({
     imports: [
@@ -8,6 +9,7 @@ import { HealthModule } from './interfaces/http/health/health.module';
             isGlobal: true,
         }),
         HealthModule,
+        DatabaseModule,
     ],
 })
 export class AppModule {}
