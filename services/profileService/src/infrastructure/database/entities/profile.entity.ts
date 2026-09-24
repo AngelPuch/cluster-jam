@@ -20,8 +20,9 @@ export class ProfileEntity {
     @Column({
         type: 'varchar',
         length: 120,
+        nullable: true,
     })
-    name!: string;
+    name!: string | null;
 
     @Column({
         type: 'varchar',
@@ -29,6 +30,20 @@ export class ProfileEntity {
         nullable: true,
     })
     phone!: string | null;
+
+    @Column({
+        name: 'contact_email',
+        type: 'varchar',
+        length: 254,
+    })
+    contactEmail!: string;
+
+    @Column({
+        name: 'onboarding_status',
+        type: 'text',
+        default: 'PENDING',
+    })
+    onboardingStatus!: 'PENDING' | 'COMPLETED';
 
     @CreateDateColumn({
         name: 'created_at',
