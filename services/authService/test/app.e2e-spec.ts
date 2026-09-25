@@ -1,29 +1,42 @@
-import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
+import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import { App } from 'supertest/types';
+
 import { AppModule } from './../src/app.module';
 
-describe('AppController (e2e)', () => {
-  let app: INestApplication<App>;
+describe('Health endpoints (e2e)', () => {
+    let app: INestApplication<App>;
 
-  beforeEach(async () => {
-    const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile();
+    beforeAll(async () => {
+        const moduleFixture: TestingModule = await Test.createTestingModule({
+            imports: [AppModule],
+        }).compile();
 
-    app = moduleFixture.createNestApplication();
-    await app.init();
-  });
+        app = moduleFixture.createNestApplication();
 
-  it('/ (GET)', () => {
-    return request(app.getHttpServer())
-      .get('/')
-      .expect(200)
-      .expect('Hello World!');
-  });
+        await app.init();
+    });
 
-  afterEach(async () => {
-    await app.close();
-  });
+    it('GET /health/live should return 200', async () => {
+        await request(app.getHttpServer())
+            .get('/health/live')
+            .expect(200)
+            .expect({
+                status: 'ok',
+            });
+    });
+
+    it('GET /health/ready should return 200', async () => {
+        await request(app.getHttpServer())
+            .get('/health/ready')
+            .expect(200)
+            .expect({
+                status: 'ok',
+            });
+    });
+
+    afterAll(async () => {
+        await app.close();
+    });
 });
