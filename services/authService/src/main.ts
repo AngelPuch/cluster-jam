@@ -20,7 +20,9 @@ async function bootstrap(): Promise<void> {
         }),
     );
 
-    app.setGlobalPrefix('api/v1');
+    app.setGlobalPrefix('api/v1', {
+        exclude: ['health/live', 'health/ready'],
+    });
 
     const port = configService.getOrThrow<number>('HTTP_PORT');
 
