@@ -1,28 +1,15 @@
-import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
-import helmet from 'helmet';
 
 import { AppModule } from './app.module';
+import { configureHttpApplication } from './interfaces/http/http.setup';
 
 async function bootstrap(): Promise<void> {
     const app = await NestFactory.create(AppModule);
 
+    configureHttpApplication(app);
+
     const configService = app.get(ConfigService);
-
-    app.use(helmet());
-
-    app.useGlobalPipes(
-        new ValidationPipe({
-            whitelist: true,
-            forbidNonWhitelisted: true,
-            transform: true,
-        }),
-    );
-
-    app.setGlobalPrefix('api/v1', {
-        exclude: ['health/live', 'health/ready'],
-    });
 
     const port = configService.getOrThrow<number>('HTTP_PORT');
 
