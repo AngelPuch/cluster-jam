@@ -5,6 +5,7 @@ import { APP_FILTER } from '@nestjs/core';
 import { environmentValidationSchema } from './infrastructure/config/environment.validation';
 import { ProblemDetailsFilter } from './interfaces/http/common/errors/problem-details.filter';
 import { HealthModule } from './interfaces/http/health/health.module';
+import { AuthModule } from './interfaces/http/auth/auth.module';
 
 @Module({
     imports: [
@@ -14,6 +15,7 @@ import { HealthModule } from './interfaces/http/health/health.module';
             validationSchema: environmentValidationSchema,
         }),
         HealthModule,
+        AuthModule,
     ],
     providers: [
         {
