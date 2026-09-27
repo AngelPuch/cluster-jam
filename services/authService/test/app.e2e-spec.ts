@@ -3,6 +3,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { OpenAPIObject } from '@nestjs/swagger';
 import request from 'supertest';
 import { App } from 'supertest/types';
+import { afterAll, beforeAll, describe, expect, it, jest } from '@jest/globals';
 
 import { AppModule } from './../src/app.module';
 import { configureHttpApplication } from './../src/interfaces/http/http.setup';
@@ -19,8 +20,11 @@ interface ProblemResponse {
 
 describe('Auth Service API foundation (e2e)', () => {
     let app: INestApplication<App>;
+    let fetchSpy: jest.SpiedFunction<typeof fetch>;
 
     beforeAll(async () => {
+        fetchSpy = jest.spyOn(globalThis, 'fetch');
+
         const moduleFixture: TestingModule = await Test.createTestingModule({
             imports: [AppModule],
         }).compile();
@@ -41,13 +45,41 @@ describe('Auth Service API foundation (e2e)', () => {
             });
     });
 
-    it('GET /health/ready should return 200', async () => {
+    it('GET /health/ready should return 200 when Supabase Auth is available', async () => {
+        fetchSpy.mockResolvedValueOnce(
+            new Response(null, {
+                status: 200,
+            }),
+        );
+
         await request(app.getHttpServer())
             .get('/health/ready')
             .expect(200)
             .expect({
                 status: 'ok',
             });
+    });
+
+    it('GET /health/ready should return 503 when Supabase Auth is unavailable', async () => {
+        fetchSpy.mockResolvedValueOnce(
+            new Response(null, {
+                status: 503,
+            }),
+        );
+
+        const response = await request(app.getHttpServer())
+            .get('/health/ready')
+            .expect(503)
+            .expect('Content-Type', /application\/problem\+json/);
+
+        expect(response.body).toEqual({
+            type: 'about:blank',
+            title: 'Service Unavailable',
+            status: 503,
+            detail: 'The service is temporarily unavailable.',
+            instance: '/health/ready',
+            code: 'SERVICE_UNAVAILABLE',
+        });
     });
 
     it('GET /docs should serve Swagger UI', async () => {
@@ -106,6 +138,7 @@ describe('Auth Service API foundation (e2e)', () => {
     });
 
     afterAll(async () => {
+        fetchSpy.mockRestore();
         await app.close();
     });
 });

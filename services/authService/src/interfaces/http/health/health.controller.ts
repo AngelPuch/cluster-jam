@@ -1,11 +1,14 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, ServiceUnavailableException } from '@nestjs/common';
 import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 
+import { ReadinessService } from '../../../application/health/readiness.service';
 import { HealthResponseDto } from './dto/health-response.dto';
 
 @ApiTags('Health')
 @Controller('health')
 export class HealthController {
+    constructor(private readonly readinessService: ReadinessService) {}
+
     @Get('live')
     @ApiOperation({
         summary: 'Check service liveness',
@@ -25,13 +28,19 @@ export class HealthController {
     @ApiOperation({
         summary: 'Check service readiness',
         description:
-            'Confirms that the Auth Service is ready to receive requests.',
+            'Confirms that the Auth Service can reach Supabase Auth and is ready to receive authentication requests.',
     })
     @ApiOkResponse({
         description: 'The Auth Service is ready.',
         type: HealthResponseDto,
     })
-    getReadiness(): HealthResponseDto {
+    async getReadiness(): Promise<HealthResponseDto> {
+        const isReady = await this.readinessService.isReady();
+
+        if (!isReady) {
+            throw new ServiceUnavailableException();
+        }
+
         return {
             status: 'ok',
         };
