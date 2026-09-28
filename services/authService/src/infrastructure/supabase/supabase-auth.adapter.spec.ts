@@ -10,12 +10,24 @@ import {
 } from '@jest/globals';
 
 import { AuthRegistrationFailure } from '../../application/auth/errors/auth-registration.error';
+import { AuthLoginFailure } from '../../application/auth/errors/auth-login.error';
 import { UserRegistrationStatus } from '../../application/ports/auth-provider.port';
 import { SupabaseAuthAdapter } from './supabase-auth.adapter';
 
 interface AuthClientForTest {
     auth: {
         signUp(credentials: { email: string; password: string }): Promise<{
+            data: {
+                user: User | null;
+                session: Session | null;
+            };
+            error: AuthError | null;
+        }>;
+
+        signInWithPassword(credentials: {
+            email: string;
+            password: string;
+        }): Promise<{
             data: {
                 user: User | null;
                 session: Session | null;
@@ -259,12 +271,205 @@ describe('SupabaseAuthAdapter', () => {
             failure: AuthRegistrationFailure.ProviderUnavailable,
         });
     });
+    it('should login a user and return the session tokens', async () => {
+        const adapter = new SupabaseAuthAdapter(configService);
+
+        const signInSpy = getSignInWithPasswordSpy(adapter);
+
+        signInSpy.mockResolvedValue({
+            data: {
+                user: createUser(1),
+                session: createSession(),
+            },
+            error: null,
+        });
+
+        await expect(
+            adapter.loginUser({
+                email: 'user@example.com',
+                password: 'StrongPassword123!',
+            }),
+        ).resolves.toEqual({
+            userId: '11111111-1111-4111-8111-111111111111',
+            email: 'user@example.com',
+            accessToken: 'access-token',
+            refreshToken: 'refresh-token',
+            expiresIn: 3600,
+            tokenType: 'bearer',
+        });
+
+        expect(signInSpy).toHaveBeenCalledWith({
+            email: 'user@example.com',
+            password: 'StrongPassword123!',
+        });
+    });
+
+    it('should translate invalid login credentials', async () => {
+        const adapter = new SupabaseAuthAdapter(configService);
+
+        const signInSpy = getSignInWithPasswordSpy(adapter);
+
+        signInSpy.mockResolvedValue({
+            data: {
+                user: null,
+                session: null,
+            },
+            error: createAuthError('invalid_credentials'),
+        });
+
+        await expect(
+            adapter.loginUser({
+                email: 'user@example.com',
+                password: 'WrongPassword!',
+            }),
+        ).rejects.toMatchObject({
+            failure: AuthLoginFailure.InvalidCredentials,
+        });
+    });
+
+    it('should translate an unconfirmed email error', async () => {
+        const adapter = new SupabaseAuthAdapter(configService);
+
+        const signInSpy = getSignInWithPasswordSpy(adapter);
+
+        signInSpy.mockResolvedValue({
+            data: {
+                user: null,
+                session: null,
+            },
+            error: createAuthError('email_not_confirmed'),
+        });
+
+        await expect(
+            adapter.loginUser({
+                email: 'user@example.com',
+                password: 'StrongPassword123!',
+            }),
+        ).rejects.toMatchObject({
+            failure: AuthLoginFailure.EmailNotConfirmed,
+        });
+    });
+
+    it('should translate invalid login data', async () => {
+        const adapter = new SupabaseAuthAdapter(configService);
+
+        const signInSpy = getSignInWithPasswordSpy(adapter);
+
+        signInSpy.mockResolvedValue({
+            data: {
+                user: null,
+                session: null,
+            },
+            error: createAuthError('validation_failed'),
+        });
+
+        await expect(
+            adapter.loginUser({
+                email: 'user@example.com',
+                password: 'StrongPassword123!',
+            }),
+        ).rejects.toMatchObject({
+            failure: AuthLoginFailure.InvalidRequest,
+        });
+    });
+
+    it('should translate a login rate limit error', async () => {
+        const adapter = new SupabaseAuthAdapter(configService);
+
+        const signInSpy = getSignInWithPasswordSpy(adapter);
+
+        signInSpy.mockResolvedValue({
+            data: {
+                user: null,
+                session: null,
+            },
+            error: createAuthError('over_request_rate_limit', 429),
+        });
+
+        await expect(
+            adapter.loginUser({
+                email: 'user@example.com',
+                password: 'StrongPassword123!',
+            }),
+        ).rejects.toMatchObject({
+            failure: AuthLoginFailure.RateLimited,
+        });
+    });
+
+    it('should translate login provider failures as unavailable', async () => {
+        const adapter = new SupabaseAuthAdapter(configService);
+
+        const signInSpy = getSignInWithPasswordSpy(adapter);
+
+        signInSpy.mockResolvedValue({
+            data: {
+                user: null,
+                session: null,
+            },
+            error: createAuthError('unexpected_failure', 500),
+        });
+
+        await expect(
+            adapter.loginUser({
+                email: 'user@example.com',
+                password: 'StrongPassword123!',
+            }),
+        ).rejects.toMatchObject({
+            failure: AuthLoginFailure.ProviderUnavailable,
+        });
+    });
+
+    it('should reject a login response without a session', async () => {
+        const adapter = new SupabaseAuthAdapter(configService);
+
+        const signInSpy = getSignInWithPasswordSpy(adapter);
+
+        signInSpy.mockResolvedValue({
+            data: {
+                user: createUser(1),
+                session: null,
+            },
+            error: null,
+        });
+
+        await expect(
+            adapter.loginUser({
+                email: 'user@example.com',
+                password: 'StrongPassword123!',
+            }),
+        ).rejects.toMatchObject({
+            failure: AuthLoginFailure.ProviderUnavailable,
+        });
+    });
+
+    it('should translate login network errors as unavailable', async () => {
+        const adapter = new SupabaseAuthAdapter(configService);
+
+        const signInSpy = getSignInWithPasswordSpy(adapter);
+
+        signInSpy.mockRejectedValue(new TypeError('Network error'));
+
+        await expect(
+            adapter.loginUser({
+                email: 'user@example.com',
+                password: 'StrongPassword123!',
+            }),
+        ).rejects.toMatchObject({
+            failure: AuthLoginFailure.ProviderUnavailable,
+        });
+    });
 });
 
 function getSignUpSpy(adapter: SupabaseAuthAdapter) {
     const client = Reflect.get(adapter, 'client') as AuthClientForTest;
 
     return jest.spyOn(client.auth, 'signUp');
+}
+
+function getSignInWithPasswordSpy(adapter: SupabaseAuthAdapter) {
+    const client = Reflect.get(adapter, 'client') as AuthClientForTest;
+
+    return jest.spyOn(client.auth, 'signInWithPassword');
 }
 
 function createUser(identityCount: number): User {
@@ -284,4 +489,14 @@ function createAuthError(code: string, status = 400): AuthError {
         status,
         code,
     } as AuthError;
+}
+
+function createSession(): Session {
+    return {
+        access_token: 'access-token',
+        refresh_token: 'refresh-token',
+        expires_in: 3600,
+        token_type: 'bearer',
+        user: createUser(1),
+    };
 }

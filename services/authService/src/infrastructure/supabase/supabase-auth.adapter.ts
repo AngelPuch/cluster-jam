@@ -3,11 +3,17 @@ import { ConfigService } from '@nestjs/config';
 import { createClient } from '@supabase/supabase-js';
 
 import {
+    AuthLoginError,
+    AuthLoginFailure,
+} from '../../application/auth/errors/auth-login.error';
+import {
     AuthRegistrationError,
     AuthRegistrationFailure,
 } from '../../application/auth/errors/auth-registration.error';
 import {
     type AuthProviderPort,
+    type LoginUserInput,
+    type LoginUserResult,
     type RegisterUserInput,
     type RegisterUserResult,
     UserRegistrationStatus,
@@ -87,6 +93,38 @@ export class SupabaseAuthAdapter implements AuthProviderPort {
                     : UserRegistrationStatus.Active,
         };
     }
+
+    async loginUser(input: LoginUserInput): Promise<LoginUserResult> {
+        try {
+            const { data, error } = await this.client.auth.signInWithPassword({
+                email: input.email,
+                password: input.password,
+            });
+
+            if (error) {
+                throw mapSupabaseLoginError(error);
+            }
+
+            if (!data.user || !data.session) {
+                throw new AuthLoginError(AuthLoginFailure.ProviderUnavailable);
+            }
+
+            return {
+                userId: data.user.id,
+                email: data.user.email ?? input.email,
+                accessToken: data.session.access_token,
+                refreshToken: data.session.refresh_token,
+                expiresIn: data.session.expires_in,
+                tokenType: data.session.token_type,
+            };
+        } catch (error) {
+            if (error instanceof AuthLoginError) {
+                throw error;
+            }
+
+            throw new AuthLoginError(AuthLoginFailure.ProviderUnavailable);
+        }
+    }
 }
 
 function mapSupabaseRegistrationError(error: {
@@ -133,5 +171,32 @@ function mapSupabaseRegistrationError(error: {
             return new AuthRegistrationError(
                 AuthRegistrationFailure.ProviderUnavailable,
             );
+    }
+}
+
+function mapSupabaseLoginError(error: { code?: string }): AuthLoginError {
+    switch (error.code) {
+        case 'invalid_credentials':
+        case 'user_not_found':
+        case 'user_banned':
+            return new AuthLoginError(AuthLoginFailure.InvalidCredentials);
+
+        case 'email_not_confirmed':
+            return new AuthLoginError(AuthLoginFailure.EmailNotConfirmed);
+
+        case 'email_address_invalid':
+        case 'validation_failed':
+            return new AuthLoginError(AuthLoginFailure.InvalidRequest);
+
+        case 'over_request_rate_limit':
+            return new AuthLoginError(AuthLoginFailure.RateLimited);
+
+        case 'email_provider_disabled':
+        case 'request_timeout':
+        case 'unexpected_failure':
+            return new AuthLoginError(AuthLoginFailure.ProviderUnavailable);
+
+        default:
+            return new AuthLoginError(AuthLoginFailure.ProviderUnavailable);
     }
 }

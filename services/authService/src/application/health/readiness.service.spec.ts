@@ -14,6 +14,8 @@ describe('ReadinessService', () => {
     beforeEach(async () => {
         authProvider = {
             isAvailable: jest.fn(),
+            registerUser: jest.fn(),
+            loginUser: jest.fn(),
         };
 
         const module: TestingModule = await Test.createTestingModule({
