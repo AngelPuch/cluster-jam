@@ -16,8 +16,24 @@ export interface RegisterUserResult {
     status: UserRegistrationStatus;
 }
 
+export interface LoginUserInput {
+    email: string;
+    password: string;
+}
+
+export interface LoginUserResult {
+    userId: string;
+    email: string;
+    accessToken: string;
+    refreshToken: string;
+    expiresIn: number;
+    tokenType: string;
+}
+
 export interface AuthProviderPort {
     isAvailable(): Promise<boolean>;
 
     registerUser(input: RegisterUserInput): Promise<RegisterUserResult>;
+
+    loginUser(input: LoginUserInput): Promise<LoginUserResult>;
 }
