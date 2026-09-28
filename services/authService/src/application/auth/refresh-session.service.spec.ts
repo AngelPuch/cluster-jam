@@ -1,15 +1,18 @@
-import { Test, TestingModule } from '@nestjs/testing';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { Test, TestingModule } from '@nestjs/testing';
 
 import {
     AUTH_PROVIDER_PORT,
     type AuthProviderPort,
 } from '../ports/auth-provider.port';
-import { AuthLoginError, AuthLoginFailure } from './errors/auth-login.error';
-import { LoginUserService } from './login-user.service';
+import {
+    AuthRefreshError,
+    AuthRefreshFailure,
+} from './errors/auth-refresh.error';
+import { RefreshSessionService } from './refresh-session.service';
 
-describe('LoginUserService', () => {
-    let service: LoginUserService;
+describe('RefreshSessionService', () => {
+    let service: RefreshSessionService;
     let authProvider: jest.Mocked<AuthProviderPort>;
 
     beforeEach(async () => {
@@ -22,7 +25,7 @@ describe('LoginUserService', () => {
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
-                LoginUserService,
+                RefreshSessionService,
                 {
                     provide: AUTH_PROVIDER_PORT,
                     useValue: authProvider,
@@ -30,42 +33,37 @@ describe('LoginUserService', () => {
             ],
         }).compile();
 
-        service = module.get<LoginUserService>(LoginUserService);
+        service = module.get<RefreshSessionService>(RefreshSessionService);
     });
 
-    it('should login a user through the auth provider', async () => {
-        const input = {
-            email: 'user@example.com',
-            password: 'StrongPassword123!',
-        };
-
+    it('renews a session through the provider', async () => {
+        const input = { refreshToken: 'old-refresh-token' };
         const result = {
             userId: '11111111-1111-4111-8111-111111111111',
             email: 'user@example.com',
-            accessToken: 'access-token',
-            refreshToken: 'refresh-token',
+            accessToken: 'new-access-token',
+            refreshToken: 'new-refresh-token',
             expiresIn: 3600,
             tokenType: 'bearer',
         };
 
-        authProvider.loginUser.mockResolvedValue(result);
+        authProvider.refreshSession.mockResolvedValue(result);
 
         await expect(service.execute(input)).resolves.toEqual(result);
 
         // eslint-disable-next-line @typescript-eslint/unbound-method
-        expect(authProvider.loginUser).toHaveBeenCalledWith(input);
+        expect(authProvider.refreshSession).toHaveBeenCalledWith(input);
     });
 
-    it('should propagate login failures from the auth provider', async () => {
-        const error = new AuthLoginError(AuthLoginFailure.InvalidCredentials);
+    it('propagates a provider failure', async () => {
+        const error = new AuthRefreshError(
+            AuthRefreshFailure.InvalidRefreshToken,
+        );
 
-        authProvider.loginUser.mockRejectedValue(error);
+        authProvider.refreshSession.mockRejectedValue(error);
 
         await expect(
-            service.execute({
-                email: 'user@example.com',
-                password: 'WrongPassword!',
-            }),
+            service.execute({ refreshToken: 'invalid-token' }),
         ).rejects.toBe(error);
     });
 });
