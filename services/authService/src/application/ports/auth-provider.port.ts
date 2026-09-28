@@ -30,10 +30,18 @@ export interface LoginUserResult {
     tokenType: string;
 }
 
+export interface RefreshSessionInput {
+    refreshToken: string;
+}
+
+export type RefreshSessionResult = LoginUserResult;
+
 export interface AuthProviderPort {
     isAvailable(): Promise<boolean>;
 
     registerUser(input: RegisterUserInput): Promise<RegisterUserResult>;
 
     loginUser(input: LoginUserInput): Promise<LoginUserResult>;
+
+    refreshSession(input: RefreshSessionInput): Promise<RefreshSessionResult>;
 }

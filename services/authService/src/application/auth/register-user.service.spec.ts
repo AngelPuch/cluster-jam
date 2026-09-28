@@ -21,6 +21,7 @@ describe('RegisterUserService', () => {
             isAvailable: jest.fn(),
             registerUser: jest.fn(),
             loginUser: jest.fn(),
+            refreshSession: jest.fn(),
         };
 
         const module: TestingModule = await Test.createTestingModule({

@@ -7,6 +7,10 @@ import {
     AuthLoginFailure,
 } from '../../application/auth/errors/auth-login.error';
 import {
+    AuthRefreshError,
+    AuthRefreshFailure,
+} from '../../application/auth/errors/auth-refresh.error';
+import {
     AuthRegistrationError,
     AuthRegistrationFailure,
 } from '../../application/auth/errors/auth-registration.error';
@@ -14,17 +18,27 @@ import {
     type AuthProviderPort,
     type LoginUserInput,
     type LoginUserResult,
+    type RefreshSessionInput,
+    type RefreshSessionResult,
     type RegisterUserInput,
     type RegisterUserResult,
     UserRegistrationStatus,
 } from '../../application/ports/auth-provider.port';
 
 const SUPABASE_HEALTH_TIMEOUT_MS = 2_000;
+const SUPABASE_REFRESH_TIMEOUT_MS = 5_000;
+
+const noSessionStorage = {
+    getItem: () => null,
+    setItem: () => undefined,
+    removeItem: () => undefined,
+};
 
 @Injectable()
 export class SupabaseAuthAdapter implements AuthProviderPort {
     private readonly client: ReturnType<typeof createClient>;
     private readonly healthUrl: string;
+    private readonly refreshUrl: string;
     private readonly publishableKey: string;
 
     constructor(private readonly configService: ConfigService) {
@@ -38,12 +52,17 @@ export class SupabaseAuthAdapter implements AuthProviderPort {
         this.client = createClient(supabaseUrl, this.publishableKey, {
             auth: {
                 autoRefreshToken: false,
-                persistSession: false,
+                persistSession: true,
                 detectSessionInUrl: false,
+                storage: noSessionStorage,
             },
         });
 
         this.healthUrl = new URL('/auth/v1/health', supabaseUrl).toString();
+        this.refreshUrl = new URL(
+            '/auth/v1/token?grant_type=refresh_token',
+            supabaseUrl,
+        ).toString();
     }
 
     async isAvailable(): Promise<boolean> {
@@ -125,6 +144,52 @@ export class SupabaseAuthAdapter implements AuthProviderPort {
             throw new AuthLoginError(AuthLoginFailure.ProviderUnavailable);
         }
     }
+
+    async refreshSession(
+        input: RefreshSessionInput,
+    ): Promise<RefreshSessionResult> {
+        try {
+            const response = await fetch(this.refreshUrl, {
+                method: 'POST',
+                headers: {
+                    apikey: this.publishableKey,
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json',
+                },
+                body: JSON.stringify({
+                    refresh_token: input.refreshToken,
+                }),
+                signal: AbortSignal.timeout(SUPABASE_REFRESH_TIMEOUT_MS),
+            });
+
+            const payload: unknown = await response.json();
+
+            if (!response.ok) {
+                throw mapSupabaseRefreshError(response.status, payload);
+            }
+
+            if (!isRefreshResponse(payload)) {
+                throw new AuthRefreshError(
+                    AuthRefreshFailure.ProviderUnavailable,
+                );
+            }
+
+            return {
+                userId: payload.user.id,
+                email: payload.user.email,
+                accessToken: payload.access_token,
+                refreshToken: payload.refresh_token,
+                expiresIn: payload.expires_in,
+                tokenType: payload.token_type,
+            };
+        } catch (error) {
+            if (error instanceof AuthRefreshError) {
+                throw error;
+            }
+
+            throw new AuthRefreshError(AuthRefreshFailure.ProviderUnavailable);
+        }
+    }
 }
 
 function mapSupabaseRegistrationError(error: {
@@ -199,4 +264,72 @@ function mapSupabaseLoginError(error: { code?: string }): AuthLoginError {
         default:
             return new AuthLoginError(AuthLoginFailure.ProviderUnavailable);
     }
+}
+
+function mapSupabaseRefreshError(
+    status: number,
+    payload: unknown,
+): AuthRefreshError {
+    const code =
+        isRecord(payload) && typeof payload.error_code === 'string'
+            ? payload.error_code
+            : undefined;
+
+    switch (code) {
+        case 'refresh_token_not_found':
+        case 'refresh_token_already_used':
+        case 'session_not_found':
+        case 'session_expired':
+        case 'invalid_credentials':
+        case 'user_not_found':
+        case 'user_banned':
+        case 'validation_failed':
+            return new AuthRefreshError(AuthRefreshFailure.InvalidRefreshToken);
+
+        case 'bad_json':
+            return new AuthRefreshError(AuthRefreshFailure.InvalidRequest);
+
+        case 'conflict':
+            return new AuthRefreshError(AuthRefreshFailure.ConcurrentRefresh);
+
+        case 'over_request_rate_limit':
+            return new AuthRefreshError(AuthRefreshFailure.RateLimited);
+    }
+
+    if (status === 429) {
+        return new AuthRefreshError(AuthRefreshFailure.RateLimited);
+    }
+
+    return new AuthRefreshError(AuthRefreshFailure.ProviderUnavailable);
+}
+
+function isRefreshResponse(value: unknown): value is {
+    user: { id: string; email: string };
+    access_token: string;
+    refresh_token: string;
+    expires_in: number;
+    token_type: string;
+} {
+    if (!isRecord(value) || !isRecord(value.user)) {
+        return false;
+    }
+
+    return (
+        isNonEmptyString(value.user.id) &&
+        isNonEmptyString(value.user.email) &&
+        isNonEmptyString(value.access_token) &&
+        isNonEmptyString(value.refresh_token) &&
+        typeof value.expires_in === 'number' &&
+        Number.isFinite(value.expires_in) &&
+        value.expires_in > 0 &&
+        isNonEmptyString(value.token_type)
+    );
+}
+
+function isNonEmptyString(value: unknown): value is string {
+    return typeof value === 'string' && value.length > 0;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
