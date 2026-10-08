@@ -21,6 +21,8 @@ describe('RefreshSessionService', () => {
             registerUser: jest.fn(),
             loginUser: jest.fn(),
             refreshSession: jest.fn(),
+            requestPasswordRecovery: jest.fn(),
+            recoverPassword: jest.fn(),
         };
 
         const module: TestingModule = await Test.createTestingModule({

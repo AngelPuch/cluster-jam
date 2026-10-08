@@ -36,6 +36,12 @@ export interface RefreshSessionInput {
 
 export type RefreshSessionResult = LoginUserResult;
 
+export interface RecoverPasswordInput {
+    email: string;
+    code: string;
+    newPassword: string;
+}
+
 export interface AuthProviderPort {
     isAvailable(): Promise<boolean>;
 
@@ -44,4 +50,8 @@ export interface AuthProviderPort {
     loginUser(input: LoginUserInput): Promise<LoginUserResult>;
 
     refreshSession(input: RefreshSessionInput): Promise<RefreshSessionResult>;
+
+    requestPasswordRecovery(email: string): Promise<void>;
+
+    recoverPassword(input: RecoverPasswordInput): Promise<void>;
 }

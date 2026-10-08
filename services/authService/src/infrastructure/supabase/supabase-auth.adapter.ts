@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createClient } from '@supabase/supabase-js';
+import { Logger } from '@nestjs/common';
 
 import {
     AuthLoginError,
@@ -15,6 +16,11 @@ import {
     AuthRegistrationFailure,
 } from '../../application/auth/errors/auth-registration.error';
 import {
+    PasswordRecoveryError,
+    PasswordRecoveryFailure,
+} from '../../application/auth/errors/password-recovery.error';
+import {
+    type RecoverPasswordInput,
     type AuthProviderPort,
     type LoginUserInput,
     type LoginUserResult,
@@ -27,6 +33,7 @@ import {
 
 const SUPABASE_HEALTH_TIMEOUT_MS = 2_000;
 const SUPABASE_REFRESH_TIMEOUT_MS = 5_000;
+const SUPABASE_RECOVERY_TIMEOUT_MS = 5_000;
 
 const noSessionStorage = {
     getItem: () => null,
@@ -36,6 +43,11 @@ const noSessionStorage = {
 
 @Injectable()
 export class SupabaseAuthAdapter implements AuthProviderPort {
+    private readonly logger = new Logger(SupabaseAuthAdapter.name);
+    private readonly recoveryRequestUrl: string;
+    private readonly recoveryVerifyUrl: string;
+    private readonly recoveryUserUrl: string;
+    private readonly recoveryLogoutUrl: string;
     private readonly client: ReturnType<typeof createClient>;
     private readonly healthUrl: string;
     private readonly refreshUrl: string;
@@ -61,6 +73,20 @@ export class SupabaseAuthAdapter implements AuthProviderPort {
         this.healthUrl = new URL('/auth/v1/health', supabaseUrl).toString();
         this.refreshUrl = new URL(
             '/auth/v1/token?grant_type=refresh_token',
+            supabaseUrl,
+        ).toString();
+
+        this.recoveryRequestUrl = new URL(
+            '/auth/v1/recover',
+            supabaseUrl,
+        ).toString();
+        this.recoveryVerifyUrl = new URL(
+            '/auth/v1/verify',
+            supabaseUrl,
+        ).toString();
+        this.recoveryUserUrl = new URL('/auth/v1/user', supabaseUrl).toString();
+        this.recoveryLogoutUrl = new URL(
+            '/auth/v1/logout?scope=local',
             supabaseUrl,
         ).toString();
     }
@@ -188,6 +214,104 @@ export class SupabaseAuthAdapter implements AuthProviderPort {
             }
 
             throw new AuthRefreshError(AuthRefreshFailure.ProviderUnavailable);
+        }
+    }
+
+    async requestPasswordRecovery(email: string): Promise<void> {
+        try {
+            const response = await fetch(this.recoveryRequestUrl, {
+                method: 'POST',
+                headers: this.recoveryHeaders(),
+                body: JSON.stringify({ email }),
+                signal: AbortSignal.timeout(SUPABASE_RECOVERY_TIMEOUT_MS),
+            });
+            if (!response.ok) {
+                this.logger.warn('Password recovery email dispatch failed.');
+            }
+        } catch {
+            this.logger.warn('Password recovery email dispatch failed.');
+        }
+    }
+
+    async recoverPassword(input: RecoverPasswordInput): Promise<void> {
+        let accessToken: string | undefined;
+
+        try {
+            const verification = await fetch(this.recoveryVerifyUrl, {
+                method: 'POST',
+                headers: this.recoveryHeaders(),
+                body: JSON.stringify({
+                    email: input.email,
+                    token: input.code,
+                    type: 'recovery',
+                }),
+                signal: AbortSignal.timeout(SUPABASE_RECOVERY_TIMEOUT_MS),
+            });
+
+            if (verification.status !== 200) {
+                throw await mapRecoveryResponse(verification, 'verify');
+            }
+
+            const session: unknown = await verification.json();
+            if (!isRecoverySession(session)) {
+                throw new PasswordRecoveryError(
+                    PasswordRecoveryFailure.ProviderUnavailable,
+                );
+            }
+
+            accessToken = session.access_token;
+            const update = await fetch(this.recoveryUserUrl, {
+                method: 'PUT',
+                headers: this.recoveryHeaders(accessToken),
+                body: JSON.stringify({ password: input.newPassword }),
+                signal: AbortSignal.timeout(SUPABASE_RECOVERY_TIMEOUT_MS),
+            });
+
+            if (update.status !== 200) {
+                throw await mapRecoveryResponse(update, 'update');
+            }
+
+            const user: unknown = await update.json();
+            if (!isRecord(user) || user.id !== session.user.id) {
+                throw new PasswordRecoveryError(
+                    PasswordRecoveryFailure.ProviderUnavailable,
+                );
+            }
+        } catch (error) {
+            if (error instanceof PasswordRecoveryError) {
+                throw error;
+            }
+            throw new PasswordRecoveryError(
+                PasswordRecoveryFailure.ProviderUnavailable,
+            );
+        } finally {
+            if (accessToken) {
+                await this.closeRecoverySession(accessToken);
+            }
+        }
+    }
+
+    private recoveryHeaders(accessToken?: string): Record<string, string> {
+        return {
+            apikey: this.publishableKey,
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+            ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        };
+    }
+
+    private async closeRecoverySession(accessToken: string): Promise<void> {
+        try {
+            const response = await fetch(this.recoveryLogoutUrl, {
+                method: 'POST',
+                headers: this.recoveryHeaders(accessToken),
+                signal: AbortSignal.timeout(SUPABASE_RECOVERY_TIMEOUT_MS),
+            });
+            if (!response.ok) {
+                this.logger.warn('Temporary recovery session cleanup failed.');
+            }
+        } catch {
+            this.logger.warn('Temporary recovery session cleanup failed.');
         }
     }
 }
@@ -332,4 +456,94 @@ function isNonEmptyString(value: unknown): value is string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+async function mapRecoveryResponse(
+    response: Response,
+    stage: 'verify' | 'update',
+): Promise<PasswordRecoveryError> {
+    let payload: unknown;
+    try {
+        payload = await response.json();
+    } catch {
+        payload = null;
+    }
+    const code = isRecord(payload)
+        ? typeof payload.code === 'string'
+            ? payload.code
+            : payload.error_code
+        : undefined;
+
+    if (response.status >= 500) {
+        return new PasswordRecoveryError(
+            PasswordRecoveryFailure.ProviderUnavailable,
+        );
+    }
+    if (response.status === 429 || code === 'over_request_rate_limit') {
+        return new PasswordRecoveryError(PasswordRecoveryFailure.RateLimited);
+    }
+
+    switch (code) {
+        case 'otp_expired':
+        case 'invalid_credentials':
+        case 'session_not_found':
+        case 'session_expired':
+        case 'user_not_found':
+        case 'bad_jwt':
+            return new PasswordRecoveryError(
+                PasswordRecoveryFailure.InvalidRecoveryCode,
+            );
+        case 'weak_password':
+            return new PasswordRecoveryError(
+                PasswordRecoveryFailure.WeakPassword,
+            );
+        case 'same_password':
+            return new PasswordRecoveryError(
+                PasswordRecoveryFailure.SamePassword,
+            );
+        case 'reauthentication_needed':
+        case 'reauthentication_not_valid':
+        case 'insufficient_aal':
+        case 'user_banned':
+            return new PasswordRecoveryError(
+                PasswordRecoveryFailure.RecoveryNotAllowed,
+            );
+        case 'validation_failed':
+            return new PasswordRecoveryError(
+                stage === 'verify'
+                    ? PasswordRecoveryFailure.InvalidRecoveryCode
+                    : PasswordRecoveryFailure.InvalidRequest,
+            );
+        case 'otp_disabled':
+        case 'email_provider_disabled':
+            return new PasswordRecoveryError(
+                PasswordRecoveryFailure.ProviderUnavailable,
+            );
+    }
+
+    if (
+        (stage === 'verify' && [400, 401, 403].includes(response.status)) ||
+        (stage === 'update' && response.status === 401)
+    ) {
+        return new PasswordRecoveryError(
+            PasswordRecoveryFailure.InvalidRecoveryCode,
+        );
+    }
+
+    return new PasswordRecoveryError(
+        PasswordRecoveryFailure.ProviderUnavailable,
+    );
+}
+
+function isRecoverySession(
+    value: unknown,
+): value is { access_token: string; user: { id: string } } {
+    return (
+        isRecord(value) &&
+        typeof value.access_token === 'string' &&
+        value.access_token.length > 0 &&
+        isRecord(value.user) &&
+        typeof value.user.id === 'string' &&
+        value.user.id.length > 0
+    );
 }
