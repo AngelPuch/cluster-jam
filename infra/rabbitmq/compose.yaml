@@ -1,0 +1,22 @@
+services:
+    rabbitmq:
+        image: rabbitmq:4.3.6-management@sha256:54cb013d76cd1fd6c0a0708f34062ad61c452bb6f016b434c6c33f1a765d2b58
+        hostname: clusterjam-rabbitmq
+        environment:
+            RABBITMQ_DEFAULT_USER: clusterjam
+            RABBITMQ_DEFAULT_PASS: local-development-only
+            RABBITMQ_DEFAULT_VHOST: clusterjam
+        ports:
+            - "127.0.0.1:5672:5672"
+            - "127.0.0.1:15672:15672"
+        volumes:
+            - rabbitmq-data:/var/lib/rabbitmq
+        healthcheck:
+            test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+            interval: 5s
+            timeout: 5s
+            retries: 12
+        restart: unless-stopped
+
+volumes:
+    rabbitmq-data:

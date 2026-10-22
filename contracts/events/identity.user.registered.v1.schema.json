@@ -1,0 +1,57 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "identity.user.registered.v1",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+        "eventId",
+        "eventType",
+        "schemaVersion",
+        "aggregateId",
+        "aggregateVersion",
+        "occurredAt",
+        "data"
+    ],
+    "properties": {
+        "eventId": {
+            "type": "string",
+            "format": "uuid"
+        },
+        "eventType": {
+            "const": "identity.user.registered"
+        },
+        "schemaVersion": {
+            "const": 1
+        },
+        "aggregateId": {
+            "type": "string",
+            "format": "uuid"
+        },
+        "aggregateVersion": {
+            "const": 1
+        },
+        "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+        },
+        "data": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "userId",
+                "initialContactEmail"
+            ],
+            "properties": {
+                "userId": {
+                    "type": "string",
+                    "format": "uuid"
+                },
+                "initialContactEmail": {
+                    "type": "string",
+                    "format": "email",
+                    "maxLength": 254
+                }
+            }
+        }
+    }
+}
