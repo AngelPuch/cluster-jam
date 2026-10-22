@@ -6,6 +6,7 @@ import { environmentValidationSchema } from './infrastructure/config/environment
 import { ProblemDetailsFilter } from './interfaces/http/common/errors/problem-details.filter';
 import { HealthModule } from './interfaces/http/health/health.module';
 import { AuthModule } from './interfaces/http/auth/auth.module';
+import { RegistrationEventsModule } from './infrastructure/outbox/registration-events.module';
 
 @Module({
     imports: [
@@ -16,6 +17,7 @@ import { AuthModule } from './interfaces/http/auth/auth.module';
         }),
         HealthModule,
         AuthModule,
+        RegistrationEventsModule,
     ],
     providers: [
         {
