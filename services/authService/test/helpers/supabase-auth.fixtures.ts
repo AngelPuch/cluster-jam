@@ -68,3 +68,29 @@ export function createSession(): Session {
         user: createUser(1),
     };
 }
+
+export const confirmationInput = {
+    email: 'user@example.com',
+    code: '012345',
+};
+
+export function confirmedSession(email = confirmationInput.email) {
+    return {
+        access_token: 'private-confirmation-access-token',
+        refresh_token: 'private-confirmation-refresh-token',
+        expires_in: 3600,
+        token_type: 'bearer',
+        user: {
+            id: '11111111-1111-4111-8111-111111111111',
+            email,
+            email_confirmed_at: '2026-10-22T12:00:00Z',
+        },
+    };
+}
+
+export function confirmationJson(status: number, body: unknown): Response {
+    return new Response(JSON.stringify(body), {
+        status,
+        headers: { 'Content-Type': 'application/json' },
+    });
+}

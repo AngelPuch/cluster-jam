@@ -11,6 +11,10 @@ import {
     UserRegistrationStatus,
 } from '../ports/auth-provider.port';
 import { RegisterUserService } from './register-user.service';
+import {
+    EmailConfirmationError,
+    EmailConfirmationFailure,
+} from './errors/email-confirmation.error';
 
 describe('RegisterUserService', () => {
     let service: RegisterUserService;
@@ -24,6 +28,8 @@ describe('RegisterUserService', () => {
             refreshSession: jest.fn(),
             requestPasswordRecovery: jest.fn(),
             recoverPassword: jest.fn(),
+            confirmEmail: jest.fn(),
+            resendEmailConfirmation: jest.fn(),
         };
 
         const module: TestingModule = await Test.createTestingModule({
@@ -72,5 +78,43 @@ describe('RegisterUserService', () => {
                 password: 'StrongPassword123!',
             }),
         ).rejects.toBe(error);
+    });
+
+    it('confirms the registration through the auth provider and preserves leading zeros', async () => {
+        const input = { email: 'user@example.com', code: '012345' };
+        const result = {
+            userId: '11111111-1111-4111-8111-111111111111',
+            email: input.email,
+            accessToken: 'access-token',
+            refreshToken: 'refresh-token',
+            expiresIn: 3600,
+            tokenType: 'bearer',
+        };
+        authProvider.confirmEmail.mockResolvedValue(result);
+        await expect(service.confirm(input)).resolves.toEqual(result);
+        expect(authProvider.confirmEmail.mock.calls).toEqual([[input]]);
+        expect(authProvider.registerUser.mock.calls).toEqual([]);
+        expect(authProvider.resendEmailConfirmation.mock.calls).toEqual([]);
+    });
+
+    it('propagates confirmation failures', async () => {
+        const error = new EmailConfirmationError(
+            EmailConfirmationFailure.InvalidCode,
+        );
+        authProvider.confirmEmail.mockRejectedValue(error);
+        await expect(
+            service.confirm({ email: 'user@example.com', code: '999999' }),
+        ).rejects.toBe(error);
+    });
+
+    it('requests another confirmation code using only the email', async () => {
+        const email = 'user@example.com';
+        authProvider.resendEmailConfirmation.mockResolvedValue(undefined);
+        await expect(service.resend(email)).resolves.toBeUndefined();
+        expect(authProvider.resendEmailConfirmation.mock.calls).toEqual([
+            [email],
+        ]);
+        expect(authProvider.registerUser.mock.calls).toEqual([]);
+        expect(authProvider.confirmEmail.mock.calls).toEqual([]);
     });
 });

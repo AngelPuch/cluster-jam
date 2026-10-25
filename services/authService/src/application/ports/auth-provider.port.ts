@@ -42,10 +42,19 @@ export interface RecoverPasswordInput {
     newPassword: string;
 }
 
+export interface ConfirmEmailInput {
+    email: string;
+    code: string;
+}
+
 export interface AuthProviderPort {
     isAvailable(): Promise<boolean>;
 
     registerUser(input: RegisterUserInput): Promise<RegisterUserResult>;
+
+    confirmEmail(input: ConfirmEmailInput): Promise<LoginUserResult>;
+
+    resendEmailConfirmation(email: string): Promise<void>;
 
     loginUser(input: LoginUserInput): Promise<LoginUserResult>;
 

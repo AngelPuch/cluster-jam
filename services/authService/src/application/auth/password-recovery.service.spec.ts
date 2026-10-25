@@ -32,6 +32,8 @@ describe('PasswordRecoveryService', () => {
                         refreshSession: jest.fn(),
                         requestPasswordRecovery: requestRecovery,
                         recoverPassword,
+                        confirmEmail: jest.fn(),
+                        resendEmailConfirmation: jest.fn(),
                     },
                 },
             ],
