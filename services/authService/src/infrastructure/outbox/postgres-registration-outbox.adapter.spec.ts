@@ -75,6 +75,27 @@ describe('PostgresRegistrationOutboxAdapter', () => {
     const update = queries.find((q) => q.sql.startsWith('UPDATE'));
     expect(update?.sql).toContain('proximo_intento_en = clock_timestamp()');
     expect(update?.sql).not.toContain('publicado_en =');
+    expect(update?.values).toEqual([row.id, 'REGISTRATION_PUBLICATION_NACK']);
+    expect(queries.at(-1)?.sql).toBe('COMMIT');
+  });
+
+  it('blocks invalid events without publishing or scheduling another automatic attempt', async () => {
+    const deliver = jest
+      .fn<() => Promise<void>>()
+      .mockRejectedValue(new RegistrationPublicationError('REGISTRATION_EVENT_INVALID'));
+
+    await expect(adapter.deliverNext(deliver)).resolves.toEqual({
+      status: 'blocked',
+      eventId: row.id,
+      code: 'REGISTRATION_EVENT_INVALID',
+    });
+    const selection = queries.find((q) => q.sql.startsWith('SELECT'));
+    expect(selection?.sql).toContain('AND bloqueado_en IS NULL');
+    const update = queries.find((q) => q.sql.startsWith('UPDATE'));
+    expect(update?.sql).toContain('bloqueado_en = clock_timestamp()');
+    expect(update?.sql).toContain('proximo_intento_en = NULL');
+    expect(update?.sql).not.toContain('publicado_en =');
+    expect(update?.values).toEqual([row.id, 'REGISTRATION_EVENT_INVALID']);
     expect(queries.at(-1)?.sql).toBe('COMMIT');
   });
 

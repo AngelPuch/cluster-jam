@@ -35,3 +35,15 @@ La operación conserva la restricción de administrador único. No es necesario 
 ## Publicador de outbox
 
 El proceso utiliza una cuenta SQL dedicada con el rol `auth_outbox_publisher`, limitado a lectura y actualización de las columnas técnicas autorizadas. No necesita permisos administrativos ni acceso a los datos de Profile. En entornos alojados se usa TLS con verificación del certificado.
+
+### Fallos y reproceso
+
+Un evento se considera publicado cuando `publicado_en` tiene valor. Si sigue sin publicar y `bloqueado_en` tiene valor, está apartado por `REGISTRATION_EVENT_INVALID` y no se selecciona automáticamente. Si ambas columnas están vacías, permanece pendiente y puede tener un próximo intento programado.
+
+Los fallos temporales del broker conservan el reintento progresivo. Un mensaje no enrutable también permanece pendiente; debe revisarse el binding de la cola. `ultimo_error_codigo` guarda únicamente un código técnico permitido, sin mensajes crudos ni datos del evento.
+
+El bloqueo genera `auth.outbox.event.blocked` con el `event_id`. El evento y sus intentos se conservan; no se marca como publicado ni se elimina. La cuarentena técnica pertenece a la outbox; no sustituye la DLQ del consumidor de Profile.
+
+Tras corregir la causa, se usa `operations/requeue-auth-outbox.sql` con el UUID concreto del evento. La operación solo reabre eventos bloqueados y no publicados, conservando su ID, datos e intentos. El publicador vuelve a validar el contenido; si sigue siendo inválido, lo bloquea de nuevo. El script no repara el contenido automáticamente.
+
+Aplicar la migración `20261025190000_quarantine_invalid_auth_outbox.sql` antes de ejecutar esta versión del publicador. Conserva las filas anteriores y añade las dos columnas técnicas, sus permisos y el índice de pendientes elegibles.
