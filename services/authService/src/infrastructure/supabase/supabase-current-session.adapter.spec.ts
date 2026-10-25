@@ -9,6 +9,7 @@ import {
 } from '@jest/globals';
 import { exportJWK, generateKeyPair, SignJWT } from 'jose';
 
+import { AppRole } from '../../application/auth/app-role';
 import { CurrentSessionFailure } from '../../application/auth/errors/current-session.error';
 import { SupabaseCurrentSessionAdapter } from './supabase-current-session.adapter';
 
@@ -24,11 +25,11 @@ const config = {
     },
 } as ConfigService;
 
-// A structurally valid HS256 token; Auth verifies its signature over HTTP.
 const token = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.signature';
 const user = {
     id: '11111111-1111-4111-8111-111111111111',
     email: 'user@example.com',
+    app_metadata: { app_role: AppRole.Client },
 };
 
 describe('SupabaseCurrentSessionAdapter', () => {
@@ -49,6 +50,7 @@ describe('SupabaseCurrentSessionAdapter', () => {
         await expect(adapter.getCurrentIdentity(token)).resolves.toEqual({
             userId: user.id,
             email: user.email,
+            appRole: AppRole.Client,
         });
         expect(fetchSpy).toHaveBeenCalledWith(
             'https://test-project.supabase.co/auth/v1/user',
@@ -117,6 +119,7 @@ describe('SupabaseCurrentSessionAdapter', () => {
         await expect(adapter.getCurrentIdentity(jwt)).resolves.toEqual({
             userId: user.id,
             email: user.email,
+            appRole: AppRole.Client,
         });
         expect(fetchSpy).toHaveBeenCalledTimes(2);
     });
@@ -171,6 +174,37 @@ describe('SupabaseCurrentSessionAdapter', () => {
                 failure,
             });
         }
+    });
+    it.each([undefined, {}, { app_role: 'owner' }, { app_role: null }])(
+        'rejects missing or invalid protected metadata even when user metadata claims administrator',
+        async (metadata) => {
+            fetchSpy.mockResolvedValue(
+                jsonResponse(200, {
+                    ...user,
+                    app_metadata: metadata,
+                    user_metadata: { app_role: AppRole.Administrator },
+                }),
+            );
+            await expect(
+                adapter.getCurrentIdentity(token),
+            ).rejects.toMatchObject({
+                failure: CurrentSessionFailure.InvalidAppRole,
+            });
+        },
+    );
+
+    it('returns administrator only from protected metadata', async () => {
+        fetchSpy.mockResolvedValue(
+            jsonResponse(200, {
+                ...user,
+                app_metadata: { app_role: AppRole.Administrator },
+            }),
+        );
+        await expect(adapter.getCurrentIdentity(token)).resolves.toEqual({
+            userId: user.id,
+            email: user.email,
+            appRole: AppRole.Administrator,
+        });
     });
 });
 

@@ -20,6 +20,7 @@ import {
     CURRENT_SESSION_PORT,
     type CurrentSessionPort,
 } from '../src/application/ports/current-session.port';
+import { AppRole } from '../src/application/auth/app-role';
 import { createTestApp } from './helpers/create-test-app';
 
 describe('Current session API (e2e)', () => {
@@ -43,6 +44,7 @@ describe('Current session API (e2e)', () => {
         const identity = {
             userId: '11111111-1111-4111-8111-111111111111',
             email: 'user@example.com',
+            appRole: AppRole.Client,
         };
         getSpy.mockResolvedValue(identity);
         const response = await request(app.getHttpServer())
@@ -134,9 +136,27 @@ describe('Current session API (e2e)', () => {
             expect(op?.responses['429']).toBeDefined();
             expect(op?.responses['503']).toBeDefined();
         }
+        const schema = doc.components?.schemas?.CurrentIdentityResponseDto;
         expect(
-            doc.components?.schemas?.CurrentIdentityResponseDto,
-        ).toBeDefined();
+            schema && 'properties' in schema
+                ? schema.properties?.appRole
+                : undefined,
+        ).toMatchObject({ enum: [AppRole.Client, AppRole.Administrator] });
+        const forbidden = path?.get?.responses['403'];
+        expect(
+            forbidden && 'content' in forbidden ? forbidden.content : undefined,
+        ).toHaveProperty('application/problem+json');
+    });
+
+    it('returns 403 for an identity without a valid application role', async () => {
+        getSpy.mockRejectedValueOnce(
+            new CurrentSessionError(CurrentSessionFailure.InvalidAppRole),
+        );
+        const response = await request(app.getHttpServer())
+            .get('/api/v1/sessions/current')
+            .set('Authorization', 'Bearer access-token')
+            .expect(403);
+        expect(response.body).toMatchObject({ code: 'INVALID_APP_ROLE' });
     });
 
     afterAll(async () => {
