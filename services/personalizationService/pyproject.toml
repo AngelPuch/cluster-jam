@@ -1,0 +1,85 @@
+[build-system]
+requires = ["hatchling==1.32.4"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cluster-jam-personalization-service"
+version = "0.1.0"
+description = "Cluster JAM image validation and personalization service"
+readme = "README.md"
+requires-python = ">=3.14,<3.15"
+dependencies = [
+    "alembic==1.20.1",
+    "fastapi==0.162.0",
+    "grpcio==1.84.1",
+    "httpx==0.28.1",
+    "pillow==13.0.0",
+    "psycopg[binary]==3.3.6",
+    "pydantic==2.14.1",
+    "pydantic-settings==2.16.1",
+    "pyjwt[crypto]==2.15.1",
+    "python-multipart==0.0.32",
+    "sqlalchemy==2.1.6",
+    "uvicorn==0.54.0",
+]
+
+[dependency-groups]
+dev = [
+    "grpcio-tools==1.84.1",
+    "mypy==2.4.0",
+    "pytest==9.1.1",
+    "pytest-cov==7.1.0",
+    "ruff==0.17.2",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/personalization"]
+
+[tool.uv]
+required-version = "==0.13.5"
+
+[tool.ruff]
+required-version = "==0.17.2"
+target-version = "py314"
+line-length = 79
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "N", "UP", "B", "ANN", "RUF"]
+
+[tool.ruff.lint.pycodestyle]
+max-doc-length = 72
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+files = ["src", "test"]
+plugins = ["pydantic.mypy"]
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
+
+[tool.pytest.ini_options]
+testpaths = ["test"]
+addopts = "--strict-config --strict-markers --import-mode=importlib"
+filterwarnings = ["error"]
+markers = [
+    "integration: tests against real infrastructure adapters",
+    "e2e: tests through a service entry point",
+    "contract: tests for versioned service contracts",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["personalization"]
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true
