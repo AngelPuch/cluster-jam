@@ -2,6 +2,7 @@
 
 import json
 import subprocess
+import textwrap
 from pathlib import Path
 from uuid import uuid4
 
@@ -16,6 +17,120 @@ def run_command(arguments: list[str], *, capture: bool = False) -> str:
         timeout=900,
     )
     return result.stdout.strip() if capture else ""
+
+
+def request_http(compose: list[str], path: str) -> dict[str, object]:
+    """Probe HTTP inside the container without publishing ports."""
+    script = textwrap.dedent("""
+        import json
+        import sys
+        import httpx
+        response = httpx.get(
+            'http://127.0.0.1:8080' + sys.argv[1],
+            timeout=10, trust_env=False,
+            headers={
+                'traceparent':
+                '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01',
+                'Authorization': 'Bearer private-test-token',
+            },
+        )
+        print(json.dumps({
+            'status': response.status_code,
+            'headers': dict(response.headers),
+            'body': response.json(),
+        }))
+    """)
+    payload = json.loads(
+        run_command(
+            [
+                *compose,
+                "exec",
+                "--no-TTY",
+                "personalization",
+                "python",
+                "-c",
+                script,
+                path,
+            ],
+            capture=True,
+        )
+    )
+    if not isinstance(payload, dict):
+        raise RuntimeError("The HTTP probe must return a JSON object")
+    return payload
+
+
+def verify_http(compose: list[str]) -> None:
+    """Check HTTP contracts, outage recovery, and log privacy."""
+    if request_http(compose, "/health/live")["status"] != 200:
+        raise RuntimeError("The HTTP process is not live")
+    if request_http(compose, "/health/ready")["status"] != 200:
+        raise RuntimeError("The HTTP process cannot access its database")
+    problem = request_http(compose, "/api/v1/missing?token=private-query")
+    body = problem["body"]
+    headers = problem["headers"]
+    if not isinstance(body, dict) or not isinstance(headers, dict):
+        raise RuntimeError("The problem contract has an invalid shape")
+    if problem["status"] != 404 or body["code"] != "NOT_FOUND":
+        raise RuntimeError("Unknown resources must return a problem response")
+    if headers["content-type"] != "application/problem+json":
+        raise RuntimeError("The problem response has an incorrect media type")
+    if body["traceId"] != "4bf92f3577b34da6a3ce929d0e0e4736":
+        raise RuntimeError("The incoming trace was not propagated")
+    contract = request_http(compose, "/openapi.json")
+    document = contract["body"]
+    if (
+        not isinstance(document, dict)
+        or "/health/live" not in document["paths"]
+    ):
+        raise RuntimeError("The real API must expose its OpenAPI contract")
+    run_command([*compose, "stop", "db-personalizacion"])
+    if request_http(compose, "/health/live")["status"] != 200:
+        raise RuntimeError("A database outage must not fail liveness")
+    if request_http(compose, "/health/ready")["status"] != 503:
+        raise RuntimeError("A database outage must fail readiness")
+    run_command(
+        [
+            *compose,
+            "up",
+            "--detach",
+            "--wait",
+            "--wait-timeout",
+            "120",
+            "db-personalizacion",
+        ]
+    )
+    if request_http(compose, "/health/ready")["status"] != 200:
+        raise RuntimeError("Readiness must recover after the database returns")
+    logs = run_command(
+        [
+            *compose,
+            "logs",
+            "--no-color",
+            "--no-log-prefix",
+            "personalization",
+        ],
+        capture=True,
+    )
+    if "private-query" in logs or "private-test-token" in logs:
+        raise RuntimeError("Request credentials appeared in application logs")
+    events = [json.loads(line) for line in logs.splitlines() if line.strip()]
+    for event in events:
+        for field in (
+            "timestamp",
+            "level",
+            "service_name",
+            "service_version",
+            "environment",
+            "instance_id",
+            "event",
+            "message",
+            "trace_id",
+            "span_id",
+        ):
+            if field not in event:
+                raise RuntimeError("An application log field is missing")
+    print("HTTP, OpenAPI, readiness recovery, and JSON log checks passed")
 
 
 def verify_stack() -> None:
@@ -50,6 +165,7 @@ def verify_stack() -> None:
                 "--wait-timeout",
                 "120",
                 "db-personalizacion",
+                "personalization",
             ]
         )
         run_command(
@@ -61,6 +177,7 @@ def verify_stack() -> None:
                 "personalization-check",
             ]
         )
+        verify_http(compose)
         user_id = run_command(
             [
                 *compose,

@@ -1,5 +1,39 @@
 name: cluster-jam-personalization
 
+x-personalization-service: &personalization-service
+    image: cluster-jam/personalization:${PERSONALIZATION_IMAGE_TAG:-0.1.0-local}
+    build:
+        context: ../../services/personalizationService
+        target: runtime
+        args:
+            VCS_REF: ${PERSONALIZATION_GIT_SHA:-local}
+    environment:
+        APP_ENV: development
+        HTTP_HOST: 0.0.0.0
+        HTTP_PORT: "8080"
+        GRPC_PORT: "50051"
+        LOG_LEVEL: INFO
+        DB_HOST: db-personalizacion
+        DB_PORT: "5432"
+        DB_NAME: personalizacion_db
+        DB_USER: app_personalizacion
+        DB_SCHEMA: app
+        DB_CONNECT_TIMEOUT_SECONDS: "5"
+        DB_PASSWORD_FILE: /run/secrets/personalization_db_password
+    secrets:
+        - personalization_db_password
+    networks:
+        - personalization-db
+    depends_on:
+        db-personalizacion:
+            condition: service_healthy
+    read_only: true
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 256m
+    cpus: 1.0
+    pids_limit: 64
+
 services:
     db-personalizacion:
         image: postgres:17.11-bookworm@sha256:858bb5e98eed02eb8cafbcdc007f9a65d1b613972028944a8ec2133ccaf80d27
@@ -28,44 +62,37 @@ services:
         cpus: 1.0
         pids_limit: 128
 
-    personalization-check:
-        profiles: ["tools"]
-        image: cluster-jam/personalization:${PERSONALIZATION_IMAGE_TAG:-0.1.0-local}
-        build:
-            context: ../../services/personalizationService
-            target: runtime
-            args:
-                VCS_REF: ${PERSONALIZATION_GIT_SHA:-local}
-        environment:
-            APP_ENV: development
-            HTTP_PORT: "8080"
-            GRPC_PORT: "50051"
-            LOG_LEVEL: INFO
-            DB_HOST: db-personalizacion
-            DB_PORT: "5432"
-            DB_NAME: personalizacion_db
-            DB_USER: app_personalizacion
-            DB_SCHEMA: app
-            DB_CONNECT_TIMEOUT_SECONDS: "5"
-            DB_PASSWORD_FILE: /run/secrets/personalization_db_password
-        secrets:
-            - personalization_db_password
+    personalization:
+        <<: *personalization-service
         networks:
             - personalization-db
-        depends_on:
-            db-personalizacion:
-                condition: service_healthy
+            - backend
+        init: true
+        restart: unless-stopped
+        stop_grace_period: 20s
+        healthcheck:
+            test:
+                - CMD
+                - python
+                - -c
+                - >-
+                  import urllib.request;
+                  urllib.request.urlopen('http://127.0.0.1:8080/health/live', timeout=2).close()
+            interval: 10s
+            timeout: 3s
+            start_period: 10s
+            retries: 3
+
+    personalization-check:
+        <<: *personalization-service
+        profiles: ["tools"]
+        command: ["python", "-m", "personalization.infrastructure.database.check"]
         restart: "no"
-        read_only: true
-        cap_drop: ["ALL"]
-        security_opt: ["no-new-privileges:true"]
-        mem_limit: 256m
-        cpus: 1.0
-        pids_limit: 64
 
 networks:
     personalization-db:
         internal: true
+    backend:
 
 volumes:
     personalization-data:

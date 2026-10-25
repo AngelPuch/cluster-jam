@@ -5,6 +5,7 @@ on:
         paths:
             - "services/personalizationService/**"
             - "infra/personalization/**"
+            - "contracts/openapi/personalization/**"
             - ".github/workflows/personalization-ci.yml"
             - ".editorconfig"
             - ".gitattributes"
@@ -13,6 +14,7 @@ on:
         paths:
             - "services/personalizationService/**"
             - "infra/personalization/**"
+            - "contracts/openapi/personalization/**"
             - ".github/workflows/personalization-ci.yml"
             - ".editorconfig"
             - ".gitattributes"
@@ -59,6 +61,12 @@ jobs:
               run: python -m uv run --locked mypy ../../infra/personalization
             - name: Run tests
               run: python -m uv run --locked pytest
+            - name: Verify versioned OpenAPI contract
+              run: >-
+                  python -m uv run --locked python -m
+                  personalization.interfaces.http.export_openapi
+                  --check --output
+                  ../../contracts/openapi/personalization/v1/openapi.json
             - name: Build package
               run: python -m uv build --no-sources
 

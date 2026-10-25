@@ -1,0 +1,4 @@
+services:
+    personalization:
+        ports:
+            - "127.0.0.1:${PERSONALIZATION_HTTP_PORT:-8082}:8080"

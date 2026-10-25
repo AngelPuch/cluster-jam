@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     app_env: Literal["development", "test", "production"] = Field(
         validation_alias="APP_ENV"
     )
+    http_host: Literal["127.0.0.1", "0.0.0.0"] = Field(
+        default="127.0.0.1", validation_alias="HTTP_HOST"
+    )
     http_port: int = Field(
         default=8080, gt=0, le=65535, validation_alias="HTTP_PORT"
     )
