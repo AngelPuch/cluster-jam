@@ -27,6 +27,8 @@ export class PublishRegistrationEventsService {
     shouldStop: () => boolean = () => false,
   ): Promise<{ published: number; retried: number }> {
     const counts = { published: 0, retried: 0 };
+    let blocked = 0;
+    const retryCodes = new Set<string>();
     for (let index = 0; index < limit && !shouldStop(); index += 1) {
       const result = await this.outbox.deliverNext(async (record) => {
         const event = createRegistrationEvent(record);
@@ -34,19 +36,31 @@ export class PublishRegistrationEventsService {
         await this.publisher.publish(event, traceparent);
       });
       if (result.status === 'empty') break;
+      if (result.status === 'blocked') {
+        blocked += 1;
+        this.logger.error({
+          event: 'auth.outbox.event.blocked',
+          event_id: result.eventId,
+          code: result.code,
+        });
+        continue;
+      }
       if (result.status === 'published') counts.published += 1;
       else {
         counts.retried += 1;
+        retryCodes.add(result.code);
         this.logger.debug({
           event: 'auth.outbox.delivery.retry',
           code: result.code,
         });
       }
     }
-    if (counts.retried > 0) {
+    if (counts.retried > 0 || blocked > 0) {
       this.logger.warn({
         event: 'auth.outbox.batch.completed',
         ...counts,
+        blocked,
+        codes: [...retryCodes],
       });
     } else if (counts.published > 0) {
       this.logger.log({

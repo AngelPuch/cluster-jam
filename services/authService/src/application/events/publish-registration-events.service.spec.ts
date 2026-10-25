@@ -65,4 +65,34 @@ describe('PublishRegistrationEventsService', () => {
     ).resolves.toEqual({ published: 0, retried: 0 });
     expect(deliverNext).not.toHaveBeenCalled();
   });
+
+  it('reports a blocked event safely and continues with the next available event', async () => {
+    const error = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    const publish = jest.fn<RegistrationEventPublisherPort['publish']>();
+    const deliverNext = jest
+      .fn<RegistrationOutboxPort['deliverNext']>()
+      .mockResolvedValueOnce({
+        status: 'blocked',
+        eventId: record.id,
+        code: 'REGISTRATION_EVENT_INVALID',
+      })
+      .mockImplementationOnce(async (deliver) => {
+        await deliver(record);
+        return { status: 'published' };
+      })
+      .mockResolvedValue({ status: 'empty' });
+
+    await expect(
+      new PublishRegistrationEventsService({ deliverNext }, { publish }).execute(),
+    ).resolves.toEqual({ published: 1, retried: 0 });
+    expect(publish).toHaveBeenCalledTimes(1);
+    expect(deliverNext).toHaveBeenCalledTimes(3);
+    expect(error).toHaveBeenCalledWith({
+      event: 'auth.outbox.event.blocked',
+      event_id: record.id,
+      code: 'REGISTRATION_EVENT_INVALID',
+    });
+    expect(JSON.stringify(error.mock.calls)).not.toContain('private@example.com');
+  });
 });
