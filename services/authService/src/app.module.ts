@@ -9,21 +9,21 @@ import { AuthModule } from './interfaces/http/auth/auth.module';
 import { RegistrationEventsModule } from './infrastructure/outbox/registration-events.module';
 
 @Module({
-    imports: [
-        ConfigModule.forRoot({
-            isGlobal: true,
-            cache: true,
-            validationSchema: environmentValidationSchema,
-        }),
-        HealthModule,
-        AuthModule,
-        RegistrationEventsModule,
-    ],
-    providers: [
-        {
-            provide: APP_FILTER,
-            useClass: ProblemDetailsFilter,
-        },
-    ],
+  imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      cache: true,
+      validationSchema: environmentValidationSchema,
+    }),
+    HealthModule,
+    AuthModule,
+    RegistrationEventsModule,
+  ],
+  providers: [
+    {
+      provide: APP_FILTER,
+      useClass: ProblemDetailsFilter,
+    },
+  ],
 })
 export class AppModule {}

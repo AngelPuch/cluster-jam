@@ -6,13 +6,13 @@ import { AppModule } from '../../src/app.module';
 import { configureHttpApplication } from '../../src/interfaces/http/http.setup';
 
 export async function createTestApp(): Promise<INestApplication<App>> {
-    const moduleFixture = await Test.createTestingModule({
-        imports: [AppModule],
-    }).compile();
+  const moduleFixture = await Test.createTestingModule({
+    imports: [AppModule],
+  }).compile();
 
-    const app = moduleFixture.createNestApplication();
-    configureHttpApplication(app);
-    await app.init();
+  const app = moduleFixture.createNestApplication();
+  configureHttpApplication(app);
+  await app.init();
 
-    return app;
+  return app;
 }

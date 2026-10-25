@@ -2,687 +2,614 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createClient } from '@supabase/supabase-js';
 
+import { AuthLoginError, AuthLoginFailure } from '../../application/auth/errors/auth-login.error';
 import {
-    AuthLoginError,
-    AuthLoginFailure,
-} from '../../application/auth/errors/auth-login.error';
-import {
-    AuthRefreshError,
-    AuthRefreshFailure,
+  AuthRefreshError,
+  AuthRefreshFailure,
 } from '../../application/auth/errors/auth-refresh.error';
 import {
-    AuthRegistrationError,
-    AuthRegistrationFailure,
+  AuthRegistrationError,
+  AuthRegistrationFailure,
 } from '../../application/auth/errors/auth-registration.error';
 import {
-    PasswordRecoveryError,
-    PasswordRecoveryFailure,
+  PasswordRecoveryError,
+  PasswordRecoveryFailure,
 } from '../../application/auth/errors/password-recovery.error';
 import {
-    EmailConfirmationError,
-    EmailConfirmationFailure,
+  EmailConfirmationError,
+  EmailConfirmationFailure,
 } from '../../application/auth/errors/email-confirmation.error';
 import {
-    type ConfirmEmailInput,
-    type RecoverPasswordInput,
-    type AuthProviderPort,
-    type LoginUserInput,
-    type LoginUserResult,
-    type RefreshSessionInput,
-    type RefreshSessionResult,
-    type RegisterUserInput,
-    type RegisterUserResult,
-    UserRegistrationStatus,
+  type ConfirmEmailInput,
+  type RecoverPasswordInput,
+  type AuthProviderPort,
+  type LoginUserInput,
+  type LoginUserResult,
+  type RefreshSessionInput,
+  type RefreshSessionResult,
+  type RegisterUserInput,
+  type RegisterUserResult,
+  UserRegistrationStatus,
 } from '../../application/ports/auth-provider.port';
 
 const SUPABASE_HEALTH_TIMEOUT_MS = 2_000;
+const SUPABASE_SDK_TIMEOUT_MS = 5_000;
 const SUPABASE_REFRESH_TIMEOUT_MS = 5_000;
 const SUPABASE_RECOVERY_TIMEOUT_MS = 5_000;
 const SUPABASE_CONFIRMATION_TIMEOUT_MS = 5_000;
 
 const noSessionStorage = {
-    getItem: () => null,
-    setItem: () => undefined,
-    removeItem: () => undefined,
+  getItem: () => null,
+  setItem: () => undefined,
+  removeItem: () => undefined,
 };
 
 @Injectable()
 export class SupabaseAuthAdapter implements AuthProviderPort {
-    private readonly logger = new Logger(SupabaseAuthAdapter.name);
-    private readonly recoveryRequestUrl: string;
-    private readonly verificationUrl: string;
-    private readonly confirmationResendUrl: string;
-    private readonly recoveryUserUrl: string;
-    private readonly recoveryLogoutUrl: string;
-    private readonly client: ReturnType<typeof createClient>;
-    private readonly healthUrl: string;
-    private readonly refreshUrl: string;
-    private readonly publishableKey: string;
+  private readonly logger = new Logger(SupabaseAuthAdapter.name);
+  private readonly recoveryRequestUrl: string;
+  private readonly verificationUrl: string;
+  private readonly confirmationResendUrl: string;
+  private readonly recoveryUserUrl: string;
+  private readonly recoveryLogoutUrl: string;
+  private readonly client: ReturnType<typeof createClient>;
+  private readonly healthUrl: string;
+  private readonly refreshUrl: string;
+  private readonly publishableKey: string;
 
-    constructor(private readonly configService: ConfigService) {
-        const supabaseUrl =
-            this.configService.getOrThrow<string>('SUPABASE_URL');
+  constructor(private readonly configService: ConfigService) {
+    const supabaseUrl = this.configService.getOrThrow<string>('SUPABASE_URL');
 
-        this.publishableKey = this.configService.getOrThrow<string>(
-            'SUPABASE_PUBLISHABLE_KEY',
-        );
+    this.publishableKey = this.configService.getOrThrow<string>('SUPABASE_PUBLISHABLE_KEY');
 
-        this.client = createClient(supabaseUrl, this.publishableKey, {
-            auth: {
-                autoRefreshToken: false,
-                persistSession: true,
-                detectSessionInUrl: false,
-                storage: noSessionStorage,
-            },
-        });
+    this.client = createClient(supabaseUrl, this.publishableKey, {
+      global: {
+        fetch: (input, options) => {
+          const callerSignal =
+            options?.signal ?? (input instanceof Request ? input.signal : undefined);
+          const timeout = AbortSignal.timeout(SUPABASE_SDK_TIMEOUT_MS);
+          return fetch(input, {
+            ...options,
+            signal: callerSignal ? AbortSignal.any([callerSignal, timeout]) : timeout,
+          });
+        },
+      },
+      auth: {
+        autoRefreshToken: false,
+        persistSession: true,
+        detectSessionInUrl: false,
+        storage: noSessionStorage,
+      },
+    });
 
-        this.healthUrl = new URL('/auth/v1/health', supabaseUrl).toString();
-        this.refreshUrl = new URL(
-            '/auth/v1/token?grant_type=refresh_token',
-            supabaseUrl,
-        ).toString();
+    this.healthUrl = new URL('/auth/v1/health', supabaseUrl).toString();
+    this.refreshUrl = new URL('/auth/v1/token?grant_type=refresh_token', supabaseUrl).toString();
 
-        this.recoveryRequestUrl = new URL(
-            '/auth/v1/recover',
-            supabaseUrl,
-        ).toString();
-        this.verificationUrl = new URL(
-            '/auth/v1/verify',
-            supabaseUrl,
-        ).toString();
-        this.confirmationResendUrl = new URL(
-            '/auth/v1/resend',
-            supabaseUrl,
-        ).toString();
-        this.recoveryUserUrl = new URL('/auth/v1/user', supabaseUrl).toString();
-        this.recoveryLogoutUrl = new URL(
-            '/auth/v1/logout?scope=local',
-            supabaseUrl,
-        ).toString();
+    this.recoveryRequestUrl = new URL('/auth/v1/recover', supabaseUrl).toString();
+    this.verificationUrl = new URL('/auth/v1/verify', supabaseUrl).toString();
+    this.confirmationResendUrl = new URL('/auth/v1/resend', supabaseUrl).toString();
+    this.recoveryUserUrl = new URL('/auth/v1/user', supabaseUrl).toString();
+    this.recoveryLogoutUrl = new URL('/auth/v1/logout?scope=local', supabaseUrl).toString();
+  }
+
+  async isAvailable(): Promise<boolean> {
+    try {
+      const response = await fetch(this.healthUrl, {
+        method: 'GET',
+        headers: {
+          apikey: this.publishableKey,
+        },
+        signal: AbortSignal.timeout(SUPABASE_HEALTH_TIMEOUT_MS),
+      });
+
+      return response.ok;
+    } catch {
+      return false;
     }
+  }
 
-    async isAvailable(): Promise<boolean> {
-        try {
-            const response = await fetch(this.healthUrl, {
-                method: 'GET',
-                headers: {
-                    apikey: this.publishableKey,
-                },
-                signal: AbortSignal.timeout(SUPABASE_HEALTH_TIMEOUT_MS),
-            });
+  async registerUser(input: RegisterUserInput): Promise<RegisterUserResult> {
+    try {
+      const { data, error } = await this.client.auth.signUp({
+        email: input.email,
+        password: input.password,
+      });
 
-            return response.ok;
-        } catch {
-            return false;
-        }
+      if (error) {
+        throw mapSupabaseRegistrationError(error);
+      }
+
+      if (!data.user) {
+        throw new AuthRegistrationError(AuthRegistrationFailure.ProviderUnavailable);
+      }
+
+      if (data.user.identities?.length === 0) {
+        throw new AuthRegistrationError(AuthRegistrationFailure.EmailAlreadyRegistered);
+      }
+
+      return {
+        userId: data.user.id,
+        email: data.user.email ?? input.email,
+        status:
+          data.session === null
+            ? UserRegistrationStatus.PendingEmailConfirmation
+            : UserRegistrationStatus.Active,
+      };
+    } catch (error) {
+      if (error instanceof AuthRegistrationError) throw error;
+      throw new AuthRegistrationError(AuthRegistrationFailure.ProviderUnavailable);
     }
+  }
 
-    async registerUser(input: RegisterUserInput): Promise<RegisterUserResult> {
-        const { data, error } = await this.client.auth.signUp({
-            email: input.email,
-            password: input.password,
-        });
+  async confirmEmail(input: ConfirmEmailInput): Promise<LoginUserResult> {
+    try {
+      const response = await fetch(this.verificationUrl, {
+        method: 'POST',
+        headers: this.authHeaders(),
+        body: JSON.stringify({
+          email: input.email,
+          token: input.code,
+          // Restrict verification to registration confirmation tokens.
+          type: 'signup',
+        }),
+        signal: AbortSignal.timeout(SUPABASE_CONFIRMATION_TIMEOUT_MS),
+      });
 
-        if (error) {
-            throw mapSupabaseRegistrationError(error);
-        }
+      if (response.status !== 200) {
+        throw await mapEmailConfirmationResponse(response);
+      }
 
-        if (!data.user) {
-            throw new AuthRegistrationError(
-                AuthRegistrationFailure.ProviderUnavailable,
-            );
-        }
+      const payload: unknown = await response.json();
+      if (
+        !isConfirmedEmailSession(payload) ||
+        payload.user.email.toLowerCase() !== input.email.toLowerCase()
+      ) {
+        throw new EmailConfirmationError(EmailConfirmationFailure.ProviderUnavailable);
+      }
 
-        if (data.user.identities?.length === 0) {
-            throw new AuthRegistrationError(
-                AuthRegistrationFailure.EmailAlreadyRegistered,
-            );
-        }
-
-        return {
-            userId: data.user.id,
-            email: data.user.email ?? input.email,
-            status:
-                data.session === null
-                    ? UserRegistrationStatus.PendingEmailConfirmation
-                    : UserRegistrationStatus.Active,
-        };
+      return {
+        userId: payload.user.id,
+        email: payload.user.email,
+        accessToken: payload.access_token,
+        refreshToken: payload.refresh_token,
+        expiresIn: payload.expires_in,
+        tokenType: payload.token_type,
+      };
+    } catch (error) {
+      if (error instanceof EmailConfirmationError) throw error;
+      throw new EmailConfirmationError(EmailConfirmationFailure.ProviderUnavailable);
     }
+  }
 
-    async confirmEmail(input: ConfirmEmailInput): Promise<LoginUserResult> {
-        try {
-            const response = await fetch(this.verificationUrl, {
-                method: 'POST',
-                headers: this.authHeaders(),
-                body: JSON.stringify({
-                    email: input.email,
-                    token: input.code,
-                    // Restrict verification to registration confirmation tokens.
-                    type: 'signup',
-                }),
-                signal: AbortSignal.timeout(SUPABASE_CONFIRMATION_TIMEOUT_MS),
-            });
-
-            if (response.status !== 200) {
-                throw await mapEmailConfirmationResponse(response);
-            }
-
-            const payload: unknown = await response.json();
-            if (
-                !isConfirmedEmailSession(payload) ||
-                payload.user.email.toLowerCase() !== input.email.toLowerCase()
-            ) {
-                throw new EmailConfirmationError(
-                    EmailConfirmationFailure.ProviderUnavailable,
-                );
-            }
-
-            return {
-                userId: payload.user.id,
-                email: payload.user.email,
-                accessToken: payload.access_token,
-                refreshToken: payload.refresh_token,
-                expiresIn: payload.expires_in,
-                tokenType: payload.token_type,
-            };
-        } catch (error) {
-            if (error instanceof EmailConfirmationError) throw error;
-            throw new EmailConfirmationError(
-                EmailConfirmationFailure.ProviderUnavailable,
-            );
-        }
+  async resendEmailConfirmation(email: string): Promise<void> {
+    try {
+      const response = await fetch(this.confirmationResendUrl, {
+        method: 'POST',
+        headers: this.authHeaders(),
+        body: JSON.stringify({ type: 'signup', email }),
+        signal: AbortSignal.timeout(SUPABASE_CONFIRMATION_TIMEOUT_MS),
+      });
+      if (!response.ok) {
+        this.logger.warn('Email confirmation dispatch failed.');
+      }
+    } catch {
+      this.logger.warn('Email confirmation dispatch failed.');
     }
+  }
 
-    async resendEmailConfirmation(email: string): Promise<void> {
-        try {
-            const response = await fetch(this.confirmationResendUrl, {
-                method: 'POST',
-                headers: this.authHeaders(),
-                body: JSON.stringify({ type: 'signup', email }),
-                signal: AbortSignal.timeout(SUPABASE_CONFIRMATION_TIMEOUT_MS),
-            });
-            if (!response.ok) {
-                this.logger.warn('Email confirmation dispatch failed.');
-            }
-        } catch {
-            this.logger.warn('Email confirmation dispatch failed.');
-        }
+  async loginUser(input: LoginUserInput): Promise<LoginUserResult> {
+    try {
+      const { data, error } = await this.client.auth.signInWithPassword({
+        email: input.email,
+        password: input.password,
+      });
+
+      if (error) {
+        throw mapSupabaseLoginError(error);
+      }
+
+      if (!data.user || !data.session) {
+        throw new AuthLoginError(AuthLoginFailure.ProviderUnavailable);
+      }
+
+      return {
+        userId: data.user.id,
+        email: data.user.email ?? input.email,
+        accessToken: data.session.access_token,
+        refreshToken: data.session.refresh_token,
+        expiresIn: data.session.expires_in,
+        tokenType: data.session.token_type,
+      };
+    } catch (error) {
+      if (error instanceof AuthLoginError) {
+        throw error;
+      }
+
+      throw new AuthLoginError(AuthLoginFailure.ProviderUnavailable);
     }
+  }
 
-    async loginUser(input: LoginUserInput): Promise<LoginUserResult> {
-        try {
-            const { data, error } = await this.client.auth.signInWithPassword({
-                email: input.email,
-                password: input.password,
-            });
+  async refreshSession(input: RefreshSessionInput): Promise<RefreshSessionResult> {
+    try {
+      const response = await fetch(this.refreshUrl, {
+        method: 'POST',
+        headers: {
+          apikey: this.publishableKey,
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          refresh_token: input.refreshToken,
+        }),
+        signal: AbortSignal.timeout(SUPABASE_REFRESH_TIMEOUT_MS),
+      });
 
-            if (error) {
-                throw mapSupabaseLoginError(error);
-            }
+      const payload: unknown = await response.json();
 
-            if (!data.user || !data.session) {
-                throw new AuthLoginError(AuthLoginFailure.ProviderUnavailable);
-            }
+      if (!response.ok) {
+        throw mapSupabaseRefreshError(response.status, payload);
+      }
 
-            return {
-                userId: data.user.id,
-                email: data.user.email ?? input.email,
-                accessToken: data.session.access_token,
-                refreshToken: data.session.refresh_token,
-                expiresIn: data.session.expires_in,
-                tokenType: data.session.token_type,
-            };
-        } catch (error) {
-            if (error instanceof AuthLoginError) {
-                throw error;
-            }
+      if (!isRefreshResponse(payload)) {
+        throw new AuthRefreshError(AuthRefreshFailure.ProviderUnavailable);
+      }
 
-            throw new AuthLoginError(AuthLoginFailure.ProviderUnavailable);
-        }
+      return {
+        userId: payload.user.id,
+        email: payload.user.email,
+        accessToken: payload.access_token,
+        refreshToken: payload.refresh_token,
+        expiresIn: payload.expires_in,
+        tokenType: payload.token_type,
+      };
+    } catch (error) {
+      if (error instanceof AuthRefreshError) {
+        throw error;
+      }
+
+      throw new AuthRefreshError(AuthRefreshFailure.ProviderUnavailable);
     }
+  }
 
-    async refreshSession(
-        input: RefreshSessionInput,
-    ): Promise<RefreshSessionResult> {
-        try {
-            const response = await fetch(this.refreshUrl, {
-                method: 'POST',
-                headers: {
-                    apikey: this.publishableKey,
-                    'Content-Type': 'application/json',
-                    Accept: 'application/json',
-                },
-                body: JSON.stringify({
-                    refresh_token: input.refreshToken,
-                }),
-                signal: AbortSignal.timeout(SUPABASE_REFRESH_TIMEOUT_MS),
-            });
-
-            const payload: unknown = await response.json();
-
-            if (!response.ok) {
-                throw mapSupabaseRefreshError(response.status, payload);
-            }
-
-            if (!isRefreshResponse(payload)) {
-                throw new AuthRefreshError(
-                    AuthRefreshFailure.ProviderUnavailable,
-                );
-            }
-
-            return {
-                userId: payload.user.id,
-                email: payload.user.email,
-                accessToken: payload.access_token,
-                refreshToken: payload.refresh_token,
-                expiresIn: payload.expires_in,
-                tokenType: payload.token_type,
-            };
-        } catch (error) {
-            if (error instanceof AuthRefreshError) {
-                throw error;
-            }
-
-            throw new AuthRefreshError(AuthRefreshFailure.ProviderUnavailable);
-        }
+  async requestPasswordRecovery(email: string): Promise<void> {
+    try {
+      const response = await fetch(this.recoveryRequestUrl, {
+        method: 'POST',
+        headers: this.authHeaders(),
+        body: JSON.stringify({ email }),
+        signal: AbortSignal.timeout(SUPABASE_RECOVERY_TIMEOUT_MS),
+      });
+      if (!response.ok) {
+        this.logger.warn('Password recovery email dispatch failed.');
+      }
+    } catch {
+      this.logger.warn('Password recovery email dispatch failed.');
     }
+  }
 
-    async requestPasswordRecovery(email: string): Promise<void> {
-        try {
-            const response = await fetch(this.recoveryRequestUrl, {
-                method: 'POST',
-                headers: this.authHeaders(),
-                body: JSON.stringify({ email }),
-                signal: AbortSignal.timeout(SUPABASE_RECOVERY_TIMEOUT_MS),
-            });
-            if (!response.ok) {
-                this.logger.warn('Password recovery email dispatch failed.');
-            }
-        } catch {
-            this.logger.warn('Password recovery email dispatch failed.');
-        }
+  async recoverPassword(input: RecoverPasswordInput): Promise<void> {
+    let accessToken: string | undefined;
+
+    try {
+      const verification = await fetch(this.verificationUrl, {
+        method: 'POST',
+        headers: this.authHeaders(),
+        body: JSON.stringify({
+          email: input.email,
+          token: input.code,
+          type: 'recovery',
+        }),
+        signal: AbortSignal.timeout(SUPABASE_RECOVERY_TIMEOUT_MS),
+      });
+
+      if (verification.status !== 200) {
+        throw await mapRecoveryResponse(verification, 'verify');
+      }
+
+      const session: unknown = await verification.json();
+      if (!isRecoverySession(session)) {
+        throw new PasswordRecoveryError(PasswordRecoveryFailure.ProviderUnavailable);
+      }
+
+      accessToken = session.access_token;
+      const update = await fetch(this.recoveryUserUrl, {
+        method: 'PUT',
+        headers: this.authHeaders(accessToken),
+        body: JSON.stringify({ password: input.newPassword }),
+        signal: AbortSignal.timeout(SUPABASE_RECOVERY_TIMEOUT_MS),
+      });
+
+      if (update.status !== 200) {
+        throw await mapRecoveryResponse(update, 'update');
+      }
+
+      const user: unknown = await update.json();
+      if (!isRecord(user) || user.id !== session.user.id) {
+        throw new PasswordRecoveryError(PasswordRecoveryFailure.ProviderUnavailable);
+      }
+    } catch (error) {
+      if (error instanceof PasswordRecoveryError) {
+        throw error;
+      }
+      throw new PasswordRecoveryError(PasswordRecoveryFailure.ProviderUnavailable);
+    } finally {
+      if (accessToken) {
+        await this.closeRecoverySession(accessToken);
+      }
     }
+  }
 
-    async recoverPassword(input: RecoverPasswordInput): Promise<void> {
-        let accessToken: string | undefined;
+  private authHeaders(accessToken?: string): Record<string, string> {
+    return {
+      apikey: this.publishableKey,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+    };
+  }
 
-        try {
-            const verification = await fetch(this.verificationUrl, {
-                method: 'POST',
-                headers: this.authHeaders(),
-                body: JSON.stringify({
-                    email: input.email,
-                    token: input.code,
-                    type: 'recovery',
-                }),
-                signal: AbortSignal.timeout(SUPABASE_RECOVERY_TIMEOUT_MS),
-            });
-
-            if (verification.status !== 200) {
-                throw await mapRecoveryResponse(verification, 'verify');
-            }
-
-            const session: unknown = await verification.json();
-            if (!isRecoverySession(session)) {
-                throw new PasswordRecoveryError(
-                    PasswordRecoveryFailure.ProviderUnavailable,
-                );
-            }
-
-            accessToken = session.access_token;
-            const update = await fetch(this.recoveryUserUrl, {
-                method: 'PUT',
-                headers: this.authHeaders(accessToken),
-                body: JSON.stringify({ password: input.newPassword }),
-                signal: AbortSignal.timeout(SUPABASE_RECOVERY_TIMEOUT_MS),
-            });
-
-            if (update.status !== 200) {
-                throw await mapRecoveryResponse(update, 'update');
-            }
-
-            const user: unknown = await update.json();
-            if (!isRecord(user) || user.id !== session.user.id) {
-                throw new PasswordRecoveryError(
-                    PasswordRecoveryFailure.ProviderUnavailable,
-                );
-            }
-        } catch (error) {
-            if (error instanceof PasswordRecoveryError) {
-                throw error;
-            }
-            throw new PasswordRecoveryError(
-                PasswordRecoveryFailure.ProviderUnavailable,
-            );
-        } finally {
-            if (accessToken) {
-                await this.closeRecoverySession(accessToken);
-            }
-        }
+  private async closeRecoverySession(accessToken: string): Promise<void> {
+    try {
+      const response = await fetch(this.recoveryLogoutUrl, {
+        method: 'POST',
+        headers: this.authHeaders(accessToken),
+        signal: AbortSignal.timeout(SUPABASE_RECOVERY_TIMEOUT_MS),
+      });
+      if (!response.ok) {
+        this.logger.warn('Temporary recovery session cleanup failed.');
+      }
+    } catch {
+      this.logger.warn('Temporary recovery session cleanup failed.');
     }
-
-    private authHeaders(accessToken?: string): Record<string, string> {
-        return {
-            apikey: this.publishableKey,
-            'Content-Type': 'application/json',
-            Accept: 'application/json',
-            ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-        };
-    }
-
-    private async closeRecoverySession(accessToken: string): Promise<void> {
-        try {
-            const response = await fetch(this.recoveryLogoutUrl, {
-                method: 'POST',
-                headers: this.authHeaders(accessToken),
-                signal: AbortSignal.timeout(SUPABASE_RECOVERY_TIMEOUT_MS),
-            });
-            if (!response.ok) {
-                this.logger.warn('Temporary recovery session cleanup failed.');
-            }
-        } catch {
-            this.logger.warn('Temporary recovery session cleanup failed.');
-        }
-    }
+  }
 }
 
-function mapSupabaseRegistrationError(error: {
-    code?: string;
-}): AuthRegistrationError {
-    switch (error.code) {
-        case 'email_exists':
-        case 'user_already_exists':
-            return new AuthRegistrationError(
-                AuthRegistrationFailure.EmailAlreadyRegistered,
-            );
+function mapSupabaseRegistrationError(error: { code?: string }): AuthRegistrationError {
+  switch (error.code) {
+    case 'email_exists':
+    case 'user_already_exists':
+      return new AuthRegistrationError(AuthRegistrationFailure.EmailAlreadyRegistered);
 
-        case 'email_address_invalid':
-            return new AuthRegistrationError(
-                AuthRegistrationFailure.InvalidEmail,
-            );
+    case 'email_address_invalid':
+      return new AuthRegistrationError(AuthRegistrationFailure.InvalidEmail);
 
-        case 'validation_failed':
-            return new AuthRegistrationError(
-                AuthRegistrationFailure.InvalidRequest,
-            );
+    case 'validation_failed':
+      return new AuthRegistrationError(AuthRegistrationFailure.InvalidRequest);
 
-        case 'weak_password':
-            return new AuthRegistrationError(
-                AuthRegistrationFailure.WeakPassword,
-            );
+    case 'weak_password':
+      return new AuthRegistrationError(AuthRegistrationFailure.WeakPassword);
 
-        case 'over_email_send_rate_limit':
-        case 'over_request_rate_limit':
-            return new AuthRegistrationError(
-                AuthRegistrationFailure.RateLimited,
-            );
+    case 'over_email_send_rate_limit':
+    case 'over_request_rate_limit':
+      return new AuthRegistrationError(AuthRegistrationFailure.RateLimited);
 
-        case 'email_address_not_authorized':
-        case 'email_provider_disabled':
-        case 'signup_disabled':
-        case 'request_timeout':
-        case 'unexpected_failure':
-            return new AuthRegistrationError(
-                AuthRegistrationFailure.ProviderUnavailable,
-            );
+    case 'email_address_not_authorized':
+    case 'email_provider_disabled':
+    case 'signup_disabled':
+    case 'request_timeout':
+    case 'unexpected_failure':
+      return new AuthRegistrationError(AuthRegistrationFailure.ProviderUnavailable);
 
-        default:
-            return new AuthRegistrationError(
-                AuthRegistrationFailure.ProviderUnavailable,
-            );
-    }
+    default:
+      return new AuthRegistrationError(AuthRegistrationFailure.ProviderUnavailable);
+  }
 }
 
 function mapSupabaseLoginError(error: { code?: string }): AuthLoginError {
-    switch (error.code) {
-        case 'invalid_credentials':
-        case 'user_not_found':
-        case 'user_banned':
-            return new AuthLoginError(AuthLoginFailure.InvalidCredentials);
+  switch (error.code) {
+    case 'invalid_credentials':
+    case 'user_not_found':
+    case 'user_banned':
+      return new AuthLoginError(AuthLoginFailure.InvalidCredentials);
 
-        case 'email_not_confirmed':
-            return new AuthLoginError(AuthLoginFailure.EmailNotConfirmed);
+    case 'email_not_confirmed':
+      return new AuthLoginError(AuthLoginFailure.EmailNotConfirmed);
 
-        case 'email_address_invalid':
-        case 'validation_failed':
-            return new AuthLoginError(AuthLoginFailure.InvalidRequest);
+    case 'email_address_invalid':
+    case 'validation_failed':
+      return new AuthLoginError(AuthLoginFailure.InvalidRequest);
 
-        case 'over_request_rate_limit':
-            return new AuthLoginError(AuthLoginFailure.RateLimited);
+    case 'over_request_rate_limit':
+      return new AuthLoginError(AuthLoginFailure.RateLimited);
 
-        case 'email_provider_disabled':
-        case 'request_timeout':
-        case 'unexpected_failure':
-            return new AuthLoginError(AuthLoginFailure.ProviderUnavailable);
+    case 'email_provider_disabled':
+    case 'request_timeout':
+    case 'unexpected_failure':
+      return new AuthLoginError(AuthLoginFailure.ProviderUnavailable);
 
-        default:
-            return new AuthLoginError(AuthLoginFailure.ProviderUnavailable);
-    }
+    default:
+      return new AuthLoginError(AuthLoginFailure.ProviderUnavailable);
+  }
 }
 
-function mapSupabaseRefreshError(
-    status: number,
-    payload: unknown,
-): AuthRefreshError {
-    const code =
-        isRecord(payload) && typeof payload.error_code === 'string'
-            ? payload.error_code
-            : undefined;
+function mapSupabaseRefreshError(status: number, payload: unknown): AuthRefreshError {
+  const code =
+    isRecord(payload) && typeof payload.error_code === 'string' ? payload.error_code : undefined;
 
-    switch (code) {
-        case 'refresh_token_not_found':
-        case 'refresh_token_already_used':
-        case 'session_not_found':
-        case 'session_expired':
-        case 'invalid_credentials':
-        case 'user_not_found':
-        case 'user_banned':
-        case 'validation_failed':
-            return new AuthRefreshError(AuthRefreshFailure.InvalidRefreshToken);
+  switch (code) {
+    case 'refresh_token_not_found':
+    case 'refresh_token_already_used':
+    case 'session_not_found':
+    case 'session_expired':
+    case 'invalid_credentials':
+    case 'user_not_found':
+    case 'user_banned':
+    case 'validation_failed':
+      return new AuthRefreshError(AuthRefreshFailure.InvalidRefreshToken);
 
-        case 'bad_json':
-            return new AuthRefreshError(AuthRefreshFailure.InvalidRequest);
+    case 'bad_json':
+      return new AuthRefreshError(AuthRefreshFailure.InvalidRequest);
 
-        case 'conflict':
-            return new AuthRefreshError(AuthRefreshFailure.ConcurrentRefresh);
+    case 'conflict':
+      return new AuthRefreshError(AuthRefreshFailure.ConcurrentRefresh);
 
-        case 'over_request_rate_limit':
-            return new AuthRefreshError(AuthRefreshFailure.RateLimited);
-    }
+    case 'over_request_rate_limit':
+      return new AuthRefreshError(AuthRefreshFailure.RateLimited);
+  }
 
-    if (status === 429) {
-        return new AuthRefreshError(AuthRefreshFailure.RateLimited);
-    }
+  if (status === 429) {
+    return new AuthRefreshError(AuthRefreshFailure.RateLimited);
+  }
 
-    return new AuthRefreshError(AuthRefreshFailure.ProviderUnavailable);
+  return new AuthRefreshError(AuthRefreshFailure.ProviderUnavailable);
 }
 
 function isRefreshResponse(value: unknown): value is {
-    user: { id: string; email: string };
-    access_token: string;
-    refresh_token: string;
-    expires_in: number;
-    token_type: string;
+  user: { id: string; email: string };
+  access_token: string;
+  refresh_token: string;
+  expires_in: number;
+  token_type: string;
 } {
-    if (!isRecord(value) || !isRecord(value.user)) {
-        return false;
-    }
+  if (!isRecord(value) || !isRecord(value.user)) {
+    return false;
+  }
 
-    return (
-        isNonEmptyString(value.user.id) &&
-        isNonEmptyString(value.user.email) &&
-        isNonEmptyString(value.access_token) &&
-        isNonEmptyString(value.refresh_token) &&
-        typeof value.expires_in === 'number' &&
-        Number.isFinite(value.expires_in) &&
-        value.expires_in > 0 &&
-        isNonEmptyString(value.token_type)
-    );
+  return (
+    isNonEmptyString(value.user.id) &&
+    isNonEmptyString(value.user.email) &&
+    isNonEmptyString(value.access_token) &&
+    isNonEmptyString(value.refresh_token) &&
+    typeof value.expires_in === 'number' &&
+    Number.isFinite(value.expires_in) &&
+    value.expires_in > 0 &&
+    isNonEmptyString(value.token_type)
+  );
 }
 
 function isNonEmptyString(value: unknown): value is string {
-    return typeof value === 'string' && value.length > 0;
+  return typeof value === 'string' && value.length > 0;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === 'object' && value !== null && !Array.isArray(value);
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 async function mapRecoveryResponse(
-    response: Response,
-    stage: 'verify' | 'update',
+  response: Response,
+  stage: 'verify' | 'update',
 ): Promise<PasswordRecoveryError> {
-    let payload: unknown;
-    try {
-        payload = await response.json();
-    } catch {
-        payload = null;
-    }
-    const code = isRecord(payload)
-        ? typeof payload.code === 'string'
-            ? payload.code
-            : payload.error_code
-        : undefined;
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch {
+    payload = null;
+  }
+  const code = isRecord(payload)
+    ? typeof payload.code === 'string'
+      ? payload.code
+      : payload.error_code
+    : undefined;
 
-    if (response.status >= 500) {
-        return new PasswordRecoveryError(
-            PasswordRecoveryFailure.ProviderUnavailable,
-        );
-    }
-    if (response.status === 429 || code === 'over_request_rate_limit') {
-        return new PasswordRecoveryError(PasswordRecoveryFailure.RateLimited);
-    }
+  if (response.status >= 500) {
+    return new PasswordRecoveryError(PasswordRecoveryFailure.ProviderUnavailable);
+  }
+  if (response.status === 429 || code === 'over_request_rate_limit') {
+    return new PasswordRecoveryError(PasswordRecoveryFailure.RateLimited);
+  }
 
-    switch (code) {
-        case 'otp_expired':
-        case 'invalid_credentials':
-        case 'session_not_found':
-        case 'session_expired':
-        case 'user_not_found':
-        case 'bad_jwt':
-            return new PasswordRecoveryError(
-                PasswordRecoveryFailure.InvalidRecoveryCode,
-            );
-        case 'weak_password':
-            return new PasswordRecoveryError(
-                PasswordRecoveryFailure.WeakPassword,
-            );
-        case 'same_password':
-            return new PasswordRecoveryError(
-                PasswordRecoveryFailure.SamePassword,
-            );
-        case 'reauthentication_needed':
-        case 'reauthentication_not_valid':
-        case 'insufficient_aal':
-        case 'user_banned':
-            return new PasswordRecoveryError(
-                PasswordRecoveryFailure.RecoveryNotAllowed,
-            );
-        case 'validation_failed':
-            return new PasswordRecoveryError(
-                stage === 'verify'
-                    ? PasswordRecoveryFailure.InvalidRecoveryCode
-                    : PasswordRecoveryFailure.InvalidRequest,
-            );
-        case 'otp_disabled':
-        case 'email_provider_disabled':
-            return new PasswordRecoveryError(
-                PasswordRecoveryFailure.ProviderUnavailable,
-            );
-    }
+  switch (code) {
+    case 'otp_expired':
+    case 'invalid_credentials':
+    case 'session_not_found':
+    case 'session_expired':
+    case 'user_not_found':
+    case 'bad_jwt':
+      return new PasswordRecoveryError(PasswordRecoveryFailure.InvalidRecoveryCode);
+    case 'weak_password':
+      return new PasswordRecoveryError(PasswordRecoveryFailure.WeakPassword);
+    case 'same_password':
+      return new PasswordRecoveryError(PasswordRecoveryFailure.SamePassword);
+    case 'reauthentication_needed':
+    case 'reauthentication_not_valid':
+    case 'insufficient_aal':
+    case 'user_banned':
+      return new PasswordRecoveryError(PasswordRecoveryFailure.RecoveryNotAllowed);
+    case 'validation_failed':
+      return new PasswordRecoveryError(
+        stage === 'verify'
+          ? PasswordRecoveryFailure.InvalidRecoveryCode
+          : PasswordRecoveryFailure.InvalidRequest,
+      );
+    case 'otp_disabled':
+    case 'email_provider_disabled':
+      return new PasswordRecoveryError(PasswordRecoveryFailure.ProviderUnavailable);
+  }
 
-    if (
-        (stage === 'verify' && [400, 401, 403].includes(response.status)) ||
-        (stage === 'update' && response.status === 401)
-    ) {
-        return new PasswordRecoveryError(
-            PasswordRecoveryFailure.InvalidRecoveryCode,
-        );
-    }
+  if (
+    (stage === 'verify' && [400, 401, 403].includes(response.status)) ||
+    (stage === 'update' && response.status === 401)
+  ) {
+    return new PasswordRecoveryError(PasswordRecoveryFailure.InvalidRecoveryCode);
+  }
 
-    return new PasswordRecoveryError(
-        PasswordRecoveryFailure.ProviderUnavailable,
-    );
+  return new PasswordRecoveryError(PasswordRecoveryFailure.ProviderUnavailable);
 }
 
 function isRecoverySession(
-    value: unknown,
+  value: unknown,
 ): value is { access_token: string; user: { id: string } } {
-    return (
-        isRecord(value) &&
-        typeof value.access_token === 'string' &&
-        value.access_token.length > 0 &&
-        isRecord(value.user) &&
-        typeof value.user.id === 'string' &&
-        value.user.id.length > 0
-    );
+  return (
+    isRecord(value) &&
+    typeof value.access_token === 'string' &&
+    value.access_token.length > 0 &&
+    isRecord(value.user) &&
+    typeof value.user.id === 'string' &&
+    value.user.id.length > 0
+  );
 }
 
-async function mapEmailConfirmationResponse(
-    response: Response,
-): Promise<EmailConfirmationError> {
-    let payload: unknown;
-    try {
-        payload = await response.json();
-    } catch {
-        payload = null;
-    }
-    const code = isRecord(payload)
-        ? typeof payload.code === 'string'
-            ? payload.code
-            : payload.error_code
-        : undefined;
+async function mapEmailConfirmationResponse(response: Response): Promise<EmailConfirmationError> {
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch {
+    payload = null;
+  }
+  const code = isRecord(payload)
+    ? typeof payload.code === 'string'
+      ? payload.code
+      : payload.error_code
+    : undefined;
 
-    if (response.status >= 500) {
-        return new EmailConfirmationError(
-            EmailConfirmationFailure.ProviderUnavailable,
-        );
-    }
-    if (response.status === 429 || code === 'over_request_rate_limit') {
-        return new EmailConfirmationError(EmailConfirmationFailure.RateLimited);
-    }
-    if (code === 'user_banned') {
-        return new EmailConfirmationError(EmailConfirmationFailure.NotAllowed);
-    }
-    if (
-        ['otp_disabled', 'email_provider_disabled', 'signup_disabled'].includes(
-            String(code),
-        )
-    ) {
-        return new EmailConfirmationError(
-            EmailConfirmationFailure.ProviderUnavailable,
-        );
-    }
-    if ([400, 401, 403, 422].includes(response.status)) {
-        return new EmailConfirmationError(EmailConfirmationFailure.InvalidCode);
-    }
-    return new EmailConfirmationError(
-        EmailConfirmationFailure.ProviderUnavailable,
-    );
+  if (response.status >= 500) {
+    return new EmailConfirmationError(EmailConfirmationFailure.ProviderUnavailable);
+  }
+  if (response.status === 429 || code === 'over_request_rate_limit') {
+    return new EmailConfirmationError(EmailConfirmationFailure.RateLimited);
+  }
+  if (code === 'user_banned') {
+    return new EmailConfirmationError(EmailConfirmationFailure.NotAllowed);
+  }
+  if (['otp_disabled', 'email_provider_disabled', 'signup_disabled'].includes(String(code))) {
+    return new EmailConfirmationError(EmailConfirmationFailure.ProviderUnavailable);
+  }
+  if ([400, 401, 403, 422].includes(response.status)) {
+    return new EmailConfirmationError(EmailConfirmationFailure.InvalidCode);
+  }
+  return new EmailConfirmationError(EmailConfirmationFailure.ProviderUnavailable);
 }
 
 interface ConfirmedEmailSession {
-    user: { id: string; email: string; email_confirmed_at: string };
-    access_token: string;
-    refresh_token: string;
-    expires_in: number;
-    token_type: string;
+  user: { id: string; email: string; email_confirmed_at: string };
+  access_token: string;
+  refresh_token: string;
+  expires_in: number;
+  token_type: string;
 }
 
-function isConfirmedEmailSession(
-    value: unknown,
-): value is ConfirmedEmailSession {
-    return (
-        isRecord(value) &&
-        isRecord(value.user) &&
-        isNonEmptyString(value.user.id) &&
-        isNonEmptyString(value.user.email) &&
-        isNonEmptyString(value.user.email_confirmed_at) &&
-        isNonEmptyString(value.access_token) &&
-        isNonEmptyString(value.refresh_token) &&
-        typeof value.expires_in === 'number' &&
-        Number.isFinite(value.expires_in) &&
-        value.expires_in > 0 &&
-        value.token_type === 'bearer'
-    );
+function isConfirmedEmailSession(value: unknown): value is ConfirmedEmailSession {
+  return (
+    isRecord(value) &&
+    isRecord(value.user) &&
+    isNonEmptyString(value.user.id) &&
+    isNonEmptyString(value.user.email) &&
+    isNonEmptyString(value.user.email_confirmed_at) &&
+    isNonEmptyString(value.access_token) &&
+    isNonEmptyString(value.refresh_token) &&
+    typeof value.expires_in === 'number' &&
+    Number.isFinite(value.expires_in) &&
+    value.expires_in > 0 &&
+    value.token_type === 'bearer'
+  );
 }

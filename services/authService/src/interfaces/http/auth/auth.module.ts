@@ -14,20 +14,20 @@ import { CurrentSessionController } from './current-session.controller';
 import { PasswordRecoveryController } from './password-recovery.controller';
 
 @Module({
-    imports: [SupabaseModule],
-    controllers: [
-        RegistrationController,
-        SessionController,
-        SessionRenewalController,
-        CurrentSessionController,
-        PasswordRecoveryController,
-    ],
-    providers: [
-        RegisterUserService,
-        LoginUserService,
-        RefreshSessionService,
-        CurrentSessionService,
-        PasswordRecoveryService,
-    ],
+  imports: [SupabaseModule],
+  controllers: [
+    RegistrationController,
+    SessionController,
+    SessionRenewalController,
+    CurrentSessionController,
+    PasswordRecoveryController,
+  ],
+  providers: [
+    RegisterUserService,
+    LoginUserService,
+    RefreshSessionService,
+    CurrentSessionService,
+    PasswordRecoveryService,
+  ],
 })
 export class AuthModule {}

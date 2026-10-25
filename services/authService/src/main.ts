@@ -5,16 +5,16 @@ import { AppModule } from './app.module';
 import { configureHttpApplication } from './interfaces/http/http.setup';
 
 async function bootstrap(): Promise<void> {
-    const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule);
 
-    configureHttpApplication(app);
-    app.enableShutdownHooks();
+  configureHttpApplication(app);
+  app.enableShutdownHooks();
 
-    const configService = app.get(ConfigService);
+  const configService = app.get(ConfigService);
 
-    const port = configService.getOrThrow<number>('HTTP_PORT');
+  const port = configService.getOrThrow<number>('HTTP_PORT');
 
-    await app.listen(port);
+  await app.listen(port);
 }
 
 void bootstrap();

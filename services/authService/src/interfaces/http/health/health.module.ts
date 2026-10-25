@@ -5,8 +5,8 @@ import { SupabaseModule } from '../../../infrastructure/supabase/supabase.module
 import { HealthController } from './health.controller';
 
 @Module({
-    imports: [SupabaseModule],
-    controllers: [HealthController],
-    providers: [ReadinessService],
+  imports: [SupabaseModule],
+  controllers: [HealthController],
+  providers: [ReadinessService],
 })
 export class HealthModule {}
