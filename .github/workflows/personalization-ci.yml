@@ -4,6 +4,7 @@ on:
     pull_request:
         paths:
             - "services/personalizationService/**"
+            - "infra/personalization/**"
             - ".github/workflows/personalization-ci.yml"
             - ".editorconfig"
             - ".gitattributes"
@@ -11,6 +12,7 @@ on:
         branches: [main]
         paths:
             - "services/personalizationService/**"
+            - "infra/personalization/**"
             - ".github/workflows/personalization-ci.yml"
             - ".editorconfig"
             - ".gitattributes"
@@ -48,12 +50,33 @@ jobs:
             - name: Install locked dependencies
               run: python -m uv sync --locked
             - name: Check lint
-              run: python -m uv run --locked ruff check .
+              run: python -m uv run --locked ruff check . ../../infra/personalization
             - name: Check formatting
-              run: python -m uv run --locked ruff format --check .
+              run: python -m uv run --locked ruff format --check . ../../infra/personalization
             - name: Check types
               run: python -m uv run --locked mypy
+            - name: Check infrastructure types
+              run: python -m uv run --locked mypy ../../infra/personalization
             - name: Run tests
               run: python -m uv run --locked pytest
             - name: Build package
               run: python -m uv build --no-sources
+
+
+    docker:
+        name: Docker packaging and database isolation
+        needs: quality
+        runs-on: ubuntu-24.04
+        timeout-minutes: 20
+        env:
+            PERSONALIZATION_IMAGE_TAG: 0.1.0-${{ github.sha }}
+            PERSONALIZATION_GIT_SHA: ${{ github.sha }}
+        steps:
+            - name: Check out repository
+              uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+              with:
+                  persist-credentials: false
+            - name: Prepare temporary local secrets
+              run: python3 infra/personalization/provision_local.py
+            - name: Verify Docker packaging and persistence
+              run: python3 infra/personalization/verify_stack.py
