@@ -1,138 +1,165 @@
 # Personalization Service
 
-Backend de Cluster JAM para archivos, estampados, plantillas, zonas,
-diseños y vistas previas. Este incremento prepara el paquete Python,
-sus dependencias, configuración y controles de calidad.
+Backend de Cluster JAM con base HTTP FastAPI, configuración validada,
+PostgreSQL aislado y observabilidad JSON. Los recursos de personalización
+se incorporarán de forma incremental bajo `/api/v1`.
 
-## Estado de este incremento
+## Ejecutar en Docker para desarrollo
 
-Todavía no hay servidor HTTP/gRPC, endpoints, worker ni tablas.
-Docker y PostgreSQL se incorporan en el siguiente incremento; después
-se implementarán salud, OpenAPI, errores RFC 9457 y observabilidad.
-No se requieren credenciales de Supabase para estas verificaciones.
+Desde la raíz del repositorio, con Docker en modo Linux:
 
-## Requisitos
+```powershell
+py -3.14 infra/personalization/provision_local.py
+docker compose -f infra/personalization/compose.yaml -f infra/personalization/compose.dev.yaml up -d --build --wait personalization
+```
 
-- Python 3.14 de 64 bits.
-- uv 0.13.5 como gestor de dependencias y entornos.
-- Git.
+El archivo base mantiene PostgreSQL y la API sin puertos publicados. El
+archivo de desarrollo publica únicamente REST en `127.0.0.1:8082`, conectado
+al puerto 8080 del contenedor. Para cambiar el puerto local, definir
+`PERSONALIZATION_HTTP_PORT` antes de ejecutar Compose.
 
-En Windows, instalar uv sin modificar la instalación global:
+| Operación | URL local | Resultado |
+| --- | --- | --- |
+| Liveness | `http://127.0.0.1:8082/health/live` | 200 y `status=ok` |
+| Readiness | `http://127.0.0.1:8082/health/ready` | 200 o 503 con Problem Details |
+| Documentación | `http://127.0.0.1:8082/docs` | Swagger UI |
+| Contrato | `http://127.0.0.1:8082/openapi.json` | OpenAPI |
+
+Liveness no consulta dependencias. Readiness invoca un caso de uso mediante
+un puerto e inspecciona su propia base de datos, con límites de conexión y
+consulta. Si PostgreSQL cae, la API sigue viva y readiness devuelve 503.
+Recuperar la base permite volver a responder 200 sin reiniciar la API.
+
+Todavía no hay operaciones de negocio, validación JWT ni servidor gRPC. El
+esquema de seguridad de OpenAPI identifica el contrato futuro; los endpoints
+técnicos actuales son públicos. El puerto 50051 queda reservado para gRPC.
+HTTPS y el proxy de despliegue se incorporarán en la fase de operación.
+
+## Dependencias y configuración local
+
+Desde `services/personalizationService`:
 
 ```powershell
 py -3.14 -m pip install --user uv==0.13.5
-py -3.14 -m uv --version
-```
-
-Todos los comandos siguientes se ejecutan desde
-`services/personalizationService`.
-
-## Instalar el proyecto
-
-```powershell
 py -3.14 -m uv sync --locked
-if (-not (Test-Path -LiteralPath .env)) {
-    Copy-Item .env.example .env
-}
 ```
 
-Crear `.env` solo si todavía no existe. Contiene configuración local y
-no se incorpora a Git. En Ubuntu, usar `python3.14 -m uv` en lugar de
-`py -3.14 -m uv`; para crear el archivo local usar `cp -n`.
-
-`uv.lock` fija las dependencias transitivas. `--locked` impide cambiar
-la resolución durante la instalación. No es necesario activar `.venv`
-ni instalar dependencias de este servicio en el entorno de Auth/Profile.
-
-## Configuración
+Se requiere Python 3.14 de 64 bits. En Ubuntu usar `python3.14 -m uv` en
+lugar de `py -3.14 -m uv`. `uv.lock` fija las dependencias transitivas; cada
+comando usa `--locked` para evitar cambios implícitos en la resolución.
 
 | Variable | Regla |
 | --- | --- |
 | `APP_ENV` | Obligatoria: `development`, `test` o `production` |
+| `HTTP_HOST` | `127.0.0.1` local o `0.0.0.0` dentro del contenedor |
 | `HTTP_PORT` | Entero 1–65535; predeterminado 8080 |
 | `GRPC_PORT` | Entero 1–65535; predeterminado 50051 |
-| `LOG_LEVEL` | `DEBUG`, `INFO`, `WARN` o `ERROR`; predeterminado `INFO` |
+| `LOG_LEVEL` | `DEBUG`, `INFO`, `WARN` o `ERROR` |
+| `DB_HOST` | Predeterminado `db-personalizacion` |
+| `DB_PORT` | Entero 1–65535; predeterminado 5432 |
+| `DB_NAME` | `personalizacion_db` |
+| `DB_USER` | `app_personalizacion` |
+| `DB_SCHEMA` | `app` |
+| `DB_CONNECT_TIMEOUT_SECONDS` | Entre 1 y 30; predeterminado 5 |
+| `DB_PASSWORD_FILE` | Archivo obligatorio, legible y no vacío |
 
-Las variables del proceso tienen prioridad sobre `.env`. La clase
-`Settings` rechaza configuración inválida; se conectará al arranque
-del servidor cuando se incorpore la base HTTP. Todavía no configura
-manejadores de logs ni abre puertos.
+Compose monta el secreto de aplicación y entrega las variables necesarias.
+`.env.example` documenta rutas dentro de Docker; ese archivo de secreto no
+existe en Windows fuera del contenedor. La API acepta un archivo local de
+configuración, con prioridad para las variables del proceso, pero ningún
+secreto se incorpora a Git ni a la imagen.
 
-Comprobar la configuración desde la raíz del servicio:
+El punto de entrada es `python -m personalization.main`. Fuera de Docker
+requiere un archivo de contraseña y una dirección de PostgreSQL accesibles
+desde ese proceso. Dentro de Docker se usa el nombre `db-personalizacion`;
+la base permanece sin publicar un puerto al host.
+
+## Contratos y errores
+
+Las respuestas JSON de DTO utilizan camelCase. Todo error HTTP se devuelve
+con `application/problem+json` y los campos `type`, `title`, `status`,
+`detail`, `instance`, `code` y `traceId`. `code` es estable y utiliza
+SCREAMING_SNAKE_CASE. `instance` incluye la ruta sin su query string.
+
+JSON mal formado produce 400; datos que incumplen el contrato producen 422.
+Las rutas inexistentes, métodos no permitidos, dependencias no disponibles
+y excepciones inesperadas también usan Problem Details. Se conservan
+cabeceras de protocolo, como `Allow` y `WWW-Authenticate`, cuando procedan.
+No se devuelven cuerpos rechazados, SQL, secretos ni stack traces.
+
+OpenAPI se versiona en `contracts/openapi/personalization/v1/openapi.json`.
+La exportación funciona sin configurar secretos ni conectarse a PostgreSQL.
+Desde la carpeta del servicio:
 
 ```powershell
-py -3.14 -m uv run --locked python -c "from personalization.infrastructure.config.settings import Settings; Settings()"
+py -3.14 -m uv run --locked python -m personalization.interfaces.http.export_openapi --output ../../contracts/openapi/personalization/v1/openapi.json
+py -3.14 -m uv run --locked python -m personalization.interfaces.http.export_openapi --check --output ../../contracts/openapi/personalization/v1/openapi.json
 ```
 
-Sin salida y con código 0 significa que la configuración es válida.
-No ejecutar ese comando sin definir `APP_ENV` o crear el archivo local.
+La CI compara el contrato versionado con la definición de las rutas. La
+exportación no habilita endpoints auxiliares ni requiere datos ficticios.
+
+## Logs y correlación
+
+OpenTelemetry SDK crea un span por petición y valida el contexto W3C
+entrante. La respuesta devuelve `traceparent` con un span nuevo y
+`X-Request-ID` generado por el servidor. Un contexto ausente o inválido
+produce una traza nueva. `traceId` del error coincide con el de los logs.
+
+Los logs usan JSON de una línea en stdout, con identidad del servicio,
+entorno, fecha UTC, evento, mensaje y correlación `trace_id`/`span_id`.
+Se registra un resultado por petición y se omiten sondeos de salud exitosos.
+Los eventos de arranque y cierre pueden tener correlación nula.
+
+No se registran Authorization, JWT, cookies, cuerpos, query strings,
+contraseñas, correos o URLs firmadas. La ruta del log usa la plantilla de
+la operación; las rutas desconocidas usan `unmatched`. Los fallos inesperados
+registran el tipo de excepción, sin su mensaje potencialmente sensible.
+
+Este incremento crea contexto con OpenTelemetry, sin configurar un
+exportador de trazas. La recolección de logs y el backend de observabilidad
+se integrarán durante el despliegue.
 
 ## Verificaciones
 
+Desde la carpeta del servicio:
+
 ```powershell
-py -3.14 -m uv run --locked ruff check .
-py -3.14 -m uv run --locked ruff format --check .
+py -3.14 -m uv run --locked ruff check . ../../infra/personalization
+py -3.14 -m uv run --locked ruff format --check . ../../infra/personalization
 py -3.14 -m uv run --locked mypy
+py -3.14 -m uv run --locked mypy ../../infra/personalization
 py -3.14 -m uv run --locked pytest
 py -3.14 -m uv build --no-sources
 ```
 
-Ruff aplica nombres, imports, anotaciones y límites de 79 caracteres
-para código y 72 para comentarios/docstrings. mypy comprueba tipos en
-modo estricto. Las pruebas actuales verifican errores de configuración
-y precedencia del entorno; no requieren red ni base de datos.
+Desde la raíz para la prueba con contenedores reales:
 
-La CI ejecuta estos controles para cambios del servicio. Sus Actions
-se fijan por SHA. El empaquetado genera wheel y sdist en `dist/`, que
-permanece fuera de Git.
-
-RNF09 se comprobará con una matriz requisito–operación–prueba conforme
-se implementen operaciones. El porcentaje de líneas no sustituye la
-cobertura funcional ni demuestra que el servicio ya esté terminado.
-
-## Capas
-
-```text
-src/personalization/
-├── application/       Casos de uso, reglas, errores y puertos
-├── infrastructure/    Configuración y adaptadores
-└── interfaces/        Entradas HTTP, gRPC y workers
-test/unit/             Pruebas de configuración
+```powershell
+py -3.14 infra/personalization/provision_local.py
+py -3.14 infra/personalization/verify_stack.py
 ```
 
-Negocio define puertos y no importa FastAPI, SQLAlchemy ni adaptadores.
-Infraestructura implementa esos puertos. Las interfaces invocan casos
-de uso y no acceden directamente al ORM.
+La prueba usa un proyecto y volumen temporales. Comprueba HTTP, errores,
+correlación, OpenAPI, caída y recuperación de PostgreSQL, permisos, red y
+persistencia. Retira únicamente sus recursos temporales al terminar.
 
-Los identificadores Python son ingleses y siguen PEP 8; las columnas
-SQL conservarán los nombres españoles del modelo mediante mapeos
-explícitos. Los futuros DTO REST usarán alias camelCase.
+## Capas y evolución
 
-## Límites de datos e integración
+`application/` contiene el caso de uso y puerto de readiness;
+`infrastructure/` implementa configuración, conexiones y observabilidad;
+`interfaces/http/` contiene rutas, DTO, errores y el límite ASGI.
+`bootstrap.py` compone las dependencias y dispone conexiones al cerrar.
+Los controladores no acceden al ORM ni a bases de otros servicios.
 
-PostgreSQL tendrá host `db-personalizacion`, base `personalizacion_db`,
-usuario `app_personalizacion` y esquema `app`. SQLAlchemy y Alembic
-administrarán `archivo`, `estampado`, `estampado_version`,
-`plantilla_version`, `zona`, `tamano_zona`, `diseno`, `aplicacion` y
-`auditoria_local`. No se crearán tablas al arrancar.
+Las tablas de negocio se crearán con Alembic en su incremento. El arranque
+HTTP no crea tablas ni ejecuta migraciones. La matriz requisito–operación–
+prueba se completará con las funcionalidades, sin equiparar cobertura de
+líneas con RNF09.
 
-Auth conserva la identidad; Personalization validará JWT localmente y
-comprobará rol y propiedad. Catalog y Orders aún no existen en este
-repositorio: sus integraciones se desarrollarán mediante puertos y
-contratos versionados, sin acceder a bases de otros servicios.
-
-Los originales privados y previews se guardarán en Supabase Storage.
-Los importes serán centavos enteros en MXN. Un diseño agregado al
-carrito quedará congelado; editarlo creará otro ID.
-
-## GitHub Flow
-
-Rama de este incremento: `feat/personalization/project-scaffold`.
-El PR incluye el servicio y su workflow de CI. Se fusiona a `main`
-mediante squash después de pasar controles y recibir revisión.
-
-Título del PR y commit de squash:
+Rama: `feat/personalization/http-foundation`.
+Commit y título del PR:
 
 ```text
-feat(personalization): initialize service scaffold
+feat(personalization): add HTTP service foundation
 ```
