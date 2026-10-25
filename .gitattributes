@@ -9,3 +9,8 @@
 *.bat text eol=crlf
 *.cmd text eol=crlf
 *.ps1 text eol=crlf
+
+# Personalization source and Linux container inputs
+services/personalizationService/** text eol=lf
+infra/personalization/** text eol=lf
+.github/workflows/personalization-ci.yml text eol=lf
