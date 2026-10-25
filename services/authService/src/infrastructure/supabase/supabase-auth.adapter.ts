@@ -1,7 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createClient } from '@supabase/supabase-js';
-import { Logger } from '@nestjs/common';
 
 import {
     AuthLoginError,
@@ -20,6 +19,11 @@ import {
     PasswordRecoveryFailure,
 } from '../../application/auth/errors/password-recovery.error';
 import {
+    EmailConfirmationError,
+    EmailConfirmationFailure,
+} from '../../application/auth/errors/email-confirmation.error';
+import {
+    type ConfirmEmailInput,
     type RecoverPasswordInput,
     type AuthProviderPort,
     type LoginUserInput,
@@ -34,6 +38,7 @@ import {
 const SUPABASE_HEALTH_TIMEOUT_MS = 2_000;
 const SUPABASE_REFRESH_TIMEOUT_MS = 5_000;
 const SUPABASE_RECOVERY_TIMEOUT_MS = 5_000;
+const SUPABASE_CONFIRMATION_TIMEOUT_MS = 5_000;
 
 const noSessionStorage = {
     getItem: () => null,
@@ -45,7 +50,8 @@ const noSessionStorage = {
 export class SupabaseAuthAdapter implements AuthProviderPort {
     private readonly logger = new Logger(SupabaseAuthAdapter.name);
     private readonly recoveryRequestUrl: string;
-    private readonly recoveryVerifyUrl: string;
+    private readonly verificationUrl: string;
+    private readonly confirmationResendUrl: string;
     private readonly recoveryUserUrl: string;
     private readonly recoveryLogoutUrl: string;
     private readonly client: ReturnType<typeof createClient>;
@@ -80,8 +86,12 @@ export class SupabaseAuthAdapter implements AuthProviderPort {
             '/auth/v1/recover',
             supabaseUrl,
         ).toString();
-        this.recoveryVerifyUrl = new URL(
+        this.verificationUrl = new URL(
             '/auth/v1/verify',
+            supabaseUrl,
+        ).toString();
+        this.confirmationResendUrl = new URL(
+            '/auth/v1/resend',
             supabaseUrl,
         ).toString();
         this.recoveryUserUrl = new URL('/auth/v1/user', supabaseUrl).toString();
@@ -137,6 +147,66 @@ export class SupabaseAuthAdapter implements AuthProviderPort {
                     ? UserRegistrationStatus.PendingEmailConfirmation
                     : UserRegistrationStatus.Active,
         };
+    }
+
+    async confirmEmail(input: ConfirmEmailInput): Promise<LoginUserResult> {
+        try {
+            const response = await fetch(this.verificationUrl, {
+                method: 'POST',
+                headers: this.authHeaders(),
+                body: JSON.stringify({
+                    email: input.email,
+                    token: input.code,
+                    // Restrict verification to registration confirmation tokens.
+                    type: 'signup',
+                }),
+                signal: AbortSignal.timeout(SUPABASE_CONFIRMATION_TIMEOUT_MS),
+            });
+
+            if (response.status !== 200) {
+                throw await mapEmailConfirmationResponse(response);
+            }
+
+            const payload: unknown = await response.json();
+            if (
+                !isConfirmedEmailSession(payload) ||
+                payload.user.email.toLowerCase() !== input.email.toLowerCase()
+            ) {
+                throw new EmailConfirmationError(
+                    EmailConfirmationFailure.ProviderUnavailable,
+                );
+            }
+
+            return {
+                userId: payload.user.id,
+                email: payload.user.email,
+                accessToken: payload.access_token,
+                refreshToken: payload.refresh_token,
+                expiresIn: payload.expires_in,
+                tokenType: payload.token_type,
+            };
+        } catch (error) {
+            if (error instanceof EmailConfirmationError) throw error;
+            throw new EmailConfirmationError(
+                EmailConfirmationFailure.ProviderUnavailable,
+            );
+        }
+    }
+
+    async resendEmailConfirmation(email: string): Promise<void> {
+        try {
+            const response = await fetch(this.confirmationResendUrl, {
+                method: 'POST',
+                headers: this.authHeaders(),
+                body: JSON.stringify({ type: 'signup', email }),
+                signal: AbortSignal.timeout(SUPABASE_CONFIRMATION_TIMEOUT_MS),
+            });
+            if (!response.ok) {
+                this.logger.warn('Email confirmation dispatch failed.');
+            }
+        } catch {
+            this.logger.warn('Email confirmation dispatch failed.');
+        }
     }
 
     async loginUser(input: LoginUserInput): Promise<LoginUserResult> {
@@ -221,7 +291,7 @@ export class SupabaseAuthAdapter implements AuthProviderPort {
         try {
             const response = await fetch(this.recoveryRequestUrl, {
                 method: 'POST',
-                headers: this.recoveryHeaders(),
+                headers: this.authHeaders(),
                 body: JSON.stringify({ email }),
                 signal: AbortSignal.timeout(SUPABASE_RECOVERY_TIMEOUT_MS),
             });
@@ -237,9 +307,9 @@ export class SupabaseAuthAdapter implements AuthProviderPort {
         let accessToken: string | undefined;
 
         try {
-            const verification = await fetch(this.recoveryVerifyUrl, {
+            const verification = await fetch(this.verificationUrl, {
                 method: 'POST',
-                headers: this.recoveryHeaders(),
+                headers: this.authHeaders(),
                 body: JSON.stringify({
                     email: input.email,
                     token: input.code,
@@ -262,7 +332,7 @@ export class SupabaseAuthAdapter implements AuthProviderPort {
             accessToken = session.access_token;
             const update = await fetch(this.recoveryUserUrl, {
                 method: 'PUT',
-                headers: this.recoveryHeaders(accessToken),
+                headers: this.authHeaders(accessToken),
                 body: JSON.stringify({ password: input.newPassword }),
                 signal: AbortSignal.timeout(SUPABASE_RECOVERY_TIMEOUT_MS),
             });
@@ -291,7 +361,7 @@ export class SupabaseAuthAdapter implements AuthProviderPort {
         }
     }
 
-    private recoveryHeaders(accessToken?: string): Record<string, string> {
+    private authHeaders(accessToken?: string): Record<string, string> {
         return {
             apikey: this.publishableKey,
             'Content-Type': 'application/json',
@@ -304,7 +374,7 @@ export class SupabaseAuthAdapter implements AuthProviderPort {
         try {
             const response = await fetch(this.recoveryLogoutUrl, {
                 method: 'POST',
-                headers: this.recoveryHeaders(accessToken),
+                headers: this.authHeaders(accessToken),
                 signal: AbortSignal.timeout(SUPABASE_RECOVERY_TIMEOUT_MS),
             });
             if (!response.ok) {
@@ -545,5 +615,74 @@ function isRecoverySession(
         isRecord(value.user) &&
         typeof value.user.id === 'string' &&
         value.user.id.length > 0
+    );
+}
+
+async function mapEmailConfirmationResponse(
+    response: Response,
+): Promise<EmailConfirmationError> {
+    let payload: unknown;
+    try {
+        payload = await response.json();
+    } catch {
+        payload = null;
+    }
+    const code = isRecord(payload)
+        ? typeof payload.code === 'string'
+            ? payload.code
+            : payload.error_code
+        : undefined;
+
+    if (response.status >= 500) {
+        return new EmailConfirmationError(
+            EmailConfirmationFailure.ProviderUnavailable,
+        );
+    }
+    if (response.status === 429 || code === 'over_request_rate_limit') {
+        return new EmailConfirmationError(EmailConfirmationFailure.RateLimited);
+    }
+    if (code === 'user_banned') {
+        return new EmailConfirmationError(EmailConfirmationFailure.NotAllowed);
+    }
+    if (
+        ['otp_disabled', 'email_provider_disabled', 'signup_disabled'].includes(
+            String(code),
+        )
+    ) {
+        return new EmailConfirmationError(
+            EmailConfirmationFailure.ProviderUnavailable,
+        );
+    }
+    if ([400, 401, 403, 422].includes(response.status)) {
+        return new EmailConfirmationError(EmailConfirmationFailure.InvalidCode);
+    }
+    return new EmailConfirmationError(
+        EmailConfirmationFailure.ProviderUnavailable,
+    );
+}
+
+interface ConfirmedEmailSession {
+    user: { id: string; email: string; email_confirmed_at: string };
+    access_token: string;
+    refresh_token: string;
+    expires_in: number;
+    token_type: string;
+}
+
+function isConfirmedEmailSession(
+    value: unknown,
+): value is ConfirmedEmailSession {
+    return (
+        isRecord(value) &&
+        isRecord(value.user) &&
+        isNonEmptyString(value.user.id) &&
+        isNonEmptyString(value.user.email) &&
+        isNonEmptyString(value.user.email_confirmed_at) &&
+        isNonEmptyString(value.access_token) &&
+        isNonEmptyString(value.refresh_token) &&
+        typeof value.expires_in === 'number' &&
+        Number.isFinite(value.expires_in) &&
+        value.expires_in > 0 &&
+        value.token_type === 'bearer'
     );
 }

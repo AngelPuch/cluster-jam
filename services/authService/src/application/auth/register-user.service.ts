@@ -5,6 +5,8 @@ import {
     type AuthProviderPort,
     type RegisterUserInput,
     type RegisterUserResult,
+    type ConfirmEmailInput,
+    type LoginUserResult,
 } from '../ports/auth-provider.port';
 
 @Injectable()
@@ -16,5 +18,13 @@ export class RegisterUserService {
 
     execute(input: RegisterUserInput): Promise<RegisterUserResult> {
         return this.authProvider.registerUser(input);
+    }
+
+    confirm(input: ConfirmEmailInput): Promise<LoginUserResult> {
+        return this.authProvider.confirmEmail(input);
+    }
+
+    resend(email: string): Promise<void> {
+        return this.authProvider.resendEmailConfirmation(email);
     }
 }
