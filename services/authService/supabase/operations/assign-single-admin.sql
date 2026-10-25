@@ -1,10 +1,12 @@
-begin;
-
 do $$
 declare
-    target_id uuid := 'a55772da-a5f6-475f-b2d3-d9b1db955d9b'::uuid;
+    target_id uuid := null;
     target_email_confirmed timestamptz;
 begin
+    if target_id is null then
+        raise exception 'Set target_id to the confirmed identity UUID before running this operation';
+    end if;
+
     select email_confirmed_at into target_email_confirmed
     from auth.users where id = target_id for update;
     if not found then
@@ -34,3 +36,4 @@ commit;
 select id, raw_app_meta_data ->> 'app_role' as app_role
 from auth.users
 where raw_app_meta_data ->> 'app_role' = 'administrador';
+
