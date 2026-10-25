@@ -37,4 +37,4 @@ WORKDIR /app
 COPY --from=build /app/.venv /app/.venv
 USER 10001:10001
 EXPOSE 8080 50051
-CMD ["python", "-m", "personalization.infrastructure.database.check"]
+CMD ["python", "-m", "personalization.main"]

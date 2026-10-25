@@ -1,9 +1,9 @@
 # Docker y PostgreSQL de Personalization
 
 Este incremento construye la imagen del servicio y una base PostgreSQL
-aislada. El comando de la imagen comprueba configuración, conexión, esquema
-y permisos; termina con código 0 si todo es correcto. Todavía no inicia un
-servidor REST/gRPC ni crea tablas de negocio.
+aislada. La imagen inicia la API REST. El servicio de herramientas
+`personalization-check` conserva la comprobación técnica de configuración,
+conexión, esquema y permisos. No se crean tablas de negocio al arrancar.
 
 ## Requisitos
 
@@ -85,9 +85,10 @@ La comprobación usa SQLAlchemy y psycopg con tiempos límite. Consulta la
 base, usuario, propietario del esquema y privilegios. No realiza DDL ni
 registra contraseñas, cadenas completas de conexión o errores SQL internos.
 
-La red compartida del backend se añadirá al incorporar la API; PostgreSQL
-permanecerá conectado exclusivamente a su red privada. RabbitMQ conserva
-su configuración independiente y no es necesario para esta comprobación.
+La API se conecta a las redes `backend` y `personalization-db` del
+proyecto Compose; PostgreSQL permanece exclusivamente en la segunda.
+La orquestación conjunta de otros servicios se incorporará al despliegue.
+RabbitMQ mantiene su configuración independiente.
 
 ## Prueba automatizada del incremento
 
@@ -135,3 +136,25 @@ antes de ejecutar la prueba del incremento. Por defecto no se necesita
 iniciar sesión en Docker para trabajar con estos contenedores locales.
 
 Referencia: https://docs.docker.com/desktop/troubleshoot-and-support/troubleshoot/topics/
+
+
+## API REST y publicación local
+
+```powershell
+docker compose -f infra/personalization/compose.yaml -f infra/personalization/compose.dev.yaml up -d --build --wait personalization
+```
+
+La API estará en `http://127.0.0.1:8082`, con salud en `/health/live` y
+`/health/ready`, Swagger UI en `/docs` y contrato en `/openapi.json`.
+`compose.dev.yaml` publica únicamente el puerto REST en loopback; el archivo
+base no publica puertos. gRPC se implementará en un incremento posterior.
+
+La prueba automatizada también detiene PostgreSQL, comprueba liveness 200
+y readiness 503, vuelve a iniciarlo y exige recuperación a readiness 200.
+Los logs deben ser JSON y no contener los tokens ni query strings de prueba.
+
+Para detener el entorno de desarrollo conservando sus datos:
+
+```powershell
+docker compose -f infra/personalization/compose.yaml -f infra/personalization/compose.dev.yaml down
+```

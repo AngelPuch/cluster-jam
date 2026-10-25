@@ -15,6 +15,7 @@ def isolate_environment(
     """Prevent machine-specific configuration from changing tests."""
     for name in (
         "APP_ENV",
+        "HTTP_HOST",
         "HTTP_PORT",
         "GRPC_PORT",
         "LOG_LEVEL",
