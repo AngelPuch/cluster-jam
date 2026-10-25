@@ -6,7 +6,6 @@ import {
     Headers,
     HttpCode,
     HttpStatus,
-    UnauthorizedException,
 } from '@nestjs/common';
 import {
     ApiBearerAuth,
@@ -15,12 +14,20 @@ import {
     ApiOperation,
     ApiResponse,
     ApiTags,
+    getSchemaPath,
 } from '@nestjs/swagger';
 
 import { CurrentSessionService } from '../../../application/auth/current-session.service';
 import { ProblemDetailsDto } from '../common/errors/problem-details.dto';
 import { throwCurrentSessionHttpError } from './current-session-error.mapper';
 import { CurrentIdentityResponseDto } from './dto/current-identity-response.dto';
+import { readBearerToken } from './read-bearer-token';
+
+const problemContent = {
+    'application/problem+json': {
+        schema: { $ref: getSchemaPath(ProblemDetailsDto) },
+    },
+};
 
 @ApiTags('Authentication')
 @ApiBearerAuth('supabase-jwt')
@@ -33,12 +40,17 @@ export class CurrentSessionController {
     @ApiOperation({
         summary: 'Get the current identity',
         description:
-            'Checks the current Supabase session and returns its user ID and email.',
+            'Checks the current Supabase session and returns its user ID, email and current application role.',
     })
     @ApiOkResponse({ type: CurrentIdentityResponseDto })
-    @ApiResponse({ status: 401, type: ProblemDetailsDto })
-    @ApiResponse({ status: 429, type: ProblemDetailsDto })
-    @ApiResponse({ status: 503, type: ProblemDetailsDto })
+    @ApiResponse({ status: 401, content: problemContent })
+    @ApiResponse({
+        status: 403,
+        description: 'Missing or invalid application role.',
+        content: problemContent,
+    })
+    @ApiResponse({ status: 429, content: problemContent })
+    @ApiResponse({ status: 503, content: problemContent })
     async getIdentity(
         @Headers('authorization') authorization?: string,
     ): Promise<CurrentIdentityResponseDto> {
@@ -60,9 +72,9 @@ export class CurrentSessionController {
             'Revokes only this Supabase session. The client must discard its tokens.',
     })
     @ApiNoContentResponse({ description: 'The current session was ended.' })
-    @ApiResponse({ status: 401, type: ProblemDetailsDto })
-    @ApiResponse({ status: 429, type: ProblemDetailsDto })
-    @ApiResponse({ status: 503, type: ProblemDetailsDto })
+    @ApiResponse({ status: 401, content: problemContent })
+    @ApiResponse({ status: 429, content: problemContent })
+    @ApiResponse({ status: 503, content: problemContent })
     async end(@Headers('authorization') authorization?: string): Promise<void> {
         try {
             await this.sessions.end(readBearerToken(authorization));
@@ -70,15 +82,4 @@ export class CurrentSessionController {
             throwCurrentSessionHttpError(error);
         }
     }
-}
-
-function readBearerToken(authorization?: string): string {
-    const token = /^Bearer ([^\s]+)$/i.exec(authorization ?? '')?.[1];
-    if (!token) {
-        throw new UnauthorizedException({
-            code: 'INVALID_ACCESS_TOKEN',
-            detail: 'A Bearer access token is required.',
-        });
-    }
-    return token;
 }

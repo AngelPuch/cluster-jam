@@ -1,4 +1,5 @@
 import {
+    ForbiddenException,
     HttpException,
     HttpStatus,
     ServiceUnavailableException,
@@ -17,6 +18,11 @@ export function throwCurrentSessionHttpError(error: unknown): never {
     }
 
     switch (error.failure) {
+        case CurrentSessionFailure.InvalidAppRole:
+            throw new ForbiddenException({
+                code: CurrentSessionFailure.InvalidAppRole,
+                detail: 'The identity does not have a valid application role.',
+            });
         case CurrentSessionFailure.InvalidAccessToken:
             throw new UnauthorizedException({
                 code: CurrentSessionFailure.InvalidAccessToken,

@@ -6,6 +6,7 @@ import {
 } from '../ports/current-session.port';
 import { Test } from '@nestjs/testing';
 import { CurrentSessionService } from './current-session.service';
+import { AppRole } from './app-role';
 
 describe('CurrentSessionService', () => {
     let service: CurrentSessionService;
@@ -26,7 +27,11 @@ describe('CurrentSessionService', () => {
     });
 
     it('returns the identity obtained from the provider', async () => {
-        const identity = { userId: 'user-id', email: 'user@example.com' };
+        const identity = {
+            userId: 'user-id',
+            email: 'user@example.com',
+            appRole: AppRole.Client,
+        };
         provider.getCurrentIdentity.mockResolvedValue(identity);
         await expect(service.getIdentity('access-token')).resolves.toEqual(
             identity,

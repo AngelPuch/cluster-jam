@@ -7,6 +7,7 @@ import {
     jwtVerify,
 } from 'jose';
 
+import { readAppRole } from '../../application/auth/app-role';
 import {
     CurrentSessionError,
     CurrentSessionFailure,
@@ -72,8 +73,15 @@ export class SupabaseCurrentSessionAdapter implements CurrentSessionPort {
                     CurrentSessionFailure.ProviderUnavailable,
                 );
             }
-            return { userId: user.id, email: user.email };
-        } catch {
+            const appRole = readAppRole(user.app_metadata);
+            if (!appRole) {
+                throw new CurrentSessionError(
+                    CurrentSessionFailure.InvalidAppRole,
+                );
+            }
+            return { userId: user.id, email: user.email, appRole };
+        } catch (error) {
+            if (error instanceof CurrentSessionError) throw error;
             throw new CurrentSessionError(
                 CurrentSessionFailure.ProviderUnavailable,
             );
@@ -162,7 +170,7 @@ export class SupabaseCurrentSessionAdapter implements CurrentSessionPort {
 
 function isCurrentIdentity(
     value: unknown,
-): value is { id: string; email: string } {
+): value is { id: string; email: string; app_metadata?: unknown } {
     if (typeof value !== 'object' || value === null) {
         return false;
     }
