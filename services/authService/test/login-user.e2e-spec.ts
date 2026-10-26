@@ -99,6 +99,7 @@ describe('User login API (e2e)', () => {
       detail: 'The email or password is incorrect.',
       instance: '/api/v1/sessions',
       code: 'INVALID_CREDENTIALS',
+      traceId: expect.stringMatching(/^[0-9a-f]{32}$/),
     });
   });
 
@@ -121,6 +122,7 @@ describe('User login API (e2e)', () => {
       detail: 'The email address must be confirmed before signing in.',
       instance: '/api/v1/sessions',
       code: 'EMAIL_NOT_CONFIRMED',
+      traceId: expect.stringMatching(/^[0-9a-f]{32}$/),
     });
   });
 
@@ -143,6 +145,7 @@ describe('User login API (e2e)', () => {
       detail: 'The login data was rejected.',
       instance: '/api/v1/sessions',
       code: 'INVALID_REQUEST',
+      traceId: expect.stringMatching(/^[0-9a-f]{32}$/),
     });
   });
 
@@ -165,6 +168,7 @@ describe('User login API (e2e)', () => {
       detail: 'Too many login attempts. Try again later.',
       instance: '/api/v1/sessions',
       code: 'TOO_MANY_REQUESTS',
+      traceId: expect.stringMatching(/^[0-9a-f]{32}$/),
     });
   });
 
@@ -187,6 +191,7 @@ describe('User login API (e2e)', () => {
       detail: 'The authentication provider is temporarily unavailable.',
       instance: '/api/v1/sessions',
       code: 'SERVICE_UNAVAILABLE',
+      traceId: expect.stringMatching(/^[0-9a-f]{32}$/),
     });
   });
 

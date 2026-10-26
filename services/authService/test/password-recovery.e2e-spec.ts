@@ -179,6 +179,7 @@ describe('Password recovery API (e2e)', () => {
       detail: 'The recovery code is invalid, expired or already used.',
       instance: recoveryPath,
       code: 'INVALID_RECOVERY_CODE',
+      traceId: expect.stringMatching(/^[0-9a-f]{32}$/),
     });
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });

@@ -3,6 +3,14 @@ import * as Joi from 'joi';
 export const environmentValidationSchema = Joi.object({
   APP_ENV: Joi.string().valid('development', 'test', 'production').required(),
 
+  LOG_LEVEL: Joi.string().valid('DEBUG', 'INFO', 'WARN', 'ERROR').default('INFO'),
+
+  SERVICE_VERSION: Joi.string()
+    .pattern(/^[a-zA-Z0-9][a-zA-Z0-9.+-]{0,63}$/)
+    .default('0.0.1'),
+
+  INSTANCE_ID: Joi.string().pattern(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/),
+
   HTTP_PORT: Joi.number().port().default(8080),
 
   SUPABASE_URL: Joi.string().uri().required(),
