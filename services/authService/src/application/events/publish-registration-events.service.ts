@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { randomBytes } from 'node:crypto';
+import { TRACE_CONTEXT_PORT, type TraceContextPort } from '../ports/trace-context.port';
 
 import {
   REGISTRATION_OUTBOX_PORT,
@@ -20,6 +20,8 @@ export class PublishRegistrationEventsService {
     private readonly outbox: RegistrationOutboxPort,
     @Inject(REGISTRATION_EVENT_PUBLISHER_PORT)
     private readonly publisher: RegistrationEventPublisherPort,
+    @Inject(TRACE_CONTEXT_PORT)
+    private readonly tracing: TraceContextPort,
   ) {}
 
   async execute(
@@ -32,8 +34,7 @@ export class PublishRegistrationEventsService {
     for (let index = 0; index < limit && !shouldStop(); index += 1) {
       const result = await this.outbox.deliverNext(async (record) => {
         const event = createRegistrationEvent(record);
-        const traceparent = `00-${randomBytes(16).toString('hex')}-${randomBytes(8).toString('hex')}-00`;
-        await this.publisher.publish(event, traceparent);
+        await this.tracing.runProducer((traceparent) => this.publisher.publish(event, traceparent));
       });
       if (result.status === 'empty') break;
       if (result.status === 'blocked') {

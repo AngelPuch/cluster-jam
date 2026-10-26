@@ -123,7 +123,7 @@ describe('Registration outbox with real Supabase/Postgres/RabbitMQ', () => {
     expect(Object.keys(event.data).sort()).toEqual(['initialContactEmail', 'userId']);
     expect(message.properties.deliveryMode).toBe(2);
     expect(message.properties.messageId).toBe(row.id);
-    expect(message.properties.headers?.traceparent).toMatch(/^00-[0-9a-f]{32}-[0-9a-f]{16}-00$/);
+    expect(message.properties.headers?.traceparent).toMatch(/^00-[0-9a-f]{32}-[0-9a-f]{16}-0[01]$/);
     channel.ack(message);
     const state = await admin.query<OutboxState>(
       'SELECT * FROM integration.auth_outbox WHERE id = $1',

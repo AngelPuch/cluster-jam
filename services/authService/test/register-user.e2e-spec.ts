@@ -103,6 +103,7 @@ describe('User registration API (e2e)', () => {
       detail: 'An account with this email is already registered.',
       instance: '/api/v1/registrations',
       code: 'EMAIL_ALREADY_REGISTERED',
+      traceId: expect.stringMatching(/^[0-9a-f]{32}$/),
     });
   });
 
@@ -127,6 +128,7 @@ describe('User registration API (e2e)', () => {
       detail: 'The email address is not accepted.',
       instance: '/api/v1/registrations',
       code: 'INVALID_EMAIL',
+      traceId: expect.stringMatching(/^[0-9a-f]{32}$/),
     });
   });
 
@@ -151,6 +153,7 @@ describe('User registration API (e2e)', () => {
       detail: 'The registration data was rejected.',
       instance: '/api/v1/registrations',
       code: 'INVALID_REQUEST',
+      traceId: expect.stringMatching(/^[0-9a-f]{32}$/),
     });
   });
 
@@ -175,6 +178,7 @@ describe('User registration API (e2e)', () => {
       detail: 'The password does not meet the required security policy.',
       instance: '/api/v1/registrations',
       code: 'WEAK_PASSWORD',
+      traceId: expect.stringMatching(/^[0-9a-f]{32}$/),
     });
   });
 
@@ -199,6 +203,7 @@ describe('User registration API (e2e)', () => {
       detail: 'Too many registration attempts. Try again later.',
       instance: '/api/v1/registrations',
       code: 'TOO_MANY_REQUESTS',
+      traceId: expect.stringMatching(/^[0-9a-f]{32}$/),
     });
   });
 
@@ -223,6 +228,7 @@ describe('User registration API (e2e)', () => {
       detail: 'The authentication provider is temporarily unavailable.',
       instance: '/api/v1/registrations',
       code: 'SERVICE_UNAVAILABLE',
+      traceId: expect.stringMatching(/^[0-9a-f]{32}$/),
     });
   });
 

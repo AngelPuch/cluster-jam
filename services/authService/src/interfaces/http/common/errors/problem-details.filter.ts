@@ -1,9 +1,8 @@
 import { ArgumentsHost, Catch, ExceptionFilter } from '@nestjs/common';
 import { Request, Response } from 'express';
 
+import { markHttpFailure, readHttpTraceId } from '../observability/request-telemetry.middleware';
 import { mapExceptionToProblemDetails } from './problem-details.mapper';
-
-const TRACEPARENT_PATTERN = /^[0-9a-f]{2}-([0-9a-f]{32})-[0-9a-f]{16}-[0-9a-f]{2}$/i;
 
 @Catch()
 export class ProblemDetailsFilter implements ExceptionFilter {
@@ -13,10 +12,12 @@ export class ProblemDetailsFilter implements ExceptionFilter {
     const request = context.getRequest<Request>();
     const response = context.getResponse<Response>();
 
+    markHttpFailure(response, exception);
+
     const problemDetails = mapExceptionToProblemDetails(
       exception,
       getRequestPath(request),
-      extractTraceId(request.get('traceparent')),
+      readHttpTraceId(response),
     );
 
     response
@@ -25,14 +26,6 @@ export class ProblemDetailsFilter implements ExceptionFilter {
       .type('application/problem+json')
       .json(problemDetails);
   }
-}
-
-function extractTraceId(traceparent: string | undefined): string | undefined {
-  if (!traceparent) {
-    return undefined;
-  }
-
-  return TRACEPARENT_PATTERN.exec(traceparent)?.[1];
 }
 
 function getRequestPath(request: Request): string {

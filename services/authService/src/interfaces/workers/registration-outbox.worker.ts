@@ -1,7 +1,17 @@
-import { Injectable, Logger, OnApplicationBootstrap, OnModuleDestroy } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  OnApplicationBootstrap,
+  OnModuleDestroy,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 import { PublishRegistrationEventsService } from '../../application/events/publish-registration-events.service';
+import {
+  TRACE_CONTEXT_PORT,
+  type TraceContextPort,
+} from '../../application/ports/trace-context.port';
 
 @Injectable()
 export class RegistrationOutboxWorker implements OnApplicationBootstrap, OnModuleDestroy {
@@ -13,6 +23,8 @@ export class RegistrationOutboxWorker implements OnApplicationBootstrap, OnModul
   constructor(
     private readonly config: ConfigService,
     private readonly publisher: PublishRegistrationEventsService,
+    @Inject(TRACE_CONTEXT_PORT)
+    private readonly tracing: TraceContextPort,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -27,16 +39,18 @@ export class RegistrationOutboxWorker implements OnApplicationBootstrap, OnModul
   }
 
   private async tick(): Promise<void> {
-    try {
-      await this.publisher.execute(10, () => this.stopped);
-    } catch {
-      this.logger.warn({
-        event: 'auth.outbox.poll.failed',
-        code: 'OUTBOX_UNAVAILABLE',
-      });
-    } finally {
-      this.schedule(1_000);
-    }
+    await this.tracing.runJob(async () => {
+      try {
+        await this.publisher.execute(10, () => this.stopped);
+      } catch {
+        this.logger.warn({
+          event: 'auth.outbox.poll.failed',
+          code: 'OUTBOX_UNAVAILABLE',
+        });
+      } finally {
+        this.schedule(1_000);
+      }
+    });
   }
 
   async onModuleDestroy(): Promise<void> {

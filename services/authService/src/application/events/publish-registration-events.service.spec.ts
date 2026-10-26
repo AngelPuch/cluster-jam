@@ -1,8 +1,11 @@
 import { Logger } from '@nestjs/common';
 import { afterEach, describe, expect, it, jest } from '@jest/globals';
+import { TraceContextService } from '../../infrastructure/observability/trace-context.service';
 import type { RegistrationOutboxPort } from '../ports/registration-outbox.port';
 import type { RegistrationEventPublisherPort } from '../ports/registration-event-publisher.port';
 import { PublishRegistrationEventsService } from './publish-registration-events.service';
+
+const tracing = new TraceContextService();
 
 const record = {
   id: '11111111-1111-4111-8111-111111111111',
@@ -30,13 +33,13 @@ describe('PublishRegistrationEventsService', () => {
         return { status: 'published' };
       })
       .mockResolvedValue({ status: 'empty' });
-    const service = new PublishRegistrationEventsService({ deliverNext }, { publish });
+    const service = new PublishRegistrationEventsService({ deliverNext }, { publish }, tracing);
     await expect(service.execute()).resolves.toEqual({
       published: 1,
       retried: 0,
     });
     expect(publish.mock.calls[0][0].eventId).toBe(record.id);
-    expect(publish.mock.calls[0][1]).toMatch(/^00-[0-9a-f]{32}-[0-9a-f]{16}-00$/);
+    expect(publish.mock.calls[0][1]).toMatch(/^00-[0-9a-f]{32}-[0-9a-f]{16}-0[01]$/);
     expect(JSON.stringify(log.mock.calls)).not.toContain('private@example.com');
     expect(deliverNext).toHaveBeenCalledTimes(2);
   });
@@ -50,7 +53,7 @@ describe('PublishRegistrationEventsService', () => {
     });
     const publish = jest.fn<RegistrationEventPublisherPort['publish']>();
     await expect(
-      new PublishRegistrationEventsService({ deliverNext }, { publish }).execute(2),
+      new PublishRegistrationEventsService({ deliverNext }, { publish }, tracing).execute(2),
     ).resolves.toEqual({ published: 0, retried: 2 });
     expect(deliverNext).toHaveBeenCalledTimes(2);
     expect(warn).toHaveBeenCalledTimes(1);
@@ -61,7 +64,10 @@ describe('PublishRegistrationEventsService', () => {
     const deliverNext = jest.fn<RegistrationOutboxPort['deliverNext']>();
     const publish = jest.fn<RegistrationEventPublisherPort['publish']>();
     await expect(
-      new PublishRegistrationEventsService({ deliverNext }, { publish }).execute(10, () => true),
+      new PublishRegistrationEventsService({ deliverNext }, { publish }, tracing).execute(
+        10,
+        () => true,
+      ),
     ).resolves.toEqual({ published: 0, retried: 0 });
     expect(deliverNext).not.toHaveBeenCalled();
   });
@@ -84,7 +90,7 @@ describe('PublishRegistrationEventsService', () => {
       .mockResolvedValue({ status: 'empty' });
 
     await expect(
-      new PublishRegistrationEventsService({ deliverNext }, { publish }).execute(),
+      new PublishRegistrationEventsService({ deliverNext }, { publish }, tracing).execute(),
     ).resolves.toEqual({ published: 1, retried: 0 });
     expect(publish).toHaveBeenCalledTimes(1);
     expect(deliverNext).toHaveBeenCalledTimes(3);

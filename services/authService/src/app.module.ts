@@ -7,6 +7,7 @@ import { ProblemDetailsFilter } from './interfaces/http/common/errors/problem-de
 import { HealthModule } from './interfaces/http/health/health.module';
 import { AuthModule } from './interfaces/http/auth/auth.module';
 import { RegistrationEventsModule } from './infrastructure/outbox/registration-events.module';
+import { ObservabilityModule } from './infrastructure/observability/observability.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { RegistrationEventsModule } from './infrastructure/outbox/registration-e
     HealthModule,
     AuthModule,
     RegistrationEventsModule,
+    ObservabilityModule,
   ],
   providers: [
     {
