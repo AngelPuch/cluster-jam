@@ -2,6 +2,8 @@ import { INestApplication } from '@nestjs/common';
 import { afterAll, beforeAll, describe, expect, it } from '@jest/globals';
 import { OpenAPIObject } from '@nestjs/swagger';
 import request from 'supertest';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { App } from 'supertest/types';
 
 import { createTestApp } from './helpers/create-test-app';
@@ -25,6 +27,16 @@ describe('Auth Service HTTP foundation (e2e)', () => {
     const response = await request(app.getHttpServer()).get('/openapi.json').expect(200);
 
     const document = response.body as OpenAPIObject;
+
+    const contractPath = join(
+      process.env.INIT_CWD || process.cwd(),
+      '../../contracts/openapi/auth/v1/openapi.json',
+    );
+
+    const committedContract: unknown = JSON.parse(await readFile(contractPath, 'utf8'));
+
+    expect(document).toEqual(committedContract);
+    expect(document.info.version).toBe('1.0.0');
 
     expect(document.info.title).toBe('Cluster JAM Auth Service');
 

@@ -1,0 +1,1136 @@
+{
+  "components": {
+    "schemas": {
+      "ConfirmEmailDto": {
+        "properties": {
+          "code": {
+            "description": "Six-digit code from the signup confirmation email.",
+            "example": "012345",
+            "maxLength": 6,
+            "minLength": 6,
+            "pattern": "^[0-9]{6}$",
+            "type": "string",
+            "writeOnly": true
+          },
+          "email": {
+            "example": "user@example.com",
+            "maxLength": 254,
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "code"
+        ],
+        "type": "object"
+      },
+      "CurrentIdentityResponseDto": {
+        "properties": {
+          "appRole": {
+            "enum": [
+              "cliente",
+              "administrador"
+            ],
+            "example": "cliente",
+            "type": "string"
+          },
+          "email": {
+            "example": "user@example.com",
+            "type": "string"
+          },
+          "userId": {
+            "example": "11111111-1111-4111-8111-111111111111",
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "userId",
+          "email",
+          "appRole"
+        ],
+        "type": "object"
+      },
+      "EmailConfirmationRequestResponseDto": {
+        "properties": {
+          "message": {
+            "example": "If the account is pending confirmation, a confirmation code will be sent.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "type": "object"
+      },
+      "HealthResponseDto": {
+        "properties": {
+          "status": {
+            "enum": [
+              "ok"
+            ],
+            "example": "ok",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "type": "object"
+      },
+      "LoginUserDto": {
+        "properties": {
+          "email": {
+            "example": "user@example.com",
+            "maxLength": 254,
+            "type": "string"
+          },
+          "password": {
+            "example": "StrongPassword123!",
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ],
+        "type": "object"
+      },
+      "LoginUserResponseDto": {
+        "properties": {
+          "accessToken": {
+            "description": "Supabase access token.",
+            "example": "access-token",
+            "type": "string"
+          },
+          "email": {
+            "example": "user@example.com",
+            "type": "string"
+          },
+          "expiresIn": {
+            "description": "Access token lifetime in seconds.",
+            "example": 3600,
+            "type": "number"
+          },
+          "refreshToken": {
+            "description": "Supabase refresh token.",
+            "example": "refresh-token",
+            "type": "string"
+          },
+          "tokenType": {
+            "example": "bearer",
+            "type": "string"
+          },
+          "userId": {
+            "example": "11111111-1111-4111-8111-111111111111",
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "userId",
+          "email",
+          "accessToken",
+          "refreshToken",
+          "expiresIn",
+          "tokenType"
+        ],
+        "type": "object"
+      },
+      "PasswordRecoveryRequestResponseDto": {
+        "properties": {
+          "message": {
+            "example": "If the account can receive recovery emails, you will receive instructions.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "type": "object"
+      },
+      "ProblemDetailsDto": {
+        "properties": {
+          "code": {
+            "example": "NOT_FOUND",
+            "type": "string"
+          },
+          "detail": {
+            "example": "Cannot GET /missing",
+            "type": "string"
+          },
+          "errors": {
+            "example": [
+              "email must be an email"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "instance": {
+            "example": "/missing",
+            "type": "string"
+          },
+          "status": {
+            "example": 404,
+            "type": "number"
+          },
+          "title": {
+            "example": "Not Found",
+            "type": "string"
+          },
+          "traceId": {
+            "example": "4bf92f3577b34da6a3ce929d0e0e4736",
+            "type": "string"
+          },
+          "type": {
+            "example": "about:blank",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status",
+          "detail",
+          "instance",
+          "code"
+        ],
+        "type": "object"
+      },
+      "RecoverPasswordDto": {
+        "properties": {
+          "code": {
+            "description": "Six-digit code received in the password recovery email.",
+            "example": "012345",
+            "maxLength": 6,
+            "minLength": 6,
+            "pattern": "^[0-9]{6}$",
+            "type": "string",
+            "writeOnly": true
+          },
+          "email": {
+            "example": "user@example.com",
+            "maxLength": 254,
+            "type": "string"
+          },
+          "newPassword": {
+            "example": "NewStrongPassword123!",
+            "minLength": 8,
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "email",
+          "code",
+          "newPassword"
+        ],
+        "type": "object"
+      },
+      "RefreshSessionDto": {
+        "properties": {
+          "refreshToken": {
+            "description": "Current Supabase refresh token.",
+            "example": "refresh-token",
+            "maxLength": 4096,
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "refreshToken"
+        ],
+        "type": "object"
+      },
+      "RegisterUserDto": {
+        "properties": {
+          "email": {
+            "example": "user@example.com",
+            "maxLength": 254,
+            "type": "string"
+          },
+          "password": {
+            "example": "StrongPassword123!",
+            "minLength": 8,
+            "type": "string",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ],
+        "type": "object"
+      },
+      "RegisterUserResponseDto": {
+        "properties": {
+          "email": {
+            "example": "user@example.com",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "PENDING_EMAIL_CONFIRMATION",
+              "ACTIVE"
+            ],
+            "example": "PENDING_EMAIL_CONFIRMATION",
+            "type": "string"
+          },
+          "userId": {
+            "example": "11111111-1111-4111-8111-111111111111",
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "userId",
+          "email",
+          "status"
+        ],
+        "type": "object"
+      },
+      "RequestEmailConfirmationDto": {
+        "properties": {
+          "email": {
+            "example": "user@example.com",
+            "maxLength": 254,
+            "type": "string"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "type": "object"
+      },
+      "RequestPasswordRecoveryDto": {
+        "properties": {
+          "email": {
+            "example": "user@example.com",
+            "maxLength": 254,
+            "type": "string"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "supabase-jwt": {
+        "bearerFormat": "JWT",
+        "description": "Supabase Auth access token.",
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "contact": {},
+    "description": "HTTP API for Cluster JAM authentication and session operations. Identity and credentials are delegated to Supabase Auth.",
+    "title": "Cluster JAM Auth Service",
+    "version": "1.0.0"
+  },
+  "openapi": "3.0.0",
+  "paths": {
+    "/api/v1/password-recoveries": {
+      "post": {
+        "description": "Verifies email and a six-digit recovery code with Supabase, then updates the password. A login Bearer token does not replace the recovery code. After verification the code is consumed, even if the update fails.",
+        "operationId": "PasswordRecoveryController_recover",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecoverPasswordDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "The password was updated."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "Invalid, expired or already used recovery code."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "Recovery is blocked or additional verification is required by Supabase."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "The new password is the same as the current password."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "Invalid fields or rejected password policy."
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "Recovery verification or update was rate limited."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "Supabase Auth is unavailable or returned invalid data."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "Error response using RFC 9457 Problem Details."
+          }
+        },
+        "summary": "Recover a password using an email code",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/api/v1/password-recovery-requests": {
+      "post": {
+        "description": "Always returns a neutral result for valid input. This does not confirm account existence or email delivery.",
+        "operationId": "PasswordRecoveryController_request",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestPasswordRecoveryDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordRecoveryRequestResponseDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "Invalid email or unexpected request fields."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "Error response using RFC 9457 Problem Details."
+          }
+        },
+        "summary": "Request a password recovery email",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/api/v1/registrations": {
+      "post": {
+        "description": "Creates a Supabase Auth identity using email and password.",
+        "operationId": "RegistrationController_register",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterUserDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegisterUserResponseDto"
+                }
+              }
+            },
+            "description": "The identity was created. Email confirmation may still be pending."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "The email is already registered."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "The registration data is invalid."
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "The registration request was rate limited."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "Supabase Auth is temporarily unavailable."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "Error response using RFC 9457 Problem Details."
+          }
+        },
+        "summary": "Register a user",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/api/v1/registrations/email-confirmation-requests": {
+      "post": {
+        "description": "Returns a neutral result for valid input, including unknown or confirmed accounts and provider failures. Does not guarantee email delivery. Supabase enforces delivery rate limits.",
+        "operationId": "RegistrationController_resend",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestEmailConfirmationDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailConfirmationRequestResponseDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "Invalid email or unexpected fields."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "Error response using RFC 9457 Problem Details."
+          }
+        },
+        "summary": "Request another signup confirmation code",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/api/v1/registrations/email-confirmations": {
+      "post": {
+        "description": "Verifies a six-digit signup code and returns the Supabase session. Does not require a Bearer token. The code is consumed after successful provider verification.",
+        "operationId": "RegistrationController_confirm",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmEmailDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginUserResponseDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "Invalid, expired or already used confirmation code."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "Email confirmation is not allowed."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "Invalid email, code format or unexpected fields."
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "Too many verification attempts."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "Supabase Auth is unavailable or returned invalid data."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "Error response using RFC 9457 Problem Details."
+          }
+        },
+        "summary": "Confirm a registration using an email code",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/api/v1/session-renewals": {
+      "post": {
+        "description": "Exchanges a Supabase refresh token for a new access token and refresh token.",
+        "operationId": "SessionRenewalController_renew",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshSessionDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginUserResponseDto"
+                }
+              }
+            },
+            "description": "The session was renewed."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "The refresh token is invalid or the session has ended."
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "A concurrent renewal conflicted with this request."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "The renewal request is invalid."
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "The renewal request was rate limited."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "Supabase Auth is temporarily unavailable."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "Error response using RFC 9457 Problem Details."
+          }
+        },
+        "summary": "Renew a session",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/api/v1/sessions": {
+      "post": {
+        "description": "Authenticates an existing user with email and password using Supabase Auth.",
+        "operationId": "SessionController_login",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginUserDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginUserResponseDto"
+                }
+              }
+            },
+            "description": "Authentication succeeded and a session was created."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "The credentials are invalid."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "The email address has not been confirmed."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "The login data is invalid."
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "The login request was rate limited."
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "Supabase Auth is temporarily unavailable."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "Error response using RFC 9457 Problem Details."
+          }
+        },
+        "summary": "Login a user",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/api/v1/sessions/current": {
+      "delete": {
+        "description": "Revokes only this Supabase session. The client must discard its tokens.",
+        "operationId": "CurrentSessionController_end",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The current session was ended."
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "Error response using RFC 9457 Problem Details."
+          }
+        },
+        "security": [
+          {
+            "supabase-jwt": []
+          }
+        ],
+        "summary": "End the current session",
+        "tags": [
+          "Authentication"
+        ]
+      },
+      "get": {
+        "description": "Checks the current Supabase session and returns its user ID, email and current application role.",
+        "operationId": "CurrentSessionController_getIdentity",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentIdentityResponseDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "Missing or invalid application role."
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": ""
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "Error response using RFC 9457 Problem Details."
+          }
+        },
+        "security": [
+          {
+            "supabase-jwt": []
+          }
+        ],
+        "summary": "Get the current identity",
+        "tags": [
+          "Authentication"
+        ]
+      }
+    },
+    "/health/live": {
+      "get": {
+        "description": "Confirms that the Auth Service process is running.",
+        "operationId": "HealthController_getLiveness",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponseDto"
+                }
+              }
+            },
+            "description": "The Auth Service process is alive."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "Error response using RFC 9457 Problem Details."
+          }
+        },
+        "summary": "Check service liveness",
+        "tags": [
+          "Health"
+        ]
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "description": "Confirms that the Auth Service can reach Supabase Auth and is ready to receive authentication requests.",
+        "operationId": "HealthController_getReadiness",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponseDto"
+                }
+              }
+            },
+            "description": "The Auth Service is ready."
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "Error response using RFC 9457 Problem Details."
+          }
+        },
+        "summary": "Check service readiness",
+        "tags": [
+          "Health"
+        ]
+      }
+    }
+  },
+  "servers": [],
+  "tags": [
+    {
+      "description": "Technical endpoints for service health checks.",
+      "name": "Health"
+    },
+    {
+      "description": "Registration, login, sessions and password recovery.",
+      "name": "Authentication"
+    }
+  ]
+}
