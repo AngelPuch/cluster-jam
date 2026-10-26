@@ -6,7 +6,14 @@ import { JsonLogger } from '../../infrastructure/observability/json-logger.servi
 import { TraceContextService } from '../../infrastructure/observability/trace-context.service';
 import { createRequestTelemetry } from './common/observability/request-telemetry.middleware';
 
-export function configureHttpApplication(app: INestApplication): void {
+interface HttpApplicationOptions {
+  enableOpenApi?: boolean;
+}
+
+export function configureHttpApplication(
+  app: INestApplication,
+  options: HttpApplicationOptions = {},
+): void {
   app.use(createRequestTelemetry(app.get(JsonLogger), app.get(TraceContextService)));
   app.use(helmet());
 
@@ -23,5 +30,5 @@ export function configureHttpApplication(app: INestApplication): void {
     exclude: ['health/live', 'health/ready'],
   });
 
-  setupOpenApi(app);
+  if (options.enableOpenApi !== false) setupOpenApi(app);
 }

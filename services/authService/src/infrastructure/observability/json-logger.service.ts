@@ -9,6 +9,13 @@ const LEVEL_PRIORITY: Record<Level, number> = { DEBUG: 10, INFO: 20, WARN: 30, E
 const DEFAULT_INSTANCE_ID = randomUUID();
 const MAX_OUTPUT_BUFFER_BYTES = 65_536;
 const EVENT_MESSAGES: Record<string, string> = {
+  'auth.openapi.exported':
+    'Auth OpenAPI contract exported to contracts/openapi/auth/v1/openapi.json.',
+  'auth.openapi.current': 'Auth OpenAPI contract matches the application.',
+  'auth.openapi.check.failed':
+    'Auth OpenAPI contract is missing, invalid or outdated. Run npm run openapi:export and commit the contract.',
+  'auth.openapi.command.failed':
+    'Auth OpenAPI command failed. Check the arguments and run npm run build.',
   'service.started': 'Auth service started.',
   'service.stopped': 'Auth service stopped.',
   'service.start.failed': 'Auth service could not start.',

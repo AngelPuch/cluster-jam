@@ -7,6 +7,8 @@
   "license": "UNLICENSED",
   "scripts": {
     "build": "nest build",
+    "openapi:export": "npm run build && node dist/commands/auth-openapi.command.js --write",
+    "openapi:check": "npm run build && node dist/commands/auth-openapi.command.js --check",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",
