@@ -182,4 +182,7 @@ def test_production_app_exposes_no_temporary_image_route(
     assert set(client.get("/openapi.json").json()["paths"]) == {
         "/health/live",
         "/health/ready",
+        "/api/v1/files",
+        "/api/v1/files/{fileId}",
+        "/api/v1/files/{fileId}/download-urls",
     }

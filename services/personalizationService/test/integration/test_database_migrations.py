@@ -6,19 +6,14 @@ from decimal import Decimal
 from uuid import UUID, uuid4
 
 import pytest
-from alembic import command
 from sqlalchemy import Connection, Engine, inspect, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from personalization.infrastructure.config.settings import Settings
-from personalization.infrastructure.database.engine import (
-    create_database_engine,
-)
 from personalization.infrastructure.database.migrate import run_migrations
 from personalization.infrastructure.database.migration_config import (
     CURRENT_REVISION,
-    migration_config,
 )
 from personalization.infrastructure.database.models import (
     ApplicationModel,
@@ -43,38 +38,6 @@ pytestmark = [
         reason="Requires the disposable Docker integration database",
     ),
 ]
-
-
-@pytest.fixture(scope="module")
-def settings() -> Settings:
-    return Settings()
-
-
-@pytest.fixture(scope="module")
-def engine(settings: Settings) -> Iterator[Engine]:
-    database = create_database_engine(settings)
-    try:
-        # Never reset a populated development or production schema.
-        if inspect(database).get_table_names(schema="app"):
-            raise RuntimeError("Integration tests require an empty app schema")
-        readiness = SqlAlchemyReadinessAdapter(database, settings)
-        assert readiness.is_ready() is False
-        run_migrations(database, settings, "upgrade")
-        assert readiness.is_ready() is True
-        yield database
-        with database.begin() as connection:
-            configuration = migration_config()
-            configuration.attributes["connection"] = connection
-            command.downgrade(configuration, "base")
-        assert inspect(database).get_table_names(schema="app") == [
-            "alembic_version"
-        ]
-        assert readiness.is_ready() is False
-        run_migrations(database, settings, "upgrade")
-        run_migrations(database, settings, "check")
-        assert readiness.is_ready() is True
-    finally:
-        database.dispose()
 
 
 @pytest.fixture

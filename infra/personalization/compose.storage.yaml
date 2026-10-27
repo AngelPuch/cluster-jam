@@ -1,0 +1,21 @@
+services:
+    personalization:
+        environment:
+            STORAGE_ENABLED: "true"
+            SUPABASE_STORAGE_KEY_FILE: /run/secrets/supabase_storage_key
+        secrets:
+            - supabase_storage_key
+
+    personalization-storage:
+        environment:
+            STORAGE_ENABLED: "true"
+            SUPABASE_STORAGE_KEY_FILE: /run/secrets/supabase_storage_key
+        secrets:
+            - supabase_storage_key
+        networks:
+            - personalization-db
+            - backend
+
+secrets:
+    supabase_storage_key:
+        file: ./.secrets/supabase_storage_key

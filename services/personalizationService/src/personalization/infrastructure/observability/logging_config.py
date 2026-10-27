@@ -17,6 +17,7 @@ ALLOWED_LOG_FIELDS = (
     "request_id",
     "error_type",
     "code",
+    "file_ids",
 )
 
 

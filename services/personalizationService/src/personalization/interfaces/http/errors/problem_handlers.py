@@ -8,6 +8,10 @@ from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException
 from starlette.responses import JSONResponse
 
+from personalization.application.errors.file_error import (
+    FileError,
+    FileFailure,
+)
 from personalization.application.errors.image_validation_error import (
     ImageValidationError,
     ImageValidationFailure,
@@ -214,8 +218,77 @@ async def image_validation_exception_handler(
     )
 
 
+async def file_exception_handler(
+    request: Request,
+    exception: Exception,
+) -> JSONResponse:
+    """Preserve file failure codes without remote diagnostic details."""
+    if not isinstance(exception, FileError):
+        return unexpected_problem(request)
+    status, detail = {
+        FileFailure.FILE_NOT_FOUND: (404, "The original file was not found."),
+        FileFailure.FILE_NOT_READY: (
+            409,
+            "The original upload is not available yet.",
+        ),
+        FileFailure.FILE_DATABASE_UNAVAILABLE: (
+            503,
+            "File metadata is temporarily unavailable.",
+        ),
+        FileFailure.STORAGE_NOT_CONFIGURED: (
+            503,
+            "Private file storage is not configured.",
+        ),
+        FileFailure.STORAGE_UNAVAILABLE: (
+            503,
+            "Private file storage is temporarily unavailable.",
+        ),
+        FileFailure.STORAGE_BUCKET_UNSAFE: (
+            503,
+            "The file bucket does not meet the required configuration.",
+        ),
+        FileFailure.FILE_INTEGRITY_MISMATCH: (
+            409,
+            "The stored original does not match its verified metadata.",
+        ),
+        FileFailure.INVALID_MULTIPART: (
+            400,
+            "Use multipart/form-data with exactly one file field named file.",
+        ),
+        FileFailure.UPLOAD_BODY_TOO_LARGE: (
+            413,
+            "The upload request body exceeds the permitted size.",
+        ),
+        FileFailure.UPLOAD_BUSY: (
+            429,
+            "Another upload is in progress. Try again shortly.",
+        ),
+        FileFailure.UPLOAD_TIMEOUT: (
+            408,
+            "The upload request body was not received in time.",
+        ),
+        FileFailure.IMAGE_READ_FAILED: (
+            503,
+            "The uploaded image could not be read.",
+        ),
+    }[exception.failure]
+    headers: dict[str, str] = {}
+    if status == 429:
+        headers["Retry-After"] = "1"
+    if exception.file_id is not None:
+        headers["Location"] = f"/api/v1/files/{exception.file_id}"
+    return problem_response(
+        request,
+        status_code=status,
+        code=exception.failure.value,
+        detail=detail,
+        headers=headers or None,
+    )
+
+
 def configure_exception_handlers(app: FastAPI) -> None:
     """Override framework defaults at the HTTP boundary."""
+    app.add_exception_handler(FileError, file_exception_handler)
     app.add_exception_handler(
         ImageValidationError, image_validation_exception_handler
     )

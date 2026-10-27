@@ -15,3 +15,4 @@ services/personalizationService/** text eol=lf
 infra/personalization/** text eol=lf
 .github/workflows/personalization-ci.yml text eol=lf
 contracts/openapi/personalization/** text eol=lf
+contracts/postman/personalization/** text eol=lf

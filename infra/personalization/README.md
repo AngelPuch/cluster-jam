@@ -212,3 +212,19 @@ El máximo de archivo permanece fijo en 10 000 000 bytes.
 Las comprobaciones y pruebas con Pillow se ejecutan al construir la imagen.
 El contrato HTTP actual sigue exponiendo las rutas técnicas; el endpoint
 de carga persistente se incorporará junto con Supabase Storage.
+
+
+## Habilitar Storage privado
+
+Preparar la clave de servidor con `py -3.14 infra/personalization/set_storage_key.py`.
+El script usa entrada oculta y conserva el secreto en `.secrets/`, fuera de Git.
+Añadir `compose.storage.yaml` a los comandos de Compose para montar la clave
+y habilitar las cargas reales. El servicio de herramientas
+`personalization-storage` permite `create`, `check`, `pending` y `reconcile`.
+
+La API utiliza un tmpfs de 32 MiB en `/tmp` para el spool multipart, con una
+subida activa por proceso. Las demás rutas y la raíz de ejecución mantienen
+su configuración anterior. No hay migraciones SQL nuevas: se usa `archivo`.
+
+La configuración completa y pruebas con Postman se describen en
+[archivos privados](../../services/personalizationService/docs/private-files.md).

@@ -1,5 +1,6 @@
 """Wire the HTTP boundary to application ports and infrastructure."""
 
+import asyncio
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -10,16 +11,26 @@ from opentelemetry.sdk.trace import TracerProvider
 from sqlalchemy import Engine
 from starlette.concurrency import run_in_threadpool
 
+from personalization.application.files.file_service import FileService
 from personalization.application.health.readiness_service import (
     ReadinessService,
 )
 from personalization.application.images.validate_image_service import (
     ValidateImageService,
 )
+from personalization.application.ports.file_repository_port import (
+    FileRepositoryPort,
+)
+from personalization.application.ports.private_storage_port import (
+    PrivateStoragePort,
+)
 from personalization.application.ports.readiness_port import ReadinessPort
 from personalization.infrastructure.config.settings import Settings
 from personalization.infrastructure.database.engine import (
     create_database_engine,
+)
+from personalization.infrastructure.database.file_repository import (
+    SqlAlchemyFileRepository,
 )
 from personalization.infrastructure.database.readiness import (
     SqlAlchemyReadinessAdapter,
@@ -33,7 +44,16 @@ from personalization.infrastructure.observability.logging_config import (
 from personalization.infrastructure.security.supabase_jwt_verifier import (
     SupabaseJwtVerifier,
 )
+from personalization.infrastructure.storage.supabase_storage import (
+    SupabaseStorage,
+)
+from personalization.infrastructure.storage.unavailable_storage import (
+    UnavailableStorage,
+)
 from personalization.interfaces.http.app import create_http_app
+from personalization.interfaces.http.files.upload_limits import (
+    UploadBodyLimitMiddleware,
+)
 from personalization.interfaces.http.request_context import (
     RequestContextMiddleware,
 )
@@ -42,6 +62,9 @@ from personalization.interfaces.http.request_context import (
 def create_app(
     settings: Settings | None = None,
     readiness_port: ReadinessPort | None = None,
+    *,
+    file_repository: FileRepositoryPort | None = None,
+    storage: PrivateStoragePort | None = None,
 ) -> FastAPI:
     """Start independently and release resources on shutdown."""
     configuration = settings if settings is not None else Settings()
@@ -49,9 +72,23 @@ def create_app(
         environment=configuration.app_env, log_level=configuration.log_level
     )
     engine: Engine | None = None
-    if readiness_port is None:
+    if readiness_port is None or file_repository is None:
         engine = create_database_engine(configuration)
-        readiness_port = SqlAlchemyReadinessAdapter(engine, configuration)
+        if readiness_port is None:
+            readiness_port = SqlAlchemyReadinessAdapter(engine, configuration)
+        if file_repository is None:
+            file_repository = SqlAlchemyFileRepository(engine)
+    outbound: SupabaseStorage | None = None
+    if storage is None:
+        if configuration.storage_enabled:
+            outbound = SupabaseStorage(
+                configuration.storage_project_url,
+                configuration.storage_bucket,
+                configuration.storage_key,
+            )
+            storage = outbound
+        else:
+            storage = UnavailableStorage()
     provider = TracerProvider(
         resource=Resource.create(
             {
@@ -72,10 +109,20 @@ def create_app(
         app.state.image_validator = ValidateImageService(
             PillowImageInspector(), configuration.image_policy
         )
+        app.state.file_service = FileService(
+            app.state.image_validator,
+            file_repository,
+            storage,
+            configuration.storage_bucket,
+            configuration.download_url_ttl_seconds,
+        )
+        app.state.upload_gate = asyncio.BoundedSemaphore(1)
         logger.info("Service started", extra={"event": "service.started"})
         try:
             yield
         finally:
+            if outbound is not None:
+                await run_in_threadpool(outbound.close)
             if engine is not None:
                 await run_in_threadpool(engine.dispose)
             provider.shutdown()
@@ -84,5 +131,6 @@ def create_app(
     app = create_http_app(lifespan)
     app.state.settings = configuration
     app.state.readiness_service = ReadinessService(readiness_port)
+    app.add_middleware(UploadBodyLimitMiddleware)
     app.add_middleware(RequestContextMiddleware, tracer=tracer)
     return app
