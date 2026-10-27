@@ -74,8 +74,8 @@ lectura y capacidades retiradas en Compose.
 | Red | `personalization-db`, interna y sin puertos publicados |
 
 El usuario de aplicación no es superusuario, no puede crear bases o roles,
-replicar ni omitir RLS. Es dueño del esquema `app`, donde posteriormente
-ejecutaremos migraciones Alembic. El rol administrativo no se utiliza para
+replicar ni omitir RLS. Es dueño del esquema `app`, donde se ejecutan
+las migraciones Alembic versionadas. El rol administrativo no se utiliza para
 la conexión del servicio.
 
 `postgres/001-bootstrap.sql` prepara el rol y el esquema solamente cuando
@@ -102,7 +102,8 @@ py -3.14 infra/personalization/verify_stack.py
 
 La prueba construye la imagen y crea un proyecto Compose temporal con un
 UUID. Comprueba acceso real, usuario sin privilegios, red interna, puerto no
-publicado y ausencia de tablas de negocio. Después recrea el contenedor de
+publicado y ausencia de tablas antes de migrar. Instala y prueba las
+migraciones y restricciones con PostgreSQL real. Después recrea el contenedor de
 PostgreSQL y verifica que conserva el identificador del clúster y el acceso
 al esquema. Elimina solamente contenedores, red y volumen de ese proyecto
 temporal al terminar; el proyecto de desarrollo queda intacto.
@@ -144,7 +145,10 @@ Referencia: https://docs.docker.com/desktop/troubleshoot-and-support/troubleshoo
 ## API REST y publicación local
 
 ```powershell
-docker compose -f infra/personalization/compose.yaml -f infra/personalization/compose.dev.yaml up -d --build --wait personalization
+docker compose -f infra/personalization/compose.yaml --profile tools build personalization-migrate
+docker compose -f infra/personalization/compose.yaml up -d --wait db-personalizacion
+docker compose -f infra/personalization/compose.yaml run --rm personalization-migrate
+docker compose -f infra/personalization/compose.yaml -f infra/personalization/compose.dev.yaml up -d --wait personalization
 ```
 
 La API estará en `http://127.0.0.1:8082`, con salud en `/health/live` y
@@ -177,3 +181,21 @@ ejecutarse sin acceso a Supabase ni credenciales de usuarios. El arranque
 y los endpoints técnicos no descargan JWKS. Las pruebas criptográficas
 de autenticación y autorización se ejecutan durante la construcción de
 la imagen, con claves generadas únicamente para las pruebas.
+
+
+## Migraciones y pruebas de PostgreSQL
+
+`personalization-migrate` ejecuta Alembic mediante el paquete instalado y
+utiliza únicamente el secreto de aplicación. Ejecutarlo antes de iniciar
+réplicas; la API no aplica migraciones. Readiness exige la revisión vigente.
+Repetir `upgrade` mantiene los datos existentes. Se pueden comprobar
+consistencia y revisión con las acciones `check` y `current`.
+
+La imagen `personalization-tests` usa la etapa Docker `integration`; no se
+despliega como API. `verify_stack.py` la ejecuta con una base temporal vacía
+y comprueba restricciones, instalación, reversión y reaplicación. Rechaza
+esquemas previamente poblados. Usar ese verificador para QA y reservar
+`personalization-migrate` para preparar la base de desarrollo.
+
+El modelo, decisiones de tipos, comandos y reversión están en
+[la guía de persistencia](../../services/personalizationService/docs/database.md).
