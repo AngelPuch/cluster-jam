@@ -10,8 +10,13 @@ Desde la raíz del repositorio, con Docker en modo Linux:
 
 ```powershell
 py -3.14 infra/personalization/provision_local.py
-Copy-Item infra/personalization/.env.example infra/personalization/.env
+if (-not (Test-Path infra/personalization/.env)) {
+    Copy-Item infra/personalization/.env.example infra/personalization/.env
+}
 # Editar las dos URLs públicas en infra/personalization/.env
+docker compose -f infra/personalization/compose.yaml --profile tools build personalization-migrate
+docker compose -f infra/personalization/compose.yaml up -d --wait db-personalizacion
+docker compose -f infra/personalization/compose.yaml run --rm personalization-migrate
 docker compose -f infra/personalization/compose.yaml -f infra/personalization/compose.dev.yaml up -d --build --wait personalization
 ```
 
@@ -28,8 +33,8 @@ al puerto 8080 del contenedor. Para cambiar el puerto local, definir
 | Contrato | `http://127.0.0.1:8082/openapi.json` | OpenAPI |
 
 Liveness no consulta dependencias. Readiness invoca un caso de uso mediante
-un puerto e inspecciona su propia base de datos, con límites de conexión y
-consulta. Si PostgreSQL cae, la API sigue viva y readiness devuelve 503.
+un puerto e inspecciona acceso y revisión Alembic de su propia base, con
+límites de conexión y consulta. Si PostgreSQL cae, la API sigue viva y readiness devuelve 503.
 Recuperar la base permite volver a responder 200 sin reiniciar la API.
 
 La validación JWT y las políticas de acceso están implementadas y probadas.
@@ -157,16 +162,16 @@ persistencia. Retira únicamente sus recursos temporales al terminar.
 `bootstrap.py` compone las dependencias y dispone conexiones al cerrar.
 Los controladores no acceden al ORM ni a bases de otros servicios.
 
-Las tablas de negocio se crearán con Alembic en su incremento. El arranque
-HTTP no crea tablas ni ejecuta migraciones. La matriz requisito–operación–
+Las nueve tablas están mapeadas con SQLAlchemy y se crean con la migración
+Alembic versionada. El arranque HTTP no crea tablas ni ejecuta migraciones. La matriz requisito–operación–
 prueba se completará con las funcionalidades, sin equiparar cobertura de
 líneas con RNF09.
 
-Rama: `feat/personalization/local-jwt-validation`.
+Rama: `feat/personalization/database-migrations`.
 Commit y título del PR:
 
 ```text
-feat(personalization): validate JWTs locally
+feat(personalization): add versioned database migrations
 ```
 
 
@@ -240,5 +245,22 @@ prueba para comprobar el arranque sin depender del proveedor externo.
 
 El contrato OpenAPI se regenera sin red y solo publica las rutas técnicas
 existentes. Las rutas protegidas de prueba viven exclusivamente en `test/`.
-Las tablas de negocio y sus migraciones Alembic pertenecen al siguiente
-incremento; no se crean tablas al iniciar este servicio.
+La persistencia se instala mediante Alembic antes de iniciar réplicas;
+no se crean tablas al arrancar la API.
+
+
+## Esquema y migraciones
+
+Se implementó la revisión `0001_personalization`, con las ocho tablas de
+negocio de la sección 7 y `auditoria_local` de la sección 11. Los nombres
+SQL están en español y los atributos ORM en inglés. Las medidas usan
+`Decimal`/`NUMERIC` exactos y los recargos `bigint` en centavos de MXN.
+
+El servicio de herramientas `personalization-migrate` aplica la revisión
+explícitamente. Readiness comprueba que esté instalada. La suite Docker
+también verifica migración, reversión y restricciones contra PostgreSQL
+real en un proyecto desechable; nunca resetea la base de desarrollo.
+
+Consultar [decisiones, comandos y reversión](docs/database.md). Los casos
+de uso de imágenes, administración y diseños se incorporarán en siguientes
+incrementos sobre esta persistencia.

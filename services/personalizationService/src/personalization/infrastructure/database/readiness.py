@@ -1,10 +1,13 @@
 """Adapt local database availability to the readiness port."""
 
-from sqlalchemy import Engine
+from sqlalchemy import Engine, text
 from sqlalchemy.exc import SQLAlchemyError
 
 from personalization.infrastructure.config.settings import Settings
 from personalization.infrastructure.database.check import DATABASE_ACCESS_QUERY
+from personalization.infrastructure.database.migration_config import (
+    CURRENT_REVISION,
+)
 
 
 class SqlAlchemyReadinessAdapter:
@@ -26,6 +29,15 @@ class SqlAlchemyReadinessAdapter:
                         "schema_name": self._settings.db_schema,
                     },
                 )
-                return result.scalar_one() is True
+                if result.scalar_one() is not True:
+                    return False
+                revisions = (
+                    connection.execute(
+                        text("SELECT version_num FROM app.alembic_version")
+                    )
+                    .scalars()
+                    .all()
+                )
+                return revisions == [CURRENT_REVISION]
         except SQLAlchemyError:
             return False

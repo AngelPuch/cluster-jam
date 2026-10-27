@@ -11,7 +11,7 @@ def create_database_engine(settings: Settings) -> Engine:
         settings.database_url,
         connect_args={
             "connect_timeout": settings.db_connect_timeout_seconds,
-            "options": "-c statement_timeout=5000",
+            "options": ("-c statement_timeout=5000 -c search_path=pg_catalog"),
         },
         pool_pre_ping=True,
         pool_timeout=settings.db_connect_timeout_seconds,

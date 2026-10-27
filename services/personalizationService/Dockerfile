@@ -16,6 +16,11 @@ RUN uv run --locked --no-editable ruff check . \
     && uv run --locked --no-editable mypy \
     && uv run --locked --no-editable pytest --cov --cov-fail-under=70 \
     && uv build --no-sources
+
+FROM build AS integration
+CMD ["uv", "run", "--locked", "--no-editable", "pytest", "test/integration", "-v"]
+
+FROM build AS production-dependencies
 RUN uv sync --locked --no-dev --no-editable
 
 FROM python:3.14.9-slim-bookworm@sha256:945c2676dc2b18e0c1f16879244122c57c0ffede60006bf3df159c507a31bcae AS runtime
@@ -34,7 +39,7 @@ RUN groupadd --gid 10001 personalization \
     && useradd --uid 10001 --gid 10001 --no-create-home \
         --shell /usr/sbin/nologin personalization
 WORKDIR /app
-COPY --from=build /app/.venv /app/.venv
+COPY --from=production-dependencies /app/.venv /app/.venv
 USER 10001:10001
 EXPOSE 8080 50051
 CMD ["python", "-m", "personalization.main"]

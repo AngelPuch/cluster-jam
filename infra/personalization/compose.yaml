@@ -7,7 +7,7 @@ x-personalization-service: &personalization-service
         target: runtime
         args:
             VCS_REF: ${PERSONALIZATION_GIT_SHA:-local}
-    environment:
+    environment: &personalization-environment
         APP_ENV: development
         HTTP_HOST: 0.0.0.0
         HTTP_PORT: "8080"
@@ -84,6 +84,26 @@ services:
             timeout: 3s
             start_period: 10s
             retries: 3
+
+    personalization-migrate:
+        <<: *personalization-service
+        profiles: ["tools"]
+        command: ["python", "-m", "personalization.infrastructure.database.migrate", "upgrade"]
+        restart: "no"
+
+    personalization-db-test:
+        <<: *personalization-service
+        profiles: ["tools"]
+        image: cluster-jam/personalization-tests:${PERSONALIZATION_IMAGE_TAG:-0.1.0-local}
+        build:
+            context: ../../services/personalizationService
+            target: integration
+        environment:
+            <<: *personalization-environment
+            APP_ENV: test
+            PERSONALIZATION_DATABASE_INTEGRATION: "1"
+        read_only: false
+        restart: "no"
 
     personalization-check:
         <<: *personalization-service

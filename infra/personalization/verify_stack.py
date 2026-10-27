@@ -160,6 +160,7 @@ def verify_stack() -> None:
             "tools",
             "build",
             "personalization-check",
+            "personalization-db-test",
         ]
     )
     try:
@@ -182,6 +183,29 @@ def verify_stack() -> None:
                 "--rm",
                 "--no-deps",
                 "personalization-check",
+            ]
+        )
+        if request_http(compose, "/health/live")["status"] != 200:
+            raise RuntimeError("Fresh API must start without migrations")
+        if request_http(compose, "/health/ready")["status"] != 503:
+            raise RuntimeError("Unmigrated schema must not be ready")
+        run_command(
+            [*compose, "run", "--rm", "--no-deps", "personalization-db-test"]
+        )
+        run_command(
+            [*compose, "run", "--rm", "--no-deps", "personalization-migrate"]
+        )
+        run_command(
+            [
+                *compose,
+                "run",
+                "--rm",
+                "--no-deps",
+                "personalization-migrate",
+                "python",
+                "-m",
+                "personalization.infrastructure.database.migrate",
+                "check",
             ]
         )
         verify_http(compose)
@@ -275,8 +299,18 @@ def verify_stack() -> None:
             ],
             capture=True,
         )
-        if table_count != "0":
-            raise RuntimeError("Domain tables must await migrations")
+        if table_count != "10":
+            raise RuntimeError("Expected nine tables and Alembic history")
+        marker_id = str(uuid4())
+        run_command(
+            [
+                *sql_command,
+                "INSERT INTO app.auditoria_local "
+                "(id, accion, recurso, recurso_id) VALUES "
+                f"('{marker_id}', 'PERSISTENCE_TEST', "
+                f"'diseno', '{marker_id}')",
+            ]
+        )
         run_command(
             [
                 *compose,
@@ -292,6 +326,18 @@ def verify_stack() -> None:
         restored_id = run_command([*sql_command, system_id_sql], capture=True)
         if not original_id or restored_id != original_id:
             raise RuntimeError("Recreation did not preserve PostgreSQL")
+        marker_count = run_command(
+            [
+                *sql_command,
+                "SELECT count(*) FROM app.auditoria_local "
+                f"WHERE id = '{marker_id}'",
+            ],
+            capture=True,
+        )
+        if marker_count != "1":
+            raise RuntimeError("Recreation lost migrated application data")
+        if request_http(compose, "/health/ready")["status"] != 200:
+            raise RuntimeError("Migrated API must recover after recreation")
         run_command(
             [
                 *compose,
@@ -299,6 +345,19 @@ def verify_stack() -> None:
                 "--rm",
                 "--no-deps",
                 "personalization-check",
+            ]
+        )
+        run_command(
+            [
+                *compose,
+                "run",
+                "--rm",
+                "--no-deps",
+                "personalization-migrate",
+                "python",
+                "-m",
+                "personalization.infrastructure.database.migrate",
+                "current",
             ]
         )
         print(
