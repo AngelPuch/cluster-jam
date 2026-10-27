@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Literal, Self
 
 from pydantic import (
+    AnyHttpUrl,
     Field,
     PrivateAttr,
     SecretStr,
@@ -64,7 +65,31 @@ class Settings(BaseSettings):
         validation_alias="DB_CONNECT_TIMEOUT_SECONDS",
     )
     db_password_file: Path = Field(validation_alias="DB_PASSWORD_FILE")
+    supabase_issuer: AnyHttpUrl = Field(validation_alias="SUPABASE_ISSUER")
+    supabase_jwks_url: AnyHttpUrl = Field(validation_alias="SUPABASE_JWKS_URL")
     _database_password: SecretStr = PrivateAttr()
+
+    @model_validator(mode="after")
+    def validate_identity_provider(self) -> Self:
+        """Require trusted HTTPS URLs for the same Supabase origin."""
+        issuer = self.supabase_issuer
+        keys = self.supabase_jwks_url
+        for url in (issuer, keys):
+            if (
+                url.scheme != "https"
+                or url.username
+                or url.password
+                or url.query
+                or url.fragment
+            ):
+                raise ValueError("Supabase URLs must be clean HTTPS URLs")
+        if (issuer.host, issuer.port) != (keys.host, keys.port):
+            raise ValueError("Supabase URLs must use the same origin")
+        if issuer.path != "/auth/v1" or keys.path != (
+            "/auth/v1/.well-known/jwks.json"
+        ):
+            raise ValueError("Supabase issuer or JWKS path is invalid")
+        return self
 
     @model_validator(mode="after")
     def load_database_password(self) -> Self:

@@ -14,7 +14,7 @@ RUN uv sync --locked --no-editable
 RUN uv run --locked --no-editable ruff check . \
     && uv run --locked --no-editable ruff format --check . \
     && uv run --locked --no-editable mypy \
-    && uv run --locked --no-editable pytest \
+    && uv run --locked --no-editable pytest --cov --cov-fail-under=70 \
     && uv build --no-sources
 RUN uv sync --locked --no-dev --no-editable
 

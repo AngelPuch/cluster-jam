@@ -26,11 +26,20 @@ def isolate_environment(
         "DB_SCHEMA",
         "DB_CONNECT_TIMEOUT_SECONDS",
         "DB_PASSWORD_FILE",
+        "SUPABASE_ISSUER",
+        "SUPABASE_JWKS_URL",
     ):
         monkeypatch.delenv(name, raising=False)
     password_file = tmp_path / "database-password"
     password_file.write_text("test-only-password\n", encoding="utf-8")
     monkeypatch.setenv("DB_PASSWORD_FILE", str(password_file))
+    monkeypatch.setenv(
+        "SUPABASE_ISSUER", "https://supabase.example.test/auth/v1"
+    )
+    monkeypatch.setenv(
+        "SUPABASE_JWKS_URL",
+        "https://supabase.example.test/auth/v1/.well-known/jwks.json",
+    )
 
 
 def test_environment_is_required() -> None:
@@ -138,3 +147,46 @@ def test_secret_is_escaped_and_hidden(
     assert password not in repr(settings)
     assert password not in settings.model_dump_json()
     assert password not in str(settings.database_url)
+
+
+@pytest.mark.parametrize("variable", ["SUPABASE_ISSUER", "SUPABASE_JWKS_URL"])
+def test_public_identity_configuration_is_required(
+    monkeypatch: pytest.MonkeyPatch,
+    variable: str,
+) -> None:
+    monkeypatch.setenv("APP_ENV", "test")
+    monkeypatch.delenv(variable)
+    with pytest.raises(ValidationError, match=variable):
+        Settings(_env_file=None)
+
+
+@pytest.mark.parametrize(
+    ("variable", "value"),
+    [
+        ("SUPABASE_ISSUER", "http://supabase.example.test/auth/v1"),
+        ("SUPABASE_ISSUER", "https://supabase.example.test/auth/v1/"),
+        (
+            "SUPABASE_ISSUER",
+            "https://name:secret@supabase.example.test/auth/v1",
+        ),
+        ("SUPABASE_ISSUER", "https://supabase.example.test/auth/v1?query=yes"),
+        (
+            "SUPABASE_JWKS_URL",
+            "https://other.example/auth/v1/.well-known/jwks.json",
+        ),
+        ("SUPABASE_JWKS_URL", "https://supabase.example.test/unexpected"),
+        (
+            "SUPABASE_JWKS_URL",
+            "https://supabase.example.test/auth/v1#fragment",
+        ),
+    ],
+)
+def test_identity_urls_reject_unsafe_or_mismatched_values(
+    monkeypatch: pytest.MonkeyPatch,
+    variable: str,
+    value: str,
+) -> None:
+    monkeypatch.setenv("APP_ENV", "test")
+    monkeypatch.setenv(variable, value)
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)

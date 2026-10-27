@@ -32,7 +32,12 @@ def http_settings(tmp_path: Path) -> Settings:
     password_file = tmp_path / "test-secret"
     password_file.write_text("test-only-password", encoding="utf-8")
     return Settings.model_validate(
-        {"APP_ENV": "test", "DB_PASSWORD_FILE": password_file}
+        {
+            "APP_ENV": "test",
+            "DB_PASSWORD_FILE": password_file,
+            "SUPABASE_ISSUER": "https://supabase.example.test/auth/v1",
+            "SUPABASE_JWKS_URL": "https://supabase.example.test/auth/v1/.well-known/jwks.json",
+        }
     )
 
 
