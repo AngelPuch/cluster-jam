@@ -26,6 +26,9 @@ def isolate_environment(
         "DB_SCHEMA",
         "DB_CONNECT_TIMEOUT_SECONDS",
         "DB_PASSWORD_FILE",
+        "IMAGE_MAX_WIDTH_PX",
+        "IMAGE_MAX_HEIGHT_PX",
+        "IMAGE_MAX_PIXELS",
         "SUPABASE_ISSUER",
         "SUPABASE_JWKS_URL",
     ):
@@ -190,3 +193,36 @@ def test_identity_urls_reject_unsafe_or_mismatched_values(
     monkeypatch.setenv(variable, value)
     with pytest.raises(ValidationError):
         Settings(_env_file=None)
+
+
+@pytest.mark.parametrize(
+    "variable",
+    [
+        "IMAGE_MAX_WIDTH_PX",
+        "IMAGE_MAX_HEIGHT_PX",
+        "IMAGE_MAX_PIXELS",
+    ],
+)
+@pytest.mark.parametrize("value", ["0", "-1", "invalid", "16000001"])
+def test_image_resource_limits_are_positive_and_bounded(
+    monkeypatch: pytest.MonkeyPatch,
+    variable: str,
+    value: str,
+) -> None:
+    monkeypatch.setenv("APP_ENV", "test")
+    monkeypatch.setenv(variable, value)
+    with pytest.raises(ValidationError, match=variable):
+        Settings(_env_file=None)
+
+
+def test_image_resource_limits_can_be_tightened(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("APP_ENV", "test")
+    monkeypatch.setenv("IMAGE_MAX_WIDTH_PX", "1024")
+    monkeypatch.setenv("IMAGE_MAX_HEIGHT_PX", "768")
+    monkeypatch.setenv("IMAGE_MAX_PIXELS", "500000")
+    policy = Settings(_env_file=None).image_policy
+    assert policy.max_width_px == 1024
+    assert policy.max_height_px == 768
+    assert policy.max_pixels == 500000

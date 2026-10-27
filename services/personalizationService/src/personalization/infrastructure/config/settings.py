@@ -13,6 +13,12 @@ from pydantic import (
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy import URL
 
+from personalization.application.images.image_policy import (
+    MAX_IMAGE_PIXELS,
+    MAX_IMAGE_SIDE_PX,
+    ImageValidationPolicy,
+)
+
 
 class Settings(BaseSettings):
     """Read configuration without exposing a database password."""
@@ -67,7 +73,34 @@ class Settings(BaseSettings):
     db_password_file: Path = Field(validation_alias="DB_PASSWORD_FILE")
     supabase_issuer: AnyHttpUrl = Field(validation_alias="SUPABASE_ISSUER")
     supabase_jwks_url: AnyHttpUrl = Field(validation_alias="SUPABASE_JWKS_URL")
+    image_max_width_px: int = Field(
+        default=MAX_IMAGE_SIDE_PX,
+        ge=1,
+        le=MAX_IMAGE_SIDE_PX,
+        validation_alias="IMAGE_MAX_WIDTH_PX",
+    )
+    image_max_height_px: int = Field(
+        default=MAX_IMAGE_SIDE_PX,
+        ge=1,
+        le=MAX_IMAGE_SIDE_PX,
+        validation_alias="IMAGE_MAX_HEIGHT_PX",
+    )
+    image_max_pixels: int = Field(
+        default=MAX_IMAGE_PIXELS,
+        ge=1,
+        le=MAX_IMAGE_PIXELS,
+        validation_alias="IMAGE_MAX_PIXELS",
+    )
     _database_password: SecretStr = PrivateAttr()
+
+    @property
+    def image_policy(self) -> ImageValidationPolicy:
+        """Provide validated limits to adapters and use cases."""
+        return ImageValidationPolicy(
+            max_width_px=self.image_max_width_px,
+            max_height_px=self.image_max_height_px,
+            max_pixels=self.image_max_pixels,
+        )
 
     @model_validator(mode="after")
     def validate_identity_provider(self) -> Self:

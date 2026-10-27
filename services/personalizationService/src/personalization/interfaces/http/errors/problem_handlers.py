@@ -8,6 +8,10 @@ from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException
 from starlette.responses import JSONResponse
 
+from personalization.application.errors.image_validation_error import (
+    ImageValidationError,
+    ImageValidationFailure,
+)
 from personalization.application.errors.security_error import (
     SecurityError,
     SecurityFailure,
@@ -161,8 +165,60 @@ async def security_exception_handler(
     )
 
 
+async def image_validation_exception_handler(
+    request: Request,
+    exception: Exception,
+) -> JSONResponse:
+    """Describe image rejections without leaking decoder diagnostics."""
+    if not isinstance(exception, ImageValidationError):
+        return unexpected_problem(request)
+    status, detail = {
+        ImageValidationFailure.EMPTY_IMAGE: (
+            400,
+            "The uploaded image is empty.",
+        ),
+        ImageValidationFailure.IMAGE_TOO_LARGE: (
+            413,
+            "The image exceeds 10,000,000 bytes.",
+        ),
+        ImageValidationFailure.UNSUPPORTED_IMAGE_TYPE: (
+            415,
+            "Only PNG and JPEG images are supported.",
+        ),
+        ImageValidationFailure.IMAGE_MIME_MISMATCH: (
+            415,
+            "The declared MIME type does not match the image contents.",
+        ),
+        ImageValidationFailure.INVALID_IMAGE: (
+            422,
+            "The image is damaged or cannot be fully decoded.",
+        ),
+        ImageValidationFailure.IMAGE_DIMENSIONS_EXCEEDED: (
+            422,
+            "The image exceeds the permitted dimensions or pixel count.",
+        ),
+        ImageValidationFailure.ANIMATED_IMAGE_NOT_SUPPORTED: (
+            422,
+            "Animated or multi-frame originals are not supported.",
+        ),
+        ImageValidationFailure.IMAGE_READ_FAILED: (
+            503,
+            "The uploaded image could not be read.",
+        ),
+    }[exception.failure]
+    return problem_response(
+        request,
+        status_code=status,
+        code=exception.failure.value,
+        detail=detail,
+    )
+
+
 def configure_exception_handlers(app: FastAPI) -> None:
     """Override framework defaults at the HTTP boundary."""
+    app.add_exception_handler(
+        ImageValidationError, image_validation_exception_handler
+    )
     app.add_exception_handler(SecurityError, security_exception_handler)
     app.add_exception_handler(HTTPException, http_exception_handler)
     app.add_exception_handler(

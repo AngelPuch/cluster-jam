@@ -167,11 +167,11 @@ Alembic versionada. El arranque HTTP no crea tablas ni ejecuta migraciones. La m
 prueba se completará con las funcionalidades, sin equiparar cobertura de
 líneas con RNF09.
 
-Rama: `feat/personalization/database-migrations`.
+Rama: `feat/personalization/image-validation`.
 Commit y título del PR:
 
 ```text
-feat(personalization): add versioned database migrations
+feat(personalization): validate original images
 ```
 
 
@@ -261,6 +261,26 @@ explícitamente. Readiness comprueba que esté instalada. La suite Docker
 también verifica migración, reversión y restricciones contra PostgreSQL
 real en un proyecto desechable; nunca resetea la base de desarrollo.
 
-Consultar [decisiones, comandos y reversión](docs/database.md). Los casos
-de uso de imágenes, administración y diseños se incorporarán en siguientes
-incrementos sobre esta persistencia.
+Consultar [decisiones, comandos y reversión](docs/database.md). La validación
+de originales ya está preparada; su almacenamiento, administración y
+diseños se incorporarán en siguientes incrementos.
+
+
+## Validación de imágenes
+
+`ValidateImageService` comprueba originales PNG/JPEG de hasta 10 000 000
+bytes mediante firma real, MIME, estructura y decodificación con Pillow.
+Aplica límites antes de cargar píxeles, rechaza múltiples frames y devuelve
+SHA-256, UUID y clave canónica sin modificar los bytes del original.
+
+Los límites iniciales son 8192 píxeles por lado y 16 000 000 píxeles totales.
+`IMAGE_MAX_WIDTH_PX`, `IMAGE_MAX_HEIGHT_PX` e `IMAGE_MAX_PIXELS` permiten
+restringirlos. Son decisiones de recursos documentadas, no cifras fijadas
+por los requisitos. Para cambiar variables de Compose, recrear la API.
+
+Este incremento no publica todavía un endpoint de subida ni persiste
+objetos. Las rutas multipart de las pruebas viven solo en `test/`. La
+integración de Storage y la autorización del archivo se implementarán
+en su siguiente incremento, antes de probar la carga real con Postman.
+
+Consultar [reglas, errores y pruebas de imágenes](docs/image-validation.md).
