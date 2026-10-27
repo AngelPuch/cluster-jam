@@ -199,3 +199,16 @@ esquemas previamente poblados. Usar ese verificador para QA y reservar
 
 El modelo, decisiones de tipos, comandos y reversión están en
 [la guía de persistencia](../../services/personalizationService/docs/database.md).
+
+
+## Límites de validación de imágenes
+
+Compose transmite `IMAGE_MAX_WIDTH_PX`, `IMAGE_MAX_HEIGHT_PX` y
+`IMAGE_MAX_PIXELS`; sus valores iniciales son 8192, 8192 y 16000000.
+Se pueden restringir en `.env` o en el entorno. Settings comprueba rangos
+antes del arranque; ampliar los techos exige revisar la política y recursos.
+El máximo de archivo permanece fijo en 10 000 000 bytes.
+
+Las comprobaciones y pruebas con Pillow se ejecutan al construir la imagen.
+El contrato HTTP actual sigue exponiendo las rutas técnicas; el endpoint
+de carga persistente se incorporará junto con Supabase Storage.

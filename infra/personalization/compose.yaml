@@ -13,6 +13,9 @@ x-personalization-service: &personalization-service
         HTTP_PORT: "8080"
         GRPC_PORT: "50051"
         LOG_LEVEL: INFO
+        IMAGE_MAX_WIDTH_PX: ${IMAGE_MAX_WIDTH_PX:-8192}
+        IMAGE_MAX_HEIGHT_PX: ${IMAGE_MAX_HEIGHT_PX:-8192}
+        IMAGE_MAX_PIXELS: ${IMAGE_MAX_PIXELS:-16000000}
         SUPABASE_ISSUER: ${SUPABASE_ISSUER:?Set SUPABASE_ISSUER}
         SUPABASE_JWKS_URL: ${SUPABASE_JWKS_URL:?Set SUPABASE_JWKS_URL}
         DB_HOST: db-personalizacion

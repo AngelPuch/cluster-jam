@@ -13,6 +13,9 @@ from starlette.concurrency import run_in_threadpool
 from personalization.application.health.readiness_service import (
     ReadinessService,
 )
+from personalization.application.images.validate_image_service import (
+    ValidateImageService,
+)
 from personalization.application.ports.readiness_port import ReadinessPort
 from personalization.infrastructure.config.settings import Settings
 from personalization.infrastructure.database.engine import (
@@ -20,6 +23,9 @@ from personalization.infrastructure.database.engine import (
 )
 from personalization.infrastructure.database.readiness import (
     SqlAlchemyReadinessAdapter,
+)
+from personalization.infrastructure.images.pillow_image_inspector import (
+    PillowImageInspector,
 )
 from personalization.infrastructure.observability.logging_config import (
     configure_logging,
@@ -62,6 +68,9 @@ def create_app(
         app.state.access_token_verifier = SupabaseJwtVerifier(
             issuer=str(configuration.supabase_issuer),
             jwks_url=str(configuration.supabase_jwks_url),
+        )
+        app.state.image_validator = ValidateImageService(
+            PillowImageInspector(), configuration.image_policy
         )
         logger.info("Service started", extra={"event": "service.started"})
         try:
