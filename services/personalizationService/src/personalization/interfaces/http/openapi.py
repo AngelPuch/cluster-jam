@@ -16,7 +16,9 @@ def configure_openapi(app: FastAPI) -> None:
         "type": "http",
         "scheme": "bearer",
         "bearerFormat": "JWT",
-        "description": "Supabase Auth access token for future protected APIs",
+        "description": (
+            "Supabase access token with a protected application role"
+        ),
     }
     content = {
         "application/problem+json": {

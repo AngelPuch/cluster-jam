@@ -24,6 +24,9 @@ from personalization.infrastructure.database.readiness import (
 from personalization.infrastructure.observability.logging_config import (
     configure_logging,
 )
+from personalization.infrastructure.security.supabase_jwt_verifier import (
+    SupabaseJwtVerifier,
+)
 from personalization.interfaces.http.app import create_http_app
 from personalization.interfaces.http.request_context import (
     RequestContextMiddleware,
@@ -56,6 +59,10 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        app.state.access_token_verifier = SupabaseJwtVerifier(
+            issuer=str(configuration.supabase_issuer),
+            jwks_url=str(configuration.supabase_jwks_url),
+        )
         logger.info("Service started", extra={"event": "service.started"})
         try:
             yield

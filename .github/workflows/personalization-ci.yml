@@ -60,7 +60,7 @@ jobs:
             - name: Check infrastructure types
               run: python -m uv run --locked mypy ../../infra/personalization
             - name: Run tests
-              run: python -m uv run --locked pytest
+              run: python -m uv run --locked pytest --cov --cov-fail-under=70
             - name: Verify versioned OpenAPI contract
               run: >-
                   python -m uv run --locked python -m

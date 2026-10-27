@@ -68,7 +68,7 @@
     "securitySchemes": {
       "supabase-jwt": {
         "bearerFormat": "JWT",
-        "description": "Supabase Auth access token for future protected APIs",
+        "description": "Supabase access token with a protected application role",
         "scheme": "bearer",
         "type": "http"
       }

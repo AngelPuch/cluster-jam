@@ -8,6 +8,10 @@ from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException
 from starlette.responses import JSONResponse
 
+from personalization.application.errors.security_error import (
+    SecurityError,
+    SecurityFailure,
+)
 from personalization.application.errors.service_not_ready_error import (
     ServiceNotReadyError,
 )
@@ -124,8 +128,42 @@ async def readiness_exception_handler(
     )
 
 
+async def security_exception_handler(
+    request: Request, exception: Exception
+) -> JSONResponse:
+    """Map security errors without exposing provider details."""
+    if not isinstance(exception, SecurityError):
+        return unexpected_problem(request)
+    status, detail = {
+        SecurityFailure.INVALID_ACCESS_TOKEN: (
+            401,
+            "A valid user access token is required.",
+        ),
+        SecurityFailure.INVALID_APP_ROLE: (
+            403,
+            "The token has no valid protected application role.",
+        ),
+        SecurityFailure.FORBIDDEN: (
+            403,
+            "The identity is not permitted to perform this operation.",
+        ),
+        SecurityFailure.KEYS_UNAVAILABLE: (
+            503,
+            "The required public signing keys are unavailable.",
+        ),
+    }[exception.failure]
+    return problem_response(
+        request,
+        status_code=status,
+        code=exception.failure.value,
+        detail=detail,
+        headers={"WWW-Authenticate": "Bearer"} if status == 401 else None,
+    )
+
+
 def configure_exception_handlers(app: FastAPI) -> None:
     """Override framework defaults at the HTTP boundary."""
+    app.add_exception_handler(SecurityError, security_exception_handler)
     app.add_exception_handler(HTTPException, http_exception_handler)
     app.add_exception_handler(
         RequestValidationError, validation_exception_handler

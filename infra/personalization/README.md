@@ -16,6 +16,9 @@ conexión, esquema y permisos. No se crean tablas de negocio al arrancar.
 
 ```powershell
 py -3.14 infra/personalization/provision_local.py
+# Solo si todavía no existe .env:
+Copy-Item infra/personalization/.env.example infra/personalization/.env
+# Editar las dos URLs públicas del proyecto Supabase en ese archivo
 docker compose -f infra/personalization/compose.yaml config --quiet
 ```
 
@@ -158,3 +161,19 @@ Para detener el entorno de desarrollo conservando sus datos:
 ```powershell
 docker compose -f infra/personalization/compose.yaml -f infra/personalization/compose.dev.yaml down
 ```
+
+
+## Configuración pública de autenticación
+
+Compose requiere `SUPABASE_ISSUER` y `SUPABASE_JWKS_URL`, documentadas en
+`.env.example`. El archivo local `.env` está ignorado. Conservarlo si ya
+existe y agregar solamente esas dos variables; no copiar credenciales de
+Auth ni sobrescribir otros valores. Ambas URLs deben usar HTTPS y el mismo
+origen. La API valida los JWT localmente con claves públicas en caché.
+
+`verify_stack.py` proporciona URLs de prueba al entorno de sus procesos
+Docker, con prioridad sobre `.env`. La prueba de infraestructura puede
+ejecutarse sin acceso a Supabase ni credenciales de usuarios. El arranque
+y los endpoints técnicos no descargan JWKS. Las pruebas criptográficas
+de autenticación y autorización se ejecutan durante la construcción de
+la imagen, con claves generadas únicamente para las pruebas.

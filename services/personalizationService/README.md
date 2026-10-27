@@ -10,6 +10,8 @@ Desde la raíz del repositorio, con Docker en modo Linux:
 
 ```powershell
 py -3.14 infra/personalization/provision_local.py
+Copy-Item infra/personalization/.env.example infra/personalization/.env
+# Editar las dos URLs públicas en infra/personalization/.env
 docker compose -f infra/personalization/compose.yaml -f infra/personalization/compose.dev.yaml up -d --build --wait personalization
 ```
 
@@ -30,9 +32,10 @@ un puerto e inspecciona su propia base de datos, con límites de conexión y
 consulta. Si PostgreSQL cae, la API sigue viva y readiness devuelve 503.
 Recuperar la base permite volver a responder 200 sin reiniciar la API.
 
-Todavía no hay operaciones de negocio, validación JWT ni servidor gRPC. El
-esquema de seguridad de OpenAPI identifica el contrato futuro; los endpoints
-técnicos actuales son públicos. El puerto 50051 queda reservado para gRPC.
+La validación JWT y las políticas de acceso están implementadas y probadas.
+Los endpoints técnicos actuales son públicos; las operaciones de negocio
+se agregarán con sus políticas explícitas. El puerto 50051 queda reservado
+para el servidor gRPC de un incremento posterior.
 HTTPS y el proxy de despliegue se incorporarán en la fase de operación.
 
 ## Dependencias y configuración local
@@ -50,6 +53,8 @@ comando usa `--locked` para evitar cambios implícitos en la resolución.
 
 | Variable | Regla |
 | --- | --- |
+| `SUPABASE_ISSUER` | URL HTTPS del proyecto, terminada en `/auth/v1` |
+| `SUPABASE_JWKS_URL` | Mismo origen, `/auth/v1/.well-known/jwks.json` |
 | `APP_ENV` | Obligatoria: `development`, `test` o `production` |
 | `HTTP_HOST` | `127.0.0.1` local o `0.0.0.0` dentro del contenedor |
 | `HTTP_PORT` | Entero 1–65535; predeterminado 8080 |
@@ -157,9 +162,83 @@ HTTP no crea tablas ni ejecuta migraciones. La matriz requisito–operación–
 prueba se completará con las funcionalidades, sin equiparar cobertura de
 líneas con RNF09.
 
-Rama: `feat/personalization/http-foundation`.
+Rama: `feat/personalization/local-jwt-validation`.
 Commit y título del PR:
 
 ```text
-feat(personalization): add HTTP service foundation
+feat(personalization): validate JWTs locally
 ```
+
+
+## Autenticación local y autorización
+
+Se sigue `ClusterJAM_Guia_Autorizacion_Microservicios.md`, adaptada a las
+capas del servicio y al contrato RFC 9457 completo. `application/` define
+la identidad mínima, el puerto del verificador y la regla de propiedad;
+`infrastructure/security/` verifica firmas y claims con PyJWT; las
+dependencias de `interfaces/http/security.py` aplican las políticas HTTP.
+
+Configurar únicamente las dos URLs públicas en el archivo ignorado
+`infra/personalization/.env`. No se necesitan claves privadas, una clave
+publicable de Supabase ni credenciales de la base de Auth. La configuración
+rechaza URLs con credenciales, query o fragmento, HTTP, rutas distintas o
+un origen diferente entre issuer y JWKS. Compose carga ese archivo desde
+su directorio de proyecto; las variables del proceso tienen prioridad.
+Al actualizar una instalación existente, conservar su `.env` y agregar las
+dos variables; copiar el ejemplo solamente si el archivo todavía no existe.
+
+Se crea un verificador por proceso durante el arranque, sin descargar
+claves todavía. La primera petición protegida obtiene las claves públicas
+por JWKS, con timeout de 5 segundos. `PyJWKClient` conserva el conjunto de
+claves en memoria durante 600 segundos. La caché individual ilimitada por
+tiempo está desactivada para respetar la retirada de claves. Las búsquedas
+de un `kid` nuevo permiten refrescar tras un intervalo de 30 segundos,
+evitando descargas repetidas por identificadores desconocidos. Una clave
+recién publicada podría rechazarse durante ese intervalo. Las dependencias
+sincrónicas se ejecutan en el pool de hilos de FastAPI.
+
+Solo se permiten ES256 y RS256, con `kid` y firma válidos. Se exigen `sub`
+UUID, `exp` numérico vigente, `iss` configurado y `aud` que contenga
+`authenticated`. También se valida `role=authenticated`, se rechazan
+usuarios anónimos y se respetan `nbf` e `iat` cuando están presentes.
+El único rol de negocio aceptado procede de `app_metadata.app_role`:
+`cliente` o `administrador`. `user_metadata`, cabeceras y cuerpos no
+otorgan permisos. No se consulta Auth Service ni `/auth/v1/user` por petición.
+
+Para cada futura ruta de negocio se usará `Depends(require_roles(...))`
+con roles explícitos, además de `SECURITY_PROBLEM_RESPONSES` en su contrato.
+Una lista vacía de roles deniega acceso. La regla `require_resource_owner`
+recibe el propietario leído por el servidor; la excepción de administrador
+requiere `allow_administrator=True` en el caso de uso que la autorice.
+Esta regla no sustituye la consulta del recurso ni decide por sí sola qué
+operaciones admiten esa excepción. No hay rutas de demostración en producción.
+
+| Situación | HTTP | `code` |
+| --- | --- | --- |
+| Token ausente, inválido o expirado | 401 | `INVALID_ACCESS_TOKEN` |
+| Rol protegido ausente o inválido | 403 | `INVALID_APP_ROLE` |
+| Rol o propiedad insuficientes | 403 | `FORBIDDEN` |
+| Claves necesarias no disponibles | 503 | `SERVICE_UNAVAILABLE` |
+
+Los 401 incluyen `WWW-Authenticate: Bearer`. Todos conservan `detail` y
+`traceId` y no exponen mensajes internos, tokens ni datos del proveedor.
+Si JWKS falla, las claves conocidas siguen funcionando mientras su caché
+sea válida; sin claves utilizables la petición protegida devuelve 503.
+Los endpoints técnicos permanecen disponibles sin consultar JWKS.
+
+La validación local no proporciona revocación inmediata de sesiones ni
+actualiza roles de JWT ya emitidos: se aplican al renovar el token o al
+expirar. La retirada de una clave puede tardar hasta el TTL de la caché.
+No se promete una latencia fija para todas las peticiones.
+
+Las pruebas usan firmas ES256/RS256 reales con claves efímeras y sustituyen
+solo el transporte JWKS. Cubren claims, firmas alteradas, roles, propiedad,
+caché concurrente, rotación, retirada de claves, fallos del proveedor,
+contratos HTTP/OpenAPI y privacidad de logs. No necesitan usuarios ni
+conectividad con Supabase. El verificador del stack Docker usa URLs de
+prueba para comprobar el arranque sin depender del proveedor externo.
+
+El contrato OpenAPI se regenera sin red y solo publica las rutas técnicas
+existentes. Las rutas protegidas de prueba viven exclusivamente en `test/`.
+Las tablas de negocio y sus migraciones Alembic pertenecen al siguiente
+incremento; no se crean tablas al iniciar este servicio.

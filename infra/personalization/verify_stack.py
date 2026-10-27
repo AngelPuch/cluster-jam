@@ -1,6 +1,7 @@
 """Verify Docker packaging, isolation, and a disposable data volume."""
 
 import json
+import os
 import subprocess
 import textwrap
 from pathlib import Path
@@ -9,12 +10,18 @@ from uuid import uuid4
 
 def run_command(arguments: list[str], *, capture: bool = False) -> str:
     """Run a bounded command without printing credential contents."""
+    environment = dict(os.environ)
+    environment["SUPABASE_ISSUER"] = "https://supabase.example.test/auth/v1"
+    environment["SUPABASE_JWKS_URL"] = (
+        "https://supabase.example.test/auth/v1/.well-known/jwks.json"
+    )
     result = subprocess.run(
         arguments,
         check=True,
         text=True,
         capture_output=capture,
         timeout=900,
+        env=environment,
     )
     return result.stdout.strip() if capture else ""
 
