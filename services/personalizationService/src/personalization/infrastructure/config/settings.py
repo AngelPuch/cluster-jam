@@ -1,5 +1,6 @@
 """Validate process configuration and load its database secret."""
 
+import re
 from pathlib import Path
 from typing import Literal, Self
 
@@ -91,7 +92,60 @@ class Settings(BaseSettings):
         le=MAX_IMAGE_PIXELS,
         validation_alias="IMAGE_MAX_PIXELS",
     )
+    storage_enabled: bool = Field(
+        default=False, validation_alias="STORAGE_ENABLED"
+    )
+    storage_bucket: str = Field(
+        default="personalization-originals",
+        min_length=3,
+        max_length=63,
+        pattern=r"^[a-z0-9][a-z0-9-]*[a-z0-9]$",
+        validation_alias="SUPABASE_STORAGE_BUCKET",
+    )
+    storage_key_file: Path | None = Field(
+        default=None, validation_alias="SUPABASE_STORAGE_KEY_FILE"
+    )
+    download_url_ttl_seconds: int = Field(
+        default=60, ge=1, le=300, validation_alias="DOWNLOAD_URL_TTL_SECONDS"
+    )
+    _storage_key: SecretStr | None = PrivateAttr(default=None)
     _database_password: SecretStr = PrivateAttr()
+
+    @property
+    def storage_project_url(self) -> str:
+        """Derive the Storage origin from the trusted
+        configured issuer.
+        """
+        return str(self.supabase_issuer).removesuffix("/auth/v1")
+
+    @property
+    def storage_key(self) -> SecretStr:
+        """Read only a configured backend key, never a user access
+        token.
+        """
+        if self._storage_key is None:
+            raise ValueError("Storage is not configured")
+        return self._storage_key
+
+    @model_validator(mode="after")
+    def load_storage_key(self) -> Self:
+        """Load a mounted server secret only when Storage is enabled."""
+        if not self.storage_enabled:
+            return self
+        if self.storage_key_file is None:
+            raise ValueError("SUPABASE_STORAGE_KEY_FILE is required")
+        try:
+            value = self.storage_key_file.read_text(encoding="utf-8").rstrip(
+                "\r\n"
+            )
+        except OSError, UnicodeError:
+            raise ValueError(
+                "Storage key file must be readable UTF-8"
+            ) from None
+        if re.fullmatch(r"sb_secret_[A-Za-z0-9_-]{20,200}", value) is None:
+            raise ValueError("A Supabase backend secret key is required")
+        self._storage_key = SecretStr(value)
+        return self
 
     @property
     def image_policy(self) -> ImageValidationPolicy:

@@ -15,6 +15,10 @@ def isolate_environment(
     """Prevent machine-specific configuration from changing tests."""
     for name in (
         "APP_ENV",
+        "STORAGE_ENABLED",
+        "SUPABASE_STORAGE_BUCKET",
+        "SUPABASE_STORAGE_KEY_FILE",
+        "DOWNLOAD_URL_TTL_SECONDS",
         "HTTP_HOST",
         "HTTP_PORT",
         "GRPC_PORT",
@@ -226,3 +230,76 @@ def test_image_resource_limits_can_be_tightened(
     assert policy.max_width_px == 1024
     assert policy.max_height_px == 768
     assert policy.max_pixels == 500000
+
+
+def test_storage_is_disabled_until_explicitly_configured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("APP_ENV", "test")
+    assert Settings(_env_file=None).storage_enabled is False
+
+
+@pytest.mark.parametrize(
+    "key", ["", "sb_publishable_public", "eyJ.legacy.key", "sb_secret_short"]
+)
+def test_storage_rejects_non_backend_keys(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    key: str,
+) -> None:
+    secret = tmp_path / "storage-key"
+    secret.write_text(key, encoding="utf-8")
+    monkeypatch.setenv("APP_ENV", "test")
+    monkeypatch.setenv("STORAGE_ENABLED", "true")
+    monkeypatch.setenv("SUPABASE_STORAGE_KEY_FILE", str(secret))
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+
+def test_storage_key_file_is_required_when_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("APP_ENV", "test")
+    monkeypatch.setenv("STORAGE_ENABLED", "true")
+    with pytest.raises(ValidationError, match="SUPABASE_STORAGE_KEY_FILE"):
+        Settings(_env_file=None)
+
+
+def test_valid_storage_key_is_hidden_in_settings_repr(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    value = "sb_secret_" + "test-only-material" * 2
+    secret = tmp_path / "storage-key"
+    secret.write_text(value, encoding="utf-8")
+    monkeypatch.setenv("APP_ENV", "test")
+    monkeypatch.setenv("STORAGE_ENABLED", "true")
+    monkeypatch.setenv("SUPABASE_STORAGE_KEY_FILE", str(secret))
+    settings = Settings(_env_file=None)
+    assert value not in repr(settings)
+    assert settings.storage_key.get_secret_value() == value
+    assert settings.storage_project_url == "https://supabase.example.test"
+
+
+@pytest.mark.parametrize(
+    "bucket", ["../private", "public/bucket", "name with spaces", "UPPERCASE"]
+)
+def test_storage_bucket_is_one_safe_path_segment(
+    monkeypatch: pytest.MonkeyPatch,
+    bucket: str,
+) -> None:
+    monkeypatch.setenv("APP_ENV", "test")
+    monkeypatch.setenv("SUPABASE_STORAGE_BUCKET", bucket)
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+
+@pytest.mark.parametrize("ttl", ["0", "301", "invalid"])
+def test_download_url_ttl_is_short_and_bounded(
+    monkeypatch: pytest.MonkeyPatch,
+    ttl: str,
+) -> None:
+    monkeypatch.setenv("APP_ENV", "test")
+    monkeypatch.setenv("DOWNLOAD_URL_TTL_SECONDS", ttl)
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)

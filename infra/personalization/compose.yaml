@@ -13,6 +13,9 @@ x-personalization-service: &personalization-service
         HTTP_PORT: "8080"
         GRPC_PORT: "50051"
         LOG_LEVEL: INFO
+        STORAGE_ENABLED: "false"
+        SUPABASE_STORAGE_BUCKET: ${SUPABASE_STORAGE_BUCKET:-personalization-originals}
+        DOWNLOAD_URL_TTL_SECONDS: ${DOWNLOAD_URL_TTL_SECONDS:-60}
         IMAGE_MAX_WIDTH_PX: ${IMAGE_MAX_WIDTH_PX:-8192}
         IMAGE_MAX_HEIGHT_PX: ${IMAGE_MAX_HEIGHT_PX:-8192}
         IMAGE_MAX_PIXELS: ${IMAGE_MAX_PIXELS:-16000000}
@@ -73,6 +76,8 @@ services:
             - personalization-db
             - backend
         init: true
+        tmpfs:
+            - /tmp:rw,noexec,nosuid,size=32m,mode=1777
         restart: unless-stopped
         stop_grace_period: 20s
         healthcheck:
@@ -87,6 +92,13 @@ services:
             timeout: 3s
             start_period: 10s
             retries: 3
+
+    personalization-storage:
+        <<: *personalization-service
+        profiles: ["tools"]
+        entrypoint: ["python", "-m", "personalization.infrastructure.storage.manage"]
+        command: ["check"]
+        restart: "no"
 
     personalization-migrate:
         <<: *personalization-service

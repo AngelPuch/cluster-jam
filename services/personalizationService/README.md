@@ -167,11 +167,11 @@ Alembic versionada. El arranque HTTP no crea tablas ni ejecuta migraciones. La m
 prueba se completará con las funcionalidades, sin equiparar cobertura de
 líneas con RNF09.
 
-Rama: `feat/personalization/image-validation`.
+Rama: `feat/personalization/private-file-storage`.
 Commit y título del PR:
 
 ```text
-feat(personalization): validate original images
+feat(personalization): store private original files
 ```
 
 
@@ -278,9 +278,27 @@ Los límites iniciales son 8192 píxeles por lado y 16 000 000 píxeles totales.
 restringirlos. Son decisiones de recursos documentadas, no cifras fijadas
 por los requisitos. Para cambiar variables de Compose, recrear la API.
 
-Este incremento no publica todavía un endpoint de subida ni persiste
-objetos. Las rutas multipart de las pruebas viven solo en `test/`. La
-integración de Storage y la autorización del archivo se implementarán
-en su siguiente incremento, antes de probar la carga real con Postman.
+La subida persistente ya usa este validador en `POST /api/v1/files`.
+Requiere preparar el bucket privado y montar su clave de servidor.
+La configuración base mantiene Storage desactivado hasta ese momento.
 
 Consultar [reglas, errores y pruebas de imágenes](docs/image-validation.md).
+
+
+## Archivos privados y Supabase Storage
+
+Se exponen `POST /api/v1/files`, `GET /api/v1/files/{fileId}` y
+`POST /api/v1/files/{fileId}/download-urls`, con JWT local, rol y propiedad.
+La carga genera metadata duradera antes de guardar y habilita la descarga
+tras confirmar el objeto. No se sobrescriben ni borran originales ante
+respuestas ambiguas. Las intenciones pendientes se pueden reconciliar
+comparando los bytes remotos con su SHA-256.
+
+El archivo de secreto se prepara con `infra/personalization/set_storage_key.py`.
+El overlay `infra/personalization/compose.storage.yaml` monta esa clave y
+habilita Storage. La configuración base conserva la API operativa sin
+credenciales, con errores 503 para cargas que necesiten almacenamiento.
+
+Consultar [preparación, recuperación y Postman](docs/private-files.md).
+El entorno y colección de Postman están en `contracts/postman/personalization`.
+Los valores reales de JWT y enlaces temporales se mantienen fuera de Git.
