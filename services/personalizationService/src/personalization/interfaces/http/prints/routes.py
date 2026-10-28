@@ -3,7 +3,7 @@
 from typing import Annotated, cast
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Path, Query, Request, Response
+from fastapi import APIRouter, Depends, Header, Path, Query, Request, Response
 
 from personalization.application.prints.print_service import PrintService
 from personalization.application.security.identity import (
@@ -17,6 +17,12 @@ from personalization.interfaces.http.prints.dto import (
     PrintResponse,
     PrintVersionPageResponse,
     PrintVersionResponse,
+    UpdatePrintRequest,
+)
+from personalization.interfaces.http.prints.preconditions import (
+    ETAG_RESPONSE,
+    parse_if_match,
+    print_etag,
 )
 from personalization.interfaces.http.security import (
     SECURITY_PROBLEM_RESPONSES,
@@ -50,7 +56,12 @@ PageLimit = Annotated[int, Query(ge=1, le=100)]
 PageCursor = Annotated[str | None, Query(min_length=1, max_length=256)]
 
 
-@router.post("", status_code=201, response_model=PrintResponse)
+@router.post(
+    "",
+    status_code=201,
+    response_model=PrintResponse,
+    responses={201: ETAG_RESPONSE},
+)
 def create_print(
     body: CreatePrintRequest,
     identity: Administrator,
@@ -66,6 +77,7 @@ def create_print(
     )
     response.headers["Location"] = f"/api/v1/admin/prints/{record.id}"
     response.headers["Cache-Control"] = "no-store"
+    response.headers["ETag"] = print_etag(record)
     return PrintResponse.from_record(record)
 
 
@@ -85,7 +97,11 @@ def list_prints(
     )
 
 
-@router.get("/{printId}", response_model=PrintResponse)
+@router.get(
+    "/{printId}",
+    response_model=PrintResponse,
+    responses={200: ETAG_RESPONSE},
+)
 def get_print(
     print_id: PrintId,
     identity: Administrator,
@@ -93,7 +109,9 @@ def get_print(
     response: Response,
 ) -> PrintResponse:
     response.headers["Cache-Control"] = "no-store"
-    return PrintResponse.from_record(service.get(identity, print_id))
+    record = service.get(identity, print_id)
+    response.headers["ETag"] = print_etag(record)
+    return PrintResponse.from_record(record)
 
 
 @router.post(
@@ -154,3 +172,31 @@ def get_print_version(
     return PrintVersionResponse.from_record(
         service.get_version(identity, print_id, version_id)
     )
+
+
+@router.patch(
+    "/{printId}",
+    response_model=PrintResponse,
+    responses={
+        200: ETAG_RESPONSE,
+        412: {"description": "The selected strong validator is stale"},
+        428: {"description": "Read the resource and supply If-Match"},
+    },
+)
+def update_print(
+    print_id: PrintId,
+    body: UpdatePrintRequest,
+    identity: Administrator,
+    service: PrintUseCase,
+    response: Response,
+    if_match: Annotated[list[str] | None, Header(alias="If-Match")] = None,
+) -> PrintResponse:
+    record = service.update(
+        identity,
+        print_id,
+        body.to_changes(),
+        parse_if_match(if_match),
+    )
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["ETag"] = print_etag(record)
+    return PrintResponse.from_record(record)

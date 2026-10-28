@@ -1,0 +1,560 @@
+{
+  "info": {
+    "name": "Cluster JAM - Print Lifecycle",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Run all 15 requests in order against an existing print. Set baseUrl, adminAccessToken, accessToken (client) and printId. ETags and the version snapshot are populated automatically. No requests attach local files."
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{adminAccessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "Consultar para editar",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/admin/prints/{{printId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) { const p = pm.response.json(); const tag = pm.response.headers.get(\"ETag\"); pm.environment.set(\"printEtag\", tag); pm.environment.set(\"previousPrintEtag\", tag); pm.environment.set(\"lifecycleVersionId\", p.latestVersion.id); pm.environment.set(\"lifecycleVersionSnapshot\", JSON.stringify(p.latestVersion)); pm.test(\"ETag present\", () => pm.expect(tag).to.match(/^\"[0-9a-f]{64}\"$/)); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Editar nombre y descripción",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "If-Match",
+            "value": "{{printEtag}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/admin/prints/{{printId}}",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Logo editado {{$guid}}\",\n  \"description\": \"Descripción actualizada\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) pm.environment.set(\"printEtag\", pm.response.headers.get(\"ETag\"));",
+              "if (pm.response.code === 200) pm.test(\"Version preserved\", () => pm.expect(pm.response.json().latestVersion).to.deep.eql(JSON.parse(pm.environment.get(\"lifecycleVersionSnapshot\"))));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "ETag anterior",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "If-Match",
+            "value": "{{previousPrintEtag}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/admin/prints/{{printId}}",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"No debe sobrescribir\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 412\", () => pm.response.to.have.status(412));",
+              "pm.test(\"Problem Details\", () => { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"); pm.expect(pm.response.json()).to.have.all.keys(\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"); });",
+              "pm.test(\"Error code\", () => pm.expect(pm.response.json().code).to.eql(\"PRINT_PRECONDITION_FAILED\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Limpiar descripción",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "If-Match",
+            "value": "{{printEtag}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/admin/prints/{{printId}}",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"description\": null\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) pm.environment.set(\"printEtag\", pm.response.headers.get(\"ETag\"));",
+              "if (pm.response.code === 200) pm.test(\"Version preserved\", () => pm.expect(pm.response.json().latestVersion).to.deep.eql(JSON.parse(pm.environment.get(\"lifecycleVersionSnapshot\"))));",
+              "pm.test(\"Description cleared\", () => pm.expect(pm.response.json().description).to.eql(null));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Retirar estampado",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "If-Match",
+            "value": "{{printEtag}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/admin/prints/{{printId}}",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"active\": false\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) pm.environment.set(\"printEtag\", pm.response.headers.get(\"ETag\"));",
+              "if (pm.response.code === 200) pm.test(\"Version preserved\", () => pm.expect(pm.response.json().latestVersion).to.deep.eql(JSON.parse(pm.environment.get(\"lifecycleVersionSnapshot\"))));",
+              "pm.test(\"Retired\", () => pm.expect(pm.response.json().active).to.eql(false));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Consultar retirado",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/admin/prints/{{printId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) pm.environment.set(\"printEtag\", pm.response.headers.get(\"ETag\"));",
+              "if (pm.response.code === 200) pm.test(\"Version preserved\", () => pm.expect(pm.response.json().latestVersion).to.deep.eql(JSON.parse(pm.environment.get(\"lifecycleVersionSnapshot\"))));",
+              "pm.test(\"Still retired\", () => pm.expect(pm.response.json().active).to.eql(false));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Consultar versión preservada",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/admin/prints/{{printId}}/versions/{{lifecycleVersionId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) pm.test(\"Original version unchanged\", () => pm.expect(pm.response.json()).to.deep.eql(JSON.parse(pm.environment.get(\"lifecycleVersionSnapshot\"))));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reactivar estampado",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "If-Match",
+            "value": "{{printEtag}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/admin/prints/{{printId}}",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"active\": true\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) pm.environment.set(\"printEtag\", pm.response.headers.get(\"ETag\"));",
+              "if (pm.response.code === 200) pm.test(\"Version preserved\", () => pm.expect(pm.response.json().latestVersion).to.deep.eql(JSON.parse(pm.environment.get(\"lifecycleVersionSnapshot\"))));",
+              "pm.test(\"Active\", () => pm.expect(pm.response.json().active).to.eql(true));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Sin If-Match",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/admin/prints/{{printId}}",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"active\": false\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 428\", () => pm.response.to.have.status(428));",
+              "pm.test(\"Problem Details\", () => { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"); pm.expect(pm.response.json()).to.have.all.keys(\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"); });",
+              "pm.test(\"Error code\", () => pm.expect(pm.response.json().code).to.eql(\"PRINT_PRECONDITION_REQUIRED\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Cliente sin permiso",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "If-Match",
+            "value": "{{printEtag}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/admin/prints/{{printId}}",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"active\": false\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 403\", () => pm.response.to.have.status(403));",
+              "pm.test(\"Problem Details\", () => { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"); pm.expect(pm.response.json()).to.have.all.keys(\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"); });",
+              "pm.test(\"Error code\", () => pm.expect(pm.response.json().code).to.eql(\"FORBIDDEN\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Sin JWT",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "If-Match",
+            "value": "{{printEtag}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/admin/prints/{{printId}}",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"active\": false\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 401\", () => pm.response.to.have.status(401));",
+              "pm.test(\"Problem Details\", () => { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"); pm.expect(pm.response.json()).to.have.all.keys(\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Campo no editable",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "If-Match",
+            "value": "{{printEtag}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/admin/prints/{{printId}}",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"surchargeCents\": 9999\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 422\", () => pm.response.to.have.status(422));",
+              "pm.test(\"Problem Details\", () => { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"); pm.expect(pm.response.json()).to.have.all.keys(\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"); });",
+              "pm.test(\"Error code\", () => pm.expect(pm.response.json().code).to.eql(\"VALIDATION_ERROR\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "If-Match mal formado",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "If-Match",
+            "value": "sin-comillas"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/admin/prints/{{printId}}",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"active\": false\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));",
+              "pm.test(\"Problem Details\", () => { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"); pm.expect(pm.response.json()).to.have.all.keys(\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"); });",
+              "pm.test(\"Error code\", () => pm.expect(pm.response.json().code).to.eql(\"INVALID_PRINT_PRECONDITION\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Estado inválido",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "If-Match",
+            "value": "{{printEtag}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/admin/prints/{{printId}}",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"active\": \"false\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 422\", () => pm.response.to.have.status(422));",
+              "pm.test(\"Problem Details\", () => { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"); pm.expect(pm.response.json()).to.have.all.keys(\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"); });",
+              "pm.test(\"Error code\", () => pm.expect(pm.response.json().code).to.eql(\"VALIDATION_ERROR\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Activar sin cambios",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "If-Match",
+            "value": "{{printEtag}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/admin/prints/{{printId}}",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"active\": true\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) pm.test(\"ETag unchanged\", () => pm.expect(pm.response.headers.get(\"ETag\")).to.eql(pm.environment.get(\"printEtag\")));",
+              "if (pm.response.code === 200) pm.test(\"Version preserved\", () => pm.expect(pm.response.json().latestVersion).to.deep.eql(JSON.parse(pm.environment.get(\"lifecycleVersionSnapshot\"))));"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

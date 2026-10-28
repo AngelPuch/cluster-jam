@@ -7,6 +7,11 @@ from personalization.application.errors.print_error import (
     PrintError,
     PrintFailure,
 )
+from personalization.application.prints.print_changes import (
+    PrintChanges,
+    PrintCondition,
+    print_revision,
+)
 from personalization.application.prints.print_record import (
     PrintRecord,
     PrintVersion,
@@ -42,6 +47,30 @@ class MemoryPrintRepository:
         self.versions[print_id] = [version]
         self.actors.append(actor_id)
         return record
+
+    def update(
+        self,
+        actor_id: UUID,
+        print_id: UUID,
+        changes: PrintChanges,
+        condition: PrintCondition,
+    ) -> PrintRecord:
+        current = self.get(print_id)
+        if not condition.matches(print_revision(current)):
+            raise PrintError(PrintFailure.PRINT_PRECONDITION_FAILED)
+        updated = current
+        if "name" in changes.fields:
+            assert changes.name is not None
+            updated = replace(updated, name=changes.name)
+        if "description" in changes.fields:
+            updated = replace(updated, description=changes.description)
+        if "active" in changes.fields:
+            assert changes.active is not None
+            updated = replace(updated, active=changes.active)
+        if updated != current:
+            self.records[print_id] = updated
+            self.actors.append(actor_id)
+        return updated
 
     def get(self, print_id: UUID) -> PrintRecord:
         self._check()
