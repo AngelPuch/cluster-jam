@@ -291,3 +291,172 @@ def test_openapi_contains_only_admin_secured_print_contracts(
         "fileId"
         in schema["components"]["schemas"]["CreatePrintRequest"]["properties"]
     )
+
+
+def test_http_lifecycle_retains_versions_and_returns_current_etag(
+    print_client: TestClient,
+    admin_headers: dict[str, str],
+    jwks_transport: object,
+    print_repository: MemoryPrintRepository,
+) -> None:
+    created = print_client.post(
+        BASE, headers=admin_headers, json={**body(), "description": "Original"}
+    )
+    assert created.status_code == 201
+    path = created.headers["Location"]
+    tag = created.headers["ETag"]
+    version = created.json()["latestVersion"]
+    assert print_client.get(path, headers=admin_headers).headers["ETag"] == tag
+    renamed = print_client.patch(
+        path,
+        headers={**admin_headers, "If-Match": tag},
+        json={"name": "New name"},
+    )
+    assert renamed.status_code == 200
+    assert renamed.json()["description"] == "Original"
+    assert renamed.json()["latestVersion"] == version
+    assert renamed.headers["ETag"] != tag
+    stale = print_client.patch(
+        path,
+        headers={**admin_headers, "If-Match": tag},
+        json={"name": "Stale name"},
+    )
+    assert stale.status_code == 412
+    assert stale.json()["code"] == "PRINT_PRECONDITION_FAILED"
+    cleared = print_client.patch(
+        path,
+        headers={**admin_headers, "If-Match": renamed.headers["ETag"]},
+        json={"description": None},
+    )
+    assert cleared.status_code == 200 and cleared.json()["description"] is None
+    retired = print_client.patch(
+        path,
+        headers={**admin_headers, "If-Match": cleared.headers["ETag"]},
+        json={"active": False},
+    )
+    assert retired.status_code == 200 and retired.json()["active"] is False
+    assert retired.headers["Cache-Control"] == "no-store"
+    actors = len(print_repository.actors)
+    unchanged = print_client.patch(
+        path,
+        headers={**admin_headers, "If-Match": retired.headers["ETag"]},
+        json={"active": False},
+    )
+    assert unchanged.headers["ETag"] == retired.headers["ETag"]
+    assert len(print_repository.actors) == actors
+    activated = print_client.patch(
+        path,
+        headers={**admin_headers, "If-Match": retired.headers["ETag"]},
+        json={"active": True},
+    )
+    assert activated.status_code == 200
+    assert activated.json()["active"] is True
+    history = print_client.get(path + "/versions", headers=admin_headers)
+    assert history.json()["items"] == [version]
+    assert print_client.delete(path, headers=admin_headers).status_code == 405
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {},
+        {"name": None},
+        {"name": "   "},
+        {"name": "x" * 121},
+        {"description": "x" * 2001},
+        {"active": None},
+        {"active": 0},
+        {"active": "false"},
+        {"fileId": str(uuid4())},
+        {"surchargeCents": 50},
+        {"actorId": str(uuid4())},
+    ],
+)
+def test_lifecycle_rejects_invalid_or_uneditable_fields(
+    print_client: TestClient,
+    admin_headers: dict[str, str],
+    jwks_transport: object,
+    print_repository: MemoryPrintRepository,
+    payload: dict[str, object],
+) -> None:
+    response = print_client.patch(
+        BASE + "/" + str(uuid4()),
+        headers={**admin_headers, "If-Match": "*"},
+        json=payload,
+    )
+    assert response.status_code == 422
+    assert response.json()["code"] == "VALIDATION_ERROR"
+    assert print_repository.calls == 0
+
+
+@pytest.mark.parametrize(
+    "condition,status,code",
+    [
+        (None, 428, "PRINT_PRECONDITION_REQUIRED"),
+        ("bad", 400, "INVALID_PRINT_PRECONDITION"),
+        ('W/"anything"', 412, "PRINT_PRECONDITION_FAILED"),
+        ('"stale"', 412, "PRINT_PRECONDITION_FAILED"),
+    ],
+)
+def test_http_preconditions_use_safe_problem_details(
+    print_client: TestClient,
+    admin_headers: dict[str, str],
+    jwks_transport: object,
+    condition: str | None,
+    status: int,
+    code: str,
+) -> None:
+    created = print_client.post(BASE, headers=admin_headers, json=body())
+    headers = dict(admin_headers)
+    if condition is not None:
+        headers["If-Match"] = condition
+    response = print_client.patch(
+        created.headers["Location"], headers=headers, json={"active": False}
+    )
+    assert response.status_code == status
+    assert response.json()["code"] == code
+    assert len(response.json()) == 7
+    assert response.headers["Cache-Control"] == "no-store"
+    assert (
+        response.json()["traceId"]
+        == response.headers["traceparent"].split("-")[1]
+    )
+
+
+def test_lifecycle_guards_run_before_conditional_write(
+    print_client: TestClient,
+    sign_token: Callable[..., str],
+    jwks_transport: object,
+    print_repository: MemoryPrintRepository,
+) -> None:
+    path = BASE + "/" + str(uuid4())
+    assert print_client.patch(path, json={"active": False}).status_code == 401
+    forbidden = print_client.patch(
+        path,
+        json={"active": False},
+        headers={"Authorization": "Bearer " + sign_token(), "If-Match": "*"},
+    )
+    assert forbidden.status_code == 403 and print_repository.calls == 0
+
+
+def test_http_precondition_lists_and_wildcard_follow_strong_matching(
+    print_client: TestClient,
+    admin_headers: dict[str, str],
+    jwks_transport: object,
+) -> None:
+    created = print_client.post(BASE, headers=admin_headers, json=body())
+    path = created.headers["Location"]
+    changed = print_client.patch(
+        path,
+        headers=[
+            *admin_headers.items(),
+            ("If-Match", 'W/"weak", "other"'),
+            ("If-Match", created.headers["ETag"]),
+        ],
+        json={"active": False},
+    )
+    assert changed.status_code == 200
+    wildcard = print_client.patch(
+        path, headers={**admin_headers, "If-Match": "*"}, json={"active": True}
+    )
+    assert wildcard.status_code == 200

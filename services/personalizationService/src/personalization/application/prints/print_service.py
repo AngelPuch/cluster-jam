@@ -18,6 +18,11 @@ from personalization.application.prints.cursor import (
     print_cursor,
     version_cursor,
 )
+from personalization.application.prints.print_changes import (
+    PrintChanges,
+    PrintCondition,
+    validate_changes,
+)
 from personalization.application.prints.print_record import (
     MAX_DESCRIPTION_LENGTH,
     MAX_SURCHARGE_CENTS,
@@ -94,6 +99,21 @@ class PrintService:
             expected_version,
             file_id,
             surcharge_cents,
+        )
+
+    def update(
+        self,
+        identity: VerifiedIdentity,
+        print_id: UUID,
+        changes: PrintChanges,
+        condition: PrintCondition,
+    ) -> PrintRecord:
+        require_administrator(identity)
+        return self._repository.update(
+            identity.user_id,
+            print_id,
+            validate_changes(changes),
+            condition,
         )
 
     def get(self, identity: VerifiedIdentity, print_id: UUID) -> PrintRecord:

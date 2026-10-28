@@ -18,7 +18,15 @@ from personalization.application.errors.print_error import (
     PrintError,
     PrintFailure,
 )
-from personalization.application.prints.print_record import PrintVersion
+from personalization.application.prints.print_changes import (
+    PrintChanges,
+    PrintCondition,
+    print_revision,
+)
+from personalization.application.prints.print_record import (
+    PrintRecord,
+    PrintVersion,
+)
 from personalization.bootstrap import create_app
 from personalization.infrastructure.config.settings import Settings
 from personalization.infrastructure.database.models.audit_entry import (
@@ -420,4 +428,393 @@ def test_http_workflow_with_real_postgres_jwt_and_atomic_audit(
         assert len(audit) == 2
         assert all(
             str(entry.actor_id) == str(claims["sub"]) for entry in audit
+        )
+
+
+def condition_for(record: PrintRecord) -> PrintCondition:
+    return PrintCondition(frozenset({print_revision(record)}))
+
+
+def test_lifecycle_keeps_history_and_audits_only_technical_changes(
+    engine: Engine,
+    seed: Seed,
+) -> None:
+    repository = SqlAlchemyPrintRepository(engine, BUCKET)
+    first = repository.create(
+        seed.actor, seed.name, "Initial", seed.file_id, 1250
+    )
+    second = repository.create_version(
+        seed.actor, first.id, 1, seed.file_id, 2000
+    )
+    current = repository.get(first.id)
+    edited = repository.update(
+        seed.actor,
+        first.id,
+        PrintChanges(
+            frozenset({"name", "description", "active"}),
+            name=seed.name + "-renamed",
+            description=None,
+            active=False,
+        ),
+        condition_for(current),
+    )
+    assert edited.description is None and edited.active is False
+    assert edited.latest_version == second
+    activated = repository.update(
+        seed.actor,
+        first.id,
+        PrintChanges(
+            frozenset({"active"}),
+            active=True,
+        ),
+        condition_for(edited),
+    )
+    retired = repository.update(
+        seed.actor,
+        first.id,
+        PrintChanges(
+            frozenset({"active"}),
+            active=False,
+        ),
+        condition_for(activated),
+    )
+    assert retired.active is False
+    assert (
+        repository.get_version(first.id, first.latest_version.id)
+        == first.latest_version
+    )
+    assert repository.list_versions(first.id, None, 20) == (
+        first.latest_version,
+        second,
+    )
+    with Session(engine) as session:
+        entries = session.scalars(
+            select(AuditEntryModel).where(
+                AuditEntryModel.resource_id == first.id
+            )
+        ).all()
+        assert len(entries) == 5
+        assert {entry.action for entry in entries} == {
+            "PRINT_CREATED",
+            "PRINT_VERSION_CREATED",
+            "PRINT_UPDATED",
+            "PRINT_ACTIVATED",
+            "PRINT_RETIRED",
+        }
+        lifecycle = [
+            entry
+            for entry in entries
+            if entry.action
+            in {
+                "PRINT_UPDATED",
+                "PRINT_ACTIVATED",
+                "PRINT_RETIRED",
+            }
+        ]
+        for entry in lifecycle:
+            assert entry.actor_id == seed.actor
+            assert entry.detail is not None
+            assert set(entry.detail) == {
+                "changedFields",
+                "previousRevision",
+                "revision",
+                "activeBefore",
+                "activeAfter",
+                "versionId",
+            }
+            assert len(str(entry.detail["revision"])) == 64
+        assert session.get(FileModel, seed.file_id) is not None
+
+
+def test_noop_edit_does_not_add_versions_or_audit(
+    engine: Engine,
+    seed: Seed,
+) -> None:
+    repository = SqlAlchemyPrintRepository(engine, BUCKET)
+    current = repository.create(seed.actor, seed.name, None, seed.file_id, 0)
+    unchanged = repository.update(
+        seed.actor,
+        current.id,
+        PrintChanges(
+            frozenset({"name", "active"}),
+            name=seed.name,
+            active=True,
+        ),
+        condition_for(current),
+    )
+    assert unchanged == current
+    with Session(engine) as session:
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(AuditEntryModel)
+                .where(AuditEntryModel.resource_id == current.id)
+            )
+            == 1
+        )
+    assert len(repository.list_versions(current.id, None, 20)) == 1
+
+
+def test_concurrent_edits_with_same_revision_have_one_winner(
+    engine: Engine,
+    seed: Seed,
+) -> None:
+    repository = SqlAlchemyPrintRepository(engine, BUCKET)
+    current = repository.create(seed.actor, seed.name, None, seed.file_id, 0)
+    condition = condition_for(current)
+    barrier = Barrier(2)
+
+    def write(description: str) -> PrintRecord | PrintFailure:
+        barrier.wait(timeout=5)
+        try:
+            return repository.update(
+                seed.actor,
+                current.id,
+                PrintChanges(
+                    frozenset({"description"}),
+                    description=description,
+                ),
+                condition,
+            )
+        except PrintError as error:
+            return error.failure
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(write, ("First", "Second")))
+    assert sum(isinstance(result, PrintRecord) for result in results) == 1
+    assert results.count(PrintFailure.PRINT_PRECONDITION_FAILED) == 1
+    assert repository.get(current.id).description in {"First", "Second"}
+    with Session(engine) as session:
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(AuditEntryModel)
+                .where(AuditEntryModel.resource_id == current.id)
+            )
+            == 2
+        )
+
+
+def test_edit_audit_failure_reverts_flushed_metadata_and_state(
+    engine: Engine,
+    seed: Seed,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repository = SqlAlchemyPrintRepository(engine, BUCKET)
+    current = repository.create(seed.actor, seed.name, None, seed.file_id, 0)
+    marker = uuid4()
+    with Session(engine) as session, session.begin():
+        session.add(
+            AuditEntryModel(
+                id=marker,
+                actor_id=seed.actor,
+                action="TEST_MARKER",
+                resource="test",
+                resource_id=uuid4(),
+                detail=None,
+            )
+        )
+    monkeypatch.setattr(adapter, "uuid4", lambda: marker)
+    changes = PrintChanges(
+        frozenset({"name", "active"}), name=seed.name + "-failed", active=False
+    )
+    with pytest.raises(PrintError) as caught:
+        repository.update(
+            seed.actor, current.id, changes, condition_for(current)
+        )
+    assert caught.value.failure is PrintFailure.PRINT_DATABASE_UNAVAILABLE
+    assert repository.get(current.id) == current
+    assert repository.list_versions(current.id, None, 20) == (
+        current.latest_version,
+    )
+    with Session(engine) as session:
+        assert session.get(AuditEntryModel, marker) is not None
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(AuditEntryModel)
+                .where(AuditEntryModel.resource_id == current.id)
+            )
+            == 1
+        )
+    monkeypatch.undo()
+    assert (
+        repository.update(
+            seed.actor, current.id, changes, condition_for(current)
+        ).active
+        is False
+    )
+
+
+def test_retired_print_accepts_versions_but_old_revision_cannot_reactivate(
+    engine: Engine,
+    seed: Seed,
+) -> None:
+    repository = SqlAlchemyPrintRepository(engine, BUCKET)
+    current = repository.create(seed.actor, seed.name, None, seed.file_id, 0)
+    retired = repository.update(
+        seed.actor,
+        current.id,
+        PrintChanges(
+            frozenset({"active"}),
+            active=False,
+        ),
+        condition_for(current),
+    )
+    repository.create_version(seed.actor, current.id, 1, seed.file_id, 2000)
+    with pytest.raises(PrintError) as caught:
+        repository.update(
+            seed.actor,
+            current.id,
+            PrintChanges(
+                frozenset({"active"}),
+                active=True,
+            ),
+            condition_for(retired),
+        )
+    assert caught.value.failure is PrintFailure.PRINT_PRECONDITION_FAILED
+    latest = repository.get(current.id)
+    assert latest.active is False and latest.latest_version.number == 2
+    assert (
+        repository.update(
+            seed.actor,
+            current.id,
+            PrintChanges(
+                frozenset({"active"}),
+                active=True,
+            ),
+            condition_for(latest),
+        ).active
+        is True
+    )
+
+
+def test_reactivation_requires_an_available_original(
+    engine: Engine,
+    seed: Seed,
+) -> None:
+    repository = SqlAlchemyPrintRepository(engine, BUCKET)
+    current = repository.create(seed.actor, seed.name, None, seed.file_id, 0)
+    retired = repository.update(
+        seed.actor,
+        current.id,
+        PrintChanges(
+            frozenset({"active"}),
+            active=False,
+        ),
+        condition_for(current),
+    )
+    with Session(engine) as session, session.begin():
+        file = session.get(FileModel, seed.file_id)
+        assert file is not None
+        file.state = "PENDIENTE_CARGA"
+    with pytest.raises(PrintError) as caught:
+        repository.update(
+            seed.actor,
+            current.id,
+            PrintChanges(
+                frozenset({"active"}),
+                active=True,
+            ),
+            condition_for(retired),
+        )
+    assert caught.value.failure is PrintFailure.INVALID_PRINT_FILE
+    assert repository.get(current.id) == retired
+
+
+def test_missing_print_and_versionless_record_fail_without_audit(
+    engine: Engine,
+    seed: Seed,
+) -> None:
+    repository = SqlAlchemyPrintRepository(engine, BUCKET)
+    changes = PrintChanges(frozenset({"active"}), active=False)
+    with pytest.raises(PrintError) as missing:
+        repository.update(
+            seed.actor, uuid4(), changes, PrintCondition(any_existing=True)
+        )
+    assert missing.value.failure is PrintFailure.PRINT_NOT_FOUND
+    print_id = uuid4()
+    with Session(engine) as session, session.begin():
+        session.add(
+            PrintModel(
+                id=print_id, name=seed.name, description=None, active=True
+            )
+        )
+    with pytest.raises(PrintError) as corrupted:
+        repository.get(print_id)
+    assert corrupted.value.failure is PrintFailure.PRINT_DATABASE_UNAVAILABLE
+    with pytest.raises(PrintError):
+        repository.update(
+            seed.actor, print_id, changes, PrintCondition(any_existing=True)
+        )
+
+
+def test_http_lifecycle_with_postgres_real_jwt_and_no_history_loss(
+    engine: Engine,
+    seed: Seed,
+    settings: Settings,
+    sign_token: Callable[..., str],
+    claims: dict[str, object],
+    jwks_transport: object,
+) -> None:
+    token = sign_token(
+        {**claims, "app_metadata": {"app_role": "administrador"}}
+    )
+    headers = {"Authorization": "Bearer " + token}
+    with TestClient(create_app(settings)) as client:
+        created = client.post(
+            "/api/v1/admin/prints",
+            headers=headers,
+            json={
+                "name": seed.name,
+                "fileId": str(seed.file_id),
+                "surchargeCents": 1250,
+            },
+        )
+        assert created.status_code == 201
+        path = created.headers["Location"]
+        initial_tag = created.headers["ETag"]
+        original = created.json()["latestVersion"]
+        response = client.patch(
+            path,
+            headers={**headers, "If-Match": initial_tag},
+            json={"name": seed.name + "-edited", "description": "Edited"},
+        )
+        assert response.status_code == 200
+        retired = client.patch(
+            path,
+            headers={**headers, "If-Match": response.headers["ETag"]},
+            json={"active": False},
+        )
+        assert retired.status_code == 200 and retired.json()["active"] is False
+        stale = client.patch(
+            path,
+            headers={**headers, "If-Match": initial_tag},
+            json={"active": True},
+        )
+        assert stale.status_code == 412
+        active = client.patch(
+            path,
+            headers={**headers, "If-Match": retired.headers["ETag"]},
+            json={"active": True},
+        )
+        assert active.status_code == 200 and active.json()["active"] is True
+        assert client.get(path + "/versions", headers=headers).json()[
+            "items"
+        ] == [original]
+        assert (
+            client.patch(
+                path, headers=headers, json={"active": False}
+            ).status_code
+            == 428
+        )
+    with Session(engine) as session:
+        entries = session.scalars(
+            select(AuditEntryModel).where(
+                AuditEntryModel.resource_id == UUID(created.json()["id"])
+            )
+        ).all()
+        assert len(entries) == 4
+        assert all(
+            str(entry.actor_id) == str(claims["sub"]) for entry in entries
         )

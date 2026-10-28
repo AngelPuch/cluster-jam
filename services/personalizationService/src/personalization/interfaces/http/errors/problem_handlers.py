@@ -327,6 +327,18 @@ async def print_exception_handler(
             422,
             "Print data does not meet the required constraints.",
         ),
+        PrintFailure.PRINT_PRECONDITION_REQUIRED: (
+            428,
+            "Read the print and send its ETag in If-Match.",
+        ),
+        PrintFailure.INVALID_PRINT_PRECONDITION: (
+            400,
+            "If-Match must contain a valid bounded entity-tag list.",
+        ),
+        PrintFailure.PRINT_PRECONDITION_FAILED: (
+            412,
+            "The print changed; read it again before editing.",
+        ),
         PrintFailure.INVALID_CURSOR: (
             400,
             "The cursor is invalid for this collection.",

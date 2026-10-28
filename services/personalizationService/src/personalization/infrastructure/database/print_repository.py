@@ -10,6 +10,11 @@ from personalization.application.errors.print_error import (
     PrintError,
     PrintFailure,
 )
+from personalization.application.prints.print_changes import (
+    PrintChanges,
+    PrintCondition,
+    print_revision,
+)
 from personalization.application.prints.print_record import (
     MAX_VERSION_NUMBER,
     PrintRecord,
@@ -153,10 +158,16 @@ class SqlAlchemyPrintRepository:
         except SQLAlchemyError:
             raise PrintError(PrintFailure.PRINT_DATABASE_UNAVAILABLE) from None
 
-    def get(self, print_id: UUID) -> PrintRecord:
+    def update(
+        self,
+        actor_id: UUID,
+        print_id: UUID,
+        changes: PrintChanges,
+        condition: PrintCondition,
+    ) -> PrintRecord:
         try:
-            with Session(self._engine) as session:
-                row = session.get(PrintModel, print_id)
+            with Session(self._engine) as session, session.begin():
+                row = session.get(PrintModel, print_id, with_for_update=True)
                 if row is None:
                     raise PrintError(PrintFailure.PRINT_NOT_FOUND)
                 version = session.scalar(
@@ -165,6 +176,70 @@ class SqlAlchemyPrintRepository:
                     .order_by(PrintVersionModel.number.desc())
                     .limit(1)
                 )
+                if version is None:
+                    raise PrintError(PrintFailure.PRINT_DATABASE_UNAVAILABLE)
+                previous = map_print(row, version)
+                revision = print_revision(previous)
+                if not condition.matches(revision):
+                    raise PrintError(PrintFailure.PRINT_PRECONDITION_FAILED)
+                if "active" in changes.fields and changes.active is True:
+                    if not row.active:
+                        self._require_file(session, version.file_id)
+                changed_fields: list[str] = []
+                for field in sorted(changes.fields):
+                    value = getattr(changes, field)
+                    if value != getattr(row, field):
+                        setattr(row, field, value)
+                        changed_fields.append(field)
+                result = map_print(row, version)
+                if changed_fields:
+                    session.flush()
+                    action = "PRINT_UPDATED"
+                    if changed_fields == ["active"]:
+                        action = (
+                            "PRINT_ACTIVATED"
+                            if row.active
+                            else "PRINT_RETIRED"
+                        )
+                    session.add(
+                        AuditEntryModel(
+                            id=uuid4(),
+                            actor_id=actor_id,
+                            action=action,
+                            resource="estampado",
+                            resource_id=print_id,
+                            detail={
+                                "changedFields": changed_fields,
+                                "previousRevision": revision,
+                                "revision": print_revision(result),
+                                "activeBefore": previous.active,
+                                "activeAfter": result.active,
+                                "versionId": str(version.id),
+                            },
+                        )
+                    )
+                session.flush()
+            return result
+        except SQLAlchemyError:
+            raise PrintError(PrintFailure.PRINT_DATABASE_UNAVAILABLE) from None
+
+    def get(self, print_id: UUID) -> PrintRecord:
+        # A single statement prevents mixed metadata/version snapshots.
+        statement = (
+            select(PrintModel, PrintVersionModel)
+            .outerjoin(
+                PrintVersionModel, PrintVersionModel.print_id == PrintModel.id
+            )
+            .where(PrintModel.id == print_id)
+            .order_by(PrintVersionModel.number.desc())
+            .limit(1)
+        )
+        try:
+            with Session(self._engine) as session:
+                pair = session.execute(statement).first()
+                if pair is None:
+                    raise PrintError(PrintFailure.PRINT_NOT_FOUND)
+                row, version = pair
                 if version is None:
                     raise PrintError(PrintFailure.PRINT_DATABASE_UNAVAILABLE)
                 return map_print(row, version)

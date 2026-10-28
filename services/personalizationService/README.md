@@ -319,3 +319,17 @@ estampados para clientes se incorporarán en su propio incremento.
 Consultar [contratos, decisiones y pruebas](docs/print-versioning.md).
 La colección de Postman es `prints.postman_collection.json`; usa
 `adminAccessToken` y no requiere adjuntar archivos en sus peticiones.
+
+
+## Edición y estado de estampados
+
+PATCH `/api/v1/admin/prints/{printId}` permite editar nombre, descripción
+y estado activo. Solo admite administradores y requiere If-Match, obtenido
+del ETag de la consulta. La revisión se comprueba bajo bloqueo de fila y
+el cambio se confirma con su auditoría. Retirar o reactivar conserva todas
+las versiones y archivos; los cambios de imagen/precio siguen creando
+una versión nueva por su endpoint específico.
+
+Consultar [contrato y pruebas paso a paso](docs/print-lifecycle.md).
+La colección `print-lifecycle.postman_collection.json` reutiliza el entorno
+local y guarda automáticamente las etiquetas para sus pruebas.

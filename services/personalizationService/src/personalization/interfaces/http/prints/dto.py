@@ -1,10 +1,18 @@
 """Expose camelCase administrative contracts with exact cents."""
 
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Self
 from uuid import UUID
 
-from pydantic import ConfigDict, Field, StrictInt, StringConstraints
+from pydantic import (
+    ConfigDict,
+    Field,
+    StrictBool,
+    StrictInt,
+    StringConstraints,
+    model_validator,
+)
 
+from personalization.application.prints.print_changes import PrintChanges
 from personalization.application.prints.print_record import (
     MAX_DESCRIPTION_LENGTH,
     MAX_SURCHARGE_CENTS,
@@ -105,3 +113,54 @@ class PrintPageResponse(RestModel):
 class PrintVersionPageResponse(RestModel):
     items: list[PrintVersionResponse]
     next_cursor: str | None
+
+
+class UpdatePrintRequest(RestModel):
+    """Keep omitted fields; allow null only for description."""
+
+    model_config = ConfigDict(
+        populate_by_name=False,
+        validate_by_name=False,
+        validate_by_alias=True,
+    )
+    name: (
+        Annotated[
+            str,
+            StringConstraints(
+                strict=True,
+                strip_whitespace=True,
+                min_length=1,
+                max_length=120,
+            ),
+        ]
+        | None
+    ) = None
+    description: (
+        Annotated[
+            str,
+            StringConstraints(
+                strict=True,
+                max_length=MAX_DESCRIPTION_LENGTH,
+            ),
+        ]
+        | None
+    ) = None
+    active: StrictBool | None = None
+
+    @model_validator(mode="after")
+    def validate_selected_fields(self) -> Self:
+        if not self.model_fields_set:
+            raise ValueError("Select at least one editable field")
+        if "name" in self.model_fields_set and self.name is None:
+            raise ValueError("Name cannot be null")
+        if "active" in self.model_fields_set and self.active is None:
+            raise ValueError("Active cannot be null")
+        return self
+
+    def to_changes(self) -> PrintChanges:
+        return PrintChanges(
+            frozenset(self.model_fields_set),
+            self.name,
+            self.description,
+            self.active,
+        )
