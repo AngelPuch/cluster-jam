@@ -1,6 +1,183 @@
 {
   "components": {
     "schemas": {
+      "AnalysisRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "applications": {
+            "items": {
+              "$ref": "#/components/schemas/SelectionRequest"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Applications",
+            "type": "array"
+          }
+        },
+        "required": [
+          "applications"
+        ],
+        "title": "AnalysisRequest",
+        "type": "object"
+      },
+      "AnalysisResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "applications": {
+            "items": {
+              "$ref": "#/components/schemas/ApplicationResponse"
+            },
+            "title": "Applications",
+            "type": "array"
+          },
+          "approximate": {
+            "const": true,
+            "default": true,
+            "title": "Approximate",
+            "type": "boolean"
+          },
+          "catalogCompatibilityVerified": {
+            "const": false,
+            "default": false,
+            "title": "Catalogcompatibilityverified",
+            "type": "boolean"
+          },
+          "currency": {
+            "const": "MXN",
+            "default": "MXN",
+            "title": "Currency",
+            "type": "string"
+          },
+          "diagnosticOnly": {
+            "const": true,
+            "default": true,
+            "title": "Diagnosticonly",
+            "type": "boolean"
+          },
+          "minimumDpi": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minimumdpi"
+          },
+          "personalizationSurchargeCents": {
+            "title": "Personalizationsurchargecents",
+            "type": "integer"
+          },
+          "templateActive": {
+            "title": "Templateactive",
+            "type": "boolean"
+          },
+          "templateId": {
+            "format": "uuid",
+            "title": "Templateid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "templateId",
+          "templateActive",
+          "minimumDpi",
+          "applications",
+          "personalizationSurchargeCents"
+        ],
+        "title": "AnalysisResponse",
+        "type": "object"
+      },
+      "ApplicationResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "effectiveDpi": {
+            "title": "Effectivedpi",
+            "type": "string"
+          },
+          "fileId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fileid"
+          },
+          "imageHeightPx": {
+            "title": "Imageheightpx",
+            "type": "integer"
+          },
+          "imageWidthPx": {
+            "title": "Imagewidthpx",
+            "type": "integer"
+          },
+          "placement": {
+            "$ref": "#/components/schemas/PlacementResponse"
+          },
+          "printSurchargeCents": {
+            "title": "Printsurchargecents",
+            "type": "integer"
+          },
+          "printVersionId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Printversionid"
+          },
+          "resolutionStatus": {
+            "$ref": "#/components/schemas/ResolutionStatus"
+          },
+          "side": {
+            "$ref": "#/components/schemas/Side"
+          },
+          "totalSurchargeCents": {
+            "title": "Totalsurchargecents",
+            "type": "integer"
+          },
+          "zoneId": {
+            "format": "uuid",
+            "title": "Zoneid",
+            "type": "string"
+          },
+          "zoneSizeId": {
+            "format": "uuid",
+            "title": "Zonesizeid",
+            "type": "string"
+          },
+          "zoneSurchargeCents": {
+            "title": "Zonesurchargecents",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "zoneId",
+          "zoneSizeId",
+          "printVersionId",
+          "fileId",
+          "side",
+          "imageWidthPx",
+          "imageHeightPx",
+          "placement",
+          "effectiveDpi",
+          "resolutionStatus",
+          "zoneSurchargeCents",
+          "printSurchargeCents",
+          "totalSurchargeCents"
+        ],
+        "title": "ApplicationResponse",
+        "type": "object"
+      },
       "CatalogPageResponse": {
         "additionalProperties": false,
         "properties": {
@@ -415,6 +592,35 @@
         "title": "HealthResponse",
         "type": "object"
       },
+      "PlacementResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "heightMm": {
+            "title": "Heightmm",
+            "type": "string"
+          },
+          "widthMm": {
+            "title": "Widthmm",
+            "type": "string"
+          },
+          "xMm": {
+            "title": "Xmm",
+            "type": "string"
+          },
+          "yMm": {
+            "title": "Ymm",
+            "type": "string"
+          }
+        },
+        "required": [
+          "xMm",
+          "yMm",
+          "widthMm",
+          "heightMm"
+        ],
+        "title": "PlacementResponse",
+        "type": "object"
+      },
       "PrintPageResponse": {
         "additionalProperties": false,
         "properties": {
@@ -604,6 +810,60 @@
           "traceId"
         ],
         "title": "ProblemDetails",
+        "type": "object"
+      },
+      "ResolutionStatus": {
+        "enum": [
+          "THRESHOLD_NOT_CONFIGURED",
+          "SUFFICIENT",
+          "INSUFFICIENT"
+        ],
+        "title": "ResolutionStatus",
+        "type": "string"
+      },
+      "SelectionRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "fileId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fileid"
+          },
+          "printVersionId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Printversionid"
+          },
+          "zoneId": {
+            "format": "uuid",
+            "title": "Zoneid",
+            "type": "string"
+          },
+          "zoneSizeId": {
+            "format": "uuid",
+            "title": "Zonesizeid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "zoneId",
+          "zoneSizeId"
+        ],
+        "title": "SelectionRequest",
         "type": "object"
       },
       "Side": {
@@ -2767,6 +3027,134 @@
         "summary": "Get Template",
         "tags": [
           "Draft template administration"
+        ]
+      }
+    },
+    "/api/v1/admin/template-versions/{templateId}/design-analyses": {
+      "post": {
+        "operationId": "analyze_design_api_v1_admin_template_versions__templateId__design_analyses_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "templateId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Templateid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnalysisRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalysisResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Missing or invalid user access token"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Invalid application role or insufficient permission"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Template or source not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Original unavailable or inconsistent"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Invalid selections, geometry, or money"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unexpected server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Required public signing keys are unavailable"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "RFC 9457 error with code and traceId"
+          }
+        },
+        "security": [
+          {
+            "supabase-jwt": []
+          }
+        ],
+        "summary": "Analyze Design",
+        "tags": [
+          "Draft design analysis"
         ]
       }
     },

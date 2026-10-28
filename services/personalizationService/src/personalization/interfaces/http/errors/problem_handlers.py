@@ -8,6 +8,10 @@ from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException
 from starlette.responses import JSONResponse
 
+from personalization.application.errors.design_analysis_error import (
+    AnalysisFailure,
+    DesignAnalysisError,
+)
 from personalization.application.errors.file_error import (
     FileError,
     FileFailure,
@@ -415,8 +419,62 @@ async def template_exception_handler(
     )
 
 
+async def design_analysis_exception_handler(
+    request: Request, exception: Exception
+) -> JSONResponse:
+    if not isinstance(exception, DesignAnalysisError):
+        return unexpected_problem(request)
+    status, detail = {
+        AnalysisFailure.INVALID_DESIGN_ANALYSIS: (
+            422,
+            "Choose valid unique applications and exactly one image source.",
+        ),
+        AnalysisFailure.ZONE_NOT_IN_TEMPLATE: (
+            422,
+            "The selected zone does not belong to this template.",
+        ),
+        AnalysisFailure.SIZE_NOT_IN_ZONE: (
+            422,
+            "The selected size does not belong to this zone.",
+        ),
+        AnalysisFailure.DUPLICATE_ZONE_APPLICATION: (
+            422,
+            "Only one application is allowed in each zone.",
+        ),
+        AnalysisFailure.ANALYSIS_SOURCE_NOT_FOUND: (
+            404,
+            "The selected original or print version was not found.",
+        ),
+        AnalysisFailure.ANALYSIS_SOURCE_NOT_READY: (
+            409,
+            "The selected source is not an available service original.",
+        ),
+        AnalysisFailure.INVALID_IMAGE_GEOMETRY: (
+            409,
+            "The original image dimensions cannot be used.",
+        ),
+        AnalysisFailure.PERSONALIZATION_AMOUNT_OVERFLOW: (
+            422,
+            "The personalization surcharge exceeds safe integer cents.",
+        ),
+        AnalysisFailure.ANALYSIS_DATABASE_UNAVAILABLE: (
+            503,
+            "Analysis source metadata is temporarily unavailable.",
+        ),
+    }[exception.failure]
+    return problem_response(
+        request,
+        status_code=status,
+        code=exception.failure.value,
+        detail=detail,
+    )
+
+
 def configure_exception_handlers(app: FastAPI) -> None:
     """Override framework defaults at the HTTP boundary."""
+    app.add_exception_handler(
+        DesignAnalysisError, design_analysis_exception_handler
+    )
     app.add_exception_handler(TemplateError, template_exception_handler)
     app.add_exception_handler(PrintError, print_exception_handler)
     app.add_exception_handler(FileError, file_exception_handler)

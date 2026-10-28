@@ -16,6 +16,7 @@ x-personalization-service: &personalization-service
         STORAGE_ENABLED: "false"
         SUPABASE_STORAGE_BUCKET: ${SUPABASE_STORAGE_BUCKET:-personalization-originals}
         DOWNLOAD_URL_TTL_SECONDS: ${DOWNLOAD_URL_TTL_SECONDS:-60}
+        MIN_PRINT_DPI: ${MIN_PRINT_DPI:-}
         IMAGE_MAX_WIDTH_PX: ${IMAGE_MAX_WIDTH_PX:-8192}
         IMAGE_MAX_HEIGHT_PX: ${IMAGE_MAX_HEIGHT_PX:-8192}
         IMAGE_MAX_PIXELS: ${IMAGE_MAX_PIXELS:-16000000}

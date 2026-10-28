@@ -1,0 +1,804 @@
+{
+  "info": {
+    "name": "Cluster JAM - Design Rules Analysis",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "21 solicitudes en orden. Reutiliza printId y JWT de admin/cliente. Crea solo una plantilla QA inactiva; el análisis no crea diseños ni cotizaciones, no activa Catalog y conserva minimumDpi=null hasta la decisión del equipo. Usa archivos originales ya cargados, sin adjuntos nuevos."
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{adminAccessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "01 - Leer versión e imagen de referencia",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/admin/prints/{{printId}}",
+        "header": []
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) {",
+              "  const version = pm.response.json().latestVersion;",
+              "  pm.environment.set(\"analysisPrintVersionId\", version.id);",
+              "  pm.environment.set(\"analysisFileId\", version.fileId);",
+              "  pm.environment.set(\"analysisPrintSurchargeCents\", version.surchargeCents);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - Crear plantilla QA inactiva",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/admin/template-versions",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"productId\": \"{{$guid}}\",\n  \"sizeId\": 1,\n  \"expectedVersion\": 0,\n  \"front\": {\n    \"widthMm\": \"400\",\n    \"heightMm\": \"600\"\n  },\n  \"back\": {\n    \"widthMm\": \"400\",\n    \"heightMm\": \"600\"\n  },\n  \"zones\": [\n    {\n      \"code\": \"chest\",\n      \"side\": \"FRONT\",\n      \"xMm\": \"50\",\n      \"yMm\": \"50\",\n      \"widthMm\": \"200\",\n      \"heightMm\": \"300\",\n      \"sizes\": [\n        {\n          \"label\": \"SMALL\",\n          \"widthMm\": \"100\",\n          \"heightMm\": \"150\",\n          \"surchargeCents\": 1250\n        }\n      ]\n    },\n    {\n      \"code\": \"upper-back\",\n      \"side\": \"BACK\",\n      \"xMm\": \"50\",\n      \"yMm\": \"50\",\n      \"widthMm\": \"200\",\n      \"heightMm\": \"300\",\n      \"sizes\": [\n        {\n          \"label\": \"SMALL\",\n          \"widthMm\": \"100\",\n          \"heightMm\": \"150\",\n          \"surchargeCents\": 1250\n        }\n      ]\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+              "if (pm.response.code === 201) {",
+              "  const value = pm.response.json();",
+              "  const front = value.zones.find(zone => zone.side === \"FRONT\");",
+              "  const back = value.zones.find(zone => zone.side === \"BACK\");",
+              "  pm.environment.set(\"analysisTemplateId\", value.id);",
+              "  pm.environment.set(\"analysisTemplateSnapshot\", JSON.stringify(value));",
+              "  pm.environment.set(\"analysisFrontZoneId\", front.id);",
+              "  pm.environment.set(\"analysisFrontSizeId\", front.sizes[0].id);",
+              "  pm.environment.set(\"analysisBackZoneId\", back.id);",
+              "  pm.environment.set(\"analysisBackSizeId\", back.sizes[0].id);",
+              "  pm.test(\"Borrador\", () => pm.expect(value.active).to.eql(false));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 - Analizar frente catálogo y espalda archivo propio",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/admin/template-versions/{{analysisTemplateId}}/design-analyses",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"applications\": [\n    {\n      \"zoneId\": \"{{analysisFrontZoneId}}\",\n      \"zoneSizeId\": \"{{analysisFrontSizeId}}\",\n      \"printVersionId\": \"{{analysisPrintVersionId}}\"\n    },\n    {\n      \"zoneId\": \"{{analysisBackZoneId}}\",\n      \"zoneSizeId\": \"{{analysisBackSizeId}}\",\n      \"fileId\": \"{{analysisFileId}}\"\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) {",
+              "  const value = pm.response.json();",
+              "  pm.environment.set(\"analysisSnapshot\", JSON.stringify(value));",
+              "  pm.test(\"Solo diagnóstico sin umbral inventado\", () => {",
+              "    pm.expect(value.diagnosticOnly).to.eql(true);",
+              "    pm.expect(value.catalogCompatibilityVerified).to.eql(false);",
+              "    pm.expect(value.templateActive).to.eql(false);",
+              "    pm.expect(value.minimumDpi).to.eql(null);",
+              "    pm.expect(value.currency).to.eql(\"MXN\");",
+              "    pm.expect(value.personalizationSurchargeCents).to.eql(2500 + Number(pm.environment.get(\"analysisPrintSurchargeCents\")));",
+              "    pm.expect(value.applications.length).to.eql(2);",
+              "    for (const application of value.applications) {",
+              "      pm.expect(application.resolutionStatus).to.eql(\"THRESHOLD_NOT_CONFIGURED\");",
+              "      pm.expect(Number(application.effectiveDpi)).to.be.above(0);",
+              "      pm.expect(Number(application.placement.widthMm)).to.be.at.most(100.000001);",
+              "      pm.expect(Number(application.placement.heightMm)).to.be.at.most(150.000001);",
+              "    }",
+              "    pm.expect(value.applications[1].printSurchargeCents).to.eql(0);",
+              "  });",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 - Repetir análisis conserva el resultado",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/admin/template-versions/{{analysisTemplateId}}/design-analyses",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"applications\": [\n    {\n      \"zoneId\": \"{{analysisFrontZoneId}}\",\n      \"zoneSizeId\": \"{{analysisFrontSizeId}}\",\n      \"printVersionId\": \"{{analysisPrintVersionId}}\"\n    },\n    {\n      \"zoneId\": \"{{analysisBackZoneId}}\",\n      \"zoneSizeId\": \"{{analysisBackSizeId}}\",\n      \"fileId\": \"{{analysisFileId}}\"\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) { pm.test(\"Resultado estable\", () => pm.expect(pm.response.json()).to.eql(JSON.parse(pm.environment.get(\"analysisSnapshot\")))); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 - Archivo propio sin recargo de catálogo",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/admin/template-versions/{{analysisTemplateId}}/design-analyses",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"applications\": [\n    {\n      \"zoneId\": \"{{analysisFrontZoneId}}\",\n      \"zoneSizeId\": \"{{analysisFrontSizeId}}\",\n      \"fileId\": \"{{analysisFileId}}\"\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) { pm.test(\"Solo recargo del tamaño\", () => { pm.expect(pm.response.json().personalizationSurchargeCents).to.eql(1250); pm.expect(pm.response.json().applications[0].printSurchargeCents).to.eql(0); }); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 - Versión de catálogo suma su recargo",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/admin/template-versions/{{analysisTemplateId}}/design-analyses",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"applications\": [\n    {\n      \"zoneId\": \"{{analysisFrontZoneId}}\",\n      \"zoneSizeId\": \"{{analysisFrontSizeId}}\",\n      \"printVersionId\": \"{{analysisPrintVersionId}}\"\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) { pm.test(\"Recargo versionado\", () => pm.expect(pm.response.json().personalizationSurchargeCents).to.eql(1250 + Number(pm.environment.get(\"analysisPrintSurchargeCents\")))); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 - La plantilla no cambió",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/admin/template-versions/{{analysisTemplateId}}",
+        "header": []
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) { pm.test(\"Sin cambios\", () => pm.expect(pm.response.json()).to.eql(JSON.parse(pm.environment.get(\"analysisTemplateSnapshot\")))); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 - Original sigue disponible para administrador",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/files/{{analysisFileId}}",
+        "header": []
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) { pm.test(\"Original disponible\", () => pm.expect(pm.response.json().state).to.eql(\"DISPONIBLE\")); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 - Zona ajena a la plantilla",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/admin/template-versions/{{analysisTemplateId}}/design-analyses",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"applications\": [\n    {\n      \"zoneId\": \"{{$guid}}\",\n      \"zoneSizeId\": \"{{analysisFrontSizeId}}\",\n      \"printVersionId\": \"{{analysisPrintVersionId}}\"\n    },\n    {\n      \"zoneId\": \"{{analysisBackZoneId}}\",\n      \"zoneSizeId\": \"{{analysisBackSizeId}}\",\n      \"fileId\": \"{{analysisFileId}}\"\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 422\", () => pm.response.to.have.status(422));",
+              "pm.test(\"RFC 9457\", () => {",
+              "  const body = pm.response.json();",
+              "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "  pm.expect(Object.keys(body).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "  pm.expect(body.code).to.eql(\"ZONE_NOT_IN_TEMPLATE\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 - Tamaño de otra zona",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/admin/template-versions/{{analysisTemplateId}}/design-analyses",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"applications\": [\n    {\n      \"zoneId\": \"{{analysisFrontZoneId}}\",\n      \"zoneSizeId\": \"{{analysisBackSizeId}}\",\n      \"printVersionId\": \"{{analysisPrintVersionId}}\"\n    },\n    {\n      \"zoneId\": \"{{analysisBackZoneId}}\",\n      \"zoneSizeId\": \"{{analysisBackSizeId}}\",\n      \"fileId\": \"{{analysisFileId}}\"\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 422\", () => pm.response.to.have.status(422));",
+              "pm.test(\"RFC 9457\", () => {",
+              "  const body = pm.response.json();",
+              "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "  pm.expect(Object.keys(body).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "  pm.expect(body.code).to.eql(\"SIZE_NOT_IN_ZONE\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11 - Dos aplicaciones en la misma zona",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/admin/template-versions/{{analysisTemplateId}}/design-analyses",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"applications\": [\n    {\n      \"zoneId\": \"{{analysisFrontZoneId}}\",\n      \"zoneSizeId\": \"{{analysisFrontSizeId}}\",\n      \"printVersionId\": \"{{analysisPrintVersionId}}\"\n    },\n    {\n      \"zoneId\": \"{{analysisFrontZoneId}}\",\n      \"zoneSizeId\": \"{{analysisFrontSizeId}}\",\n      \"printVersionId\": \"{{analysisPrintVersionId}}\"\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 422\", () => pm.response.to.have.status(422));",
+              "pm.test(\"RFC 9457\", () => {",
+              "  const body = pm.response.json();",
+              "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "  pm.expect(Object.keys(body).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "  pm.expect(body.code).to.eql(\"DUPLICATE_ZONE_APPLICATION\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "12 - Dos orígenes de imagen a la vez",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/admin/template-versions/{{analysisTemplateId}}/design-analyses",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"applications\": [\n    {\n      \"zoneId\": \"{{analysisFrontZoneId}}\",\n      \"zoneSizeId\": \"{{analysisFrontSizeId}}\",\n      \"printVersionId\": \"{{analysisPrintVersionId}}\",\n      \"fileId\": \"{{analysisFileId}}\"\n    },\n    {\n      \"zoneId\": \"{{analysisBackZoneId}}\",\n      \"zoneSizeId\": \"{{analysisBackSizeId}}\",\n      \"fileId\": \"{{analysisFileId}}\"\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 422\", () => pm.response.to.have.status(422));",
+              "pm.test(\"RFC 9457\", () => {",
+              "  const body = pm.response.json();",
+              "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "  pm.expect(Object.keys(body).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "  pm.expect(body.code).to.eql(\"VALIDATION_ERROR\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "13 - Aplicación sin origen",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/admin/template-versions/{{analysisTemplateId}}/design-analyses",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"applications\": [\n    {\n      \"zoneId\": \"{{analysisFrontZoneId}}\",\n      \"zoneSizeId\": \"{{analysisFrontSizeId}}\"\n    },\n    {\n      \"zoneId\": \"{{analysisBackZoneId}}\",\n      \"zoneSizeId\": \"{{analysisBackSizeId}}\",\n      \"fileId\": \"{{analysisFileId}}\"\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 422\", () => pm.response.to.have.status(422));",
+              "pm.test(\"RFC 9457\", () => {",
+              "  const body = pm.response.json();",
+              "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "  pm.expect(Object.keys(body).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "  pm.expect(body.code).to.eql(\"VALIDATION_ERROR\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "14 - No aceptar precio del cliente",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/admin/template-versions/{{analysisTemplateId}}/design-analyses",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"applications\": [\n    {\n      \"zoneId\": \"{{analysisFrontZoneId}}\",\n      \"zoneSizeId\": \"{{analysisFrontSizeId}}\",\n      \"printVersionId\": \"{{analysisPrintVersionId}}\",\n      \"surchargeCents\": 1\n    },\n    {\n      \"zoneId\": \"{{analysisBackZoneId}}\",\n      \"zoneSizeId\": \"{{analysisBackSizeId}}\",\n      \"fileId\": \"{{analysisFileId}}\"\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 422\", () => pm.response.to.have.status(422));",
+              "pm.test(\"RFC 9457\", () => {",
+              "  const body = pm.response.json();",
+              "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "  pm.expect(Object.keys(body).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "  pm.expect(body.code).to.eql(\"VALIDATION_ERROR\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "15 - No aceptar posición arbitraria",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/admin/template-versions/{{analysisTemplateId}}/design-analyses",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"applications\": [\n    {\n      \"zoneId\": \"{{analysisFrontZoneId}}\",\n      \"zoneSizeId\": \"{{analysisFrontSizeId}}\",\n      \"printVersionId\": \"{{analysisPrintVersionId}}\",\n      \"xMm\": \"0\"\n    },\n    {\n      \"zoneId\": \"{{analysisBackZoneId}}\",\n      \"zoneSizeId\": \"{{analysisBackSizeId}}\",\n      \"fileId\": \"{{analysisFileId}}\"\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 422\", () => pm.response.to.have.status(422));",
+              "pm.test(\"RFC 9457\", () => {",
+              "  const body = pm.response.json();",
+              "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "  pm.expect(Object.keys(body).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "  pm.expect(body.code).to.eql(\"VALIDATION_ERROR\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "16 - No aceptar umbral DPI desde el cuerpo",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/admin/template-versions/{{analysisTemplateId}}/design-analyses",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"applications\": [\n    {\n      \"zoneId\": \"{{analysisFrontZoneId}}\",\n      \"zoneSizeId\": \"{{analysisFrontSizeId}}\",\n      \"printVersionId\": \"{{analysisPrintVersionId}}\"\n    },\n    {\n      \"zoneId\": \"{{analysisBackZoneId}}\",\n      \"zoneSizeId\": \"{{analysisBackSizeId}}\",\n      \"fileId\": \"{{analysisFileId}}\"\n    }\n  ],\n  \"minimumDpi\": 1\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 422\", () => pm.response.to.have.status(422));",
+              "pm.test(\"RFC 9457\", () => {",
+              "  const body = pm.response.json();",
+              "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "  pm.expect(Object.keys(body).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "  pm.expect(body.code).to.eql(\"VALIDATION_ERROR\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "17 - Versión de estampado inexistente",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/admin/template-versions/{{analysisTemplateId}}/design-analyses",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"applications\": [\n    {\n      \"zoneId\": \"{{analysisFrontZoneId}}\",\n      \"zoneSizeId\": \"{{analysisFrontSizeId}}\",\n      \"printVersionId\": \"{{$guid}}\"\n    },\n    {\n      \"zoneId\": \"{{analysisBackZoneId}}\",\n      \"zoneSizeId\": \"{{analysisBackSizeId}}\",\n      \"fileId\": \"{{analysisFileId}}\"\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 404\", () => pm.response.to.have.status(404));",
+              "pm.test(\"RFC 9457\", () => {",
+              "  const body = pm.response.json();",
+              "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "  pm.expect(Object.keys(body).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "  pm.expect(body.code).to.eql(\"ANALYSIS_SOURCE_NOT_FOUND\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "18 - Plantilla inexistente",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/admin/template-versions/{{$guid}}/design-analyses",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"applications\": [\n    {\n      \"zoneId\": \"{{analysisFrontZoneId}}\",\n      \"zoneSizeId\": \"{{analysisFrontSizeId}}\",\n      \"printVersionId\": \"{{analysisPrintVersionId}}\"\n    },\n    {\n      \"zoneId\": \"{{analysisBackZoneId}}\",\n      \"zoneSizeId\": \"{{analysisBackSizeId}}\",\n      \"fileId\": \"{{analysisFileId}}\"\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 404\", () => pm.response.to.have.status(404));",
+              "pm.test(\"RFC 9457\", () => {",
+              "  const body = pm.response.json();",
+              "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "  pm.expect(Object.keys(body).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "  pm.expect(body.code).to.eql(\"TEMPLATE_NOT_FOUND\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "19 - Sin JWT",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/admin/template-versions/{{analysisTemplateId}}/design-analyses",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "noauth"
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"applications\": [\n    {\n      \"zoneId\": \"{{analysisFrontZoneId}}\",\n      \"zoneSizeId\": \"{{analysisFrontSizeId}}\",\n      \"printVersionId\": \"{{analysisPrintVersionId}}\"\n    },\n    {\n      \"zoneId\": \"{{analysisBackZoneId}}\",\n      \"zoneSizeId\": \"{{analysisBackSizeId}}\",\n      \"fileId\": \"{{analysisFileId}}\"\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 401\", () => pm.response.to.have.status(401));",
+              "pm.test(\"RFC 9457\", () => {",
+              "  const body = pm.response.json();",
+              "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "  pm.expect(Object.keys(body).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "  pm.expect(body.code).to.eql(\"INVALID_ACCESS_TOKEN\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "20 - Cliente no analiza borradores",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/admin/template-versions/{{analysisTemplateId}}/design-analyses",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"applications\": [\n    {\n      \"zoneId\": \"{{analysisFrontZoneId}}\",\n      \"zoneSizeId\": \"{{analysisFrontSizeId}}\",\n      \"printVersionId\": \"{{analysisPrintVersionId}}\"\n    },\n    {\n      \"zoneId\": \"{{analysisBackZoneId}}\",\n      \"zoneSizeId\": \"{{analysisBackSizeId}}\",\n      \"fileId\": \"{{analysisFileId}}\"\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 403\", () => pm.response.to.have.status(403));",
+              "pm.test(\"RFC 9457\", () => {",
+              "  const body = pm.response.json();",
+              "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "  pm.expect(Object.keys(body).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "  pm.expect(body.code).to.eql(\"FORBIDDEN\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "21 - Lista de aplicaciones vacía",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/admin/template-versions/{{analysisTemplateId}}/design-analyses",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"applications\": []\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 422\", () => pm.response.to.have.status(422));",
+              "pm.test(\"RFC 9457\", () => {",
+              "  const body = pm.response.json();",
+              "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "  pm.expect(Object.keys(body).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "  pm.expect(body.code).to.eql(\"VALIDATION_ERROR\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

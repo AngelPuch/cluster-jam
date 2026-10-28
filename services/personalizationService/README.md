@@ -370,3 +370,17 @@ habilitar publicación y diseños reales.
 
 Consultar [la guía de plantillas](docs/template-versioning.md) para el
 contrato, límites, geometría, dependencia pendiente y 25 pruebas Postman.
+
+
+## Reglas de diseño y diagnóstico administrativo
+
+`POST /api/v1/admin/template-versions/{templateId}/design-analyses` calcula
+ajuste proporcional centrado, DPI efectivo y recargos por unidad con datos
+guardados. Usa geometría exacta y centavos enteros; no crea diseños ni
+cotizaciones. Solo administrador puede analizar borradores o versiones
+históricas. Catalog sigue pendiente y `MIN_PRINT_DPI` queda sin valor por
+defecto hasta que lo defina el equipo; un umbral ausente se informa como
+evaluación pendiente y nunca como calidad suficiente.
+
+Consultar [reglas y pruebas](docs/design-rules.md), incluida la colección
+Postman de 21 solicitudes y las limitaciones de este diagnóstico.
