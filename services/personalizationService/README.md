@@ -357,3 +357,16 @@ de miniatura se solicita mediante el recurso indicado en la respuesta.
 
 Consultar [la guía del catálogo](docs/print-catalog.md) para publicación,
 contratos, vigencia de enlaces, pruebas y colección Postman de 21 pasos.
+
+
+## Plantillas versionadas en borrador
+
+La API administrativa `/api/v1/admin/template-versions` crea y consulta
+versiones inmutables con zonas y tamaños, medidas exactas en mm/cm y
+recargos MXN. La creación y auditoría son atómicas y serializan cada serie
+producto/talla. Todas las versiones se crean inactivas: Catalog Service
+todavía no existe y falta validar referencias y compatibilidad antes de
+habilitar publicación y diseños reales.
+
+Consultar [la guía de plantillas](docs/template-versioning.md) para el
+contrato, límites, geometría, dependencia pendiente y 25 pruebas Postman.

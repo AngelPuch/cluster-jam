@@ -27,6 +27,10 @@ from personalization.application.errors.security_error import (
 from personalization.application.errors.service_not_ready_error import (
     ServiceNotReadyError,
 )
+from personalization.application.errors.template_error import (
+    TemplateError,
+    TemplateFailure,
+)
 from personalization.interfaces.http.dto.problem_details import ProblemDetails
 
 HTTP_ERROR_CODES = {
@@ -352,8 +356,68 @@ async def print_exception_handler(
     )
 
 
+async def template_exception_handler(
+    request: Request, exception: Exception
+) -> JSONResponse:
+    if not isinstance(exception, TemplateError):
+        return unexpected_problem(request)
+    status, detail = {
+        TemplateFailure.TEMPLATE_NOT_FOUND: (
+            404,
+            "The template version was not found.",
+        ),
+        TemplateFailure.TEMPLATE_VERSION_CONFLICT: (
+            409,
+            "The template series changed; reload its latest version.",
+        ),
+        TemplateFailure.TEMPLATE_VERSION_LIMIT: (
+            409,
+            "The template series cannot accept another version.",
+        ),
+        TemplateFailure.TEMPLATE_DATABASE_UNAVAILABLE: (
+            503,
+            "Template metadata is temporarily unavailable.",
+        ),
+        TemplateFailure.INVALID_TEMPLATE_DATA: (
+            422,
+            "Template data does not meet the required constraints.",
+        ),
+        TemplateFailure.INVALID_CURSOR: (
+            400,
+            "The cursor is invalid for this template series.",
+        ),
+        TemplateFailure.DUPLICATE_ZONE: (
+            422,
+            "Zone codes must be unique on each side.",
+        ),
+        TemplateFailure.DUPLICATE_ZONE_SIZE: (
+            422,
+            "Size labels must be unique within a zone.",
+        ),
+        TemplateFailure.ZONE_OUTSIDE_TEMPLATE: (
+            422,
+            "A zone exceeds its template side.",
+        ),
+        TemplateFailure.ZONES_OVERLAP: (
+            422,
+            "Zones on the same side must not overlap.",
+        ),
+        TemplateFailure.SIZE_OUTSIDE_ZONE: (
+            422,
+            "An allowed size exceeds its zone.",
+        ),
+    }[exception.failure]
+    return problem_response(
+        request,
+        status_code=status,
+        code=exception.failure.value,
+        detail=detail,
+    )
+
+
 def configure_exception_handlers(app: FastAPI) -> None:
     """Override framework defaults at the HTTP boundary."""
+    app.add_exception_handler(TemplateError, template_exception_handler)
     app.add_exception_handler(PrintError, print_exception_handler)
     app.add_exception_handler(FileError, file_exception_handler)
     app.add_exception_handler(
