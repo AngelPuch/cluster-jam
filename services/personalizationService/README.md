@@ -302,3 +302,20 @@ credenciales, con errores 503 para cargas que necesiten almacenamiento.
 Consultar [preparación, recuperación y Postman](docs/private-files.md).
 El entorno y colección de Postman están en `contracts/postman/personalization`.
 Los valores reales de JWT y enlaces temporales se mantienen fuera de Git.
+
+
+## Versionado administrativo de estampados
+
+`/api/v1/admin/prints` permite crear y consultar estampados, añadir nuevas
+versiones y consultar su historial. Solo admite administradores con JWT
+verificado localmente. Cada escritura confirma el cambio y su auditoría
+en la misma transacción. `expectedVersion` detecta cambios concurrentes;
+los archivos y precios de versiones anteriores se conservan.
+
+Se usan las tablas existentes de la migración `0001_personalization`.
+No se requiere migración adicional. Las miniaturas y el catálogo de
+estampados para clientes se incorporarán en su propio incremento.
+
+Consultar [contratos, decisiones y pruebas](docs/print-versioning.md).
+La colección de Postman es `prints.postman_collection.json`; usa
+`adminAccessToken` y no requiere adjuntar archivos en sus peticiones.

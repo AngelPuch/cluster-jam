@@ -16,6 +16,10 @@ from personalization.application.errors.image_validation_error import (
     ImageValidationError,
     ImageValidationFailure,
 )
+from personalization.application.errors.print_error import (
+    PrintError,
+    PrintFailure,
+)
 from personalization.application.errors.security_error import (
     SecurityError,
     SecurityFailure,
@@ -286,8 +290,59 @@ async def file_exception_handler(
     )
 
 
+async def print_exception_handler(
+    request: Request,
+    exception: Exception,
+) -> JSONResponse:
+    """Hide persistence diagnostics and report stable print failures."""
+    if not isinstance(exception, PrintError):
+        return unexpected_problem(request)
+    status, detail = {
+        PrintFailure.PRINT_NOT_FOUND: (404, "The print was not found."),
+        PrintFailure.PRINT_VERSION_NOT_FOUND: (
+            404,
+            "The print version was not found.",
+        ),
+        PrintFailure.PRINT_FILE_NOT_FOUND: (
+            404,
+            "The original file was not found.",
+        ),
+        PrintFailure.INVALID_PRINT_FILE: (
+            409,
+            "Choose an available original in the service bucket.",
+        ),
+        PrintFailure.PRINT_VERSION_CONFLICT: (
+            409,
+            "The latest print version changed; reload before editing.",
+        ),
+        PrintFailure.PRINT_VERSION_LIMIT: (
+            409,
+            "The print cannot accept another version.",
+        ),
+        PrintFailure.PRINT_DATABASE_UNAVAILABLE: (
+            503,
+            "Print metadata is temporarily unavailable.",
+        ),
+        PrintFailure.INVALID_PRINT_DATA: (
+            422,
+            "Print data does not meet the required constraints.",
+        ),
+        PrintFailure.INVALID_CURSOR: (
+            400,
+            "The cursor is invalid for this collection.",
+        ),
+    }[exception.failure]
+    return problem_response(
+        request,
+        status_code=status,
+        code=exception.failure.value,
+        detail=detail,
+    )
+
+
 def configure_exception_handlers(app: FastAPI) -> None:
     """Override framework defaults at the HTTP boundary."""
+    app.add_exception_handler(PrintError, print_exception_handler)
     app.add_exception_handler(FileError, file_exception_handler)
     app.add_exception_handler(
         ImageValidationError, image_validation_exception_handler
