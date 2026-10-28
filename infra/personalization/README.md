@@ -241,3 +241,12 @@ No agrega tablas ni ejecuta migraciones al arrancar.
 
 El arranque, diagnóstico con `--once` y cierre sin eliminar datos están en
 [miniaturas](../../services/personalizationService/docs/print-thumbnails.md).
+
+
+## Umbral de resolución de impresión
+
+`MIN_PRINT_DPI` se pasa a los procesos del servicio. Omitido o vacío deja
+la evaluación pendiente; no hay un mínimo implícito. Configurar un entero
+de 1 a 2400 solo cuando el equipo acuerde el valor y recrear la API. El
+análisis usa este valor para un aviso, no para rechazar la imagen.
+Consultar [reglas de diseño](../../services/personalizationService/docs/design-rules.md).

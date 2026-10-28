@@ -12,12 +12,19 @@ from sqlalchemy import Engine
 from starlette.concurrency import run_in_threadpool
 
 from personalization.application.catalog.catalog_service import CatalogService
+from personalization.application.designs.design_analysis_service import (
+    DesignAnalysisService,
+)
 from personalization.application.files.file_service import FileService
 from personalization.application.health.readiness_service import (
     ReadinessService,
 )
 from personalization.application.images.validate_image_service import (
     ValidateImageService,
+)
+from personalization.application.ports.design_analysis_ports import (
+    AnalysisSourcePort,
+    ImageGeometryPort,
 )
 from personalization.application.ports.file_repository_port import (
     FileRepositoryPort,
@@ -46,6 +53,9 @@ from personalization.application.thumbnails.thumbnail_service import (
     ThumbnailService,
 )
 from personalization.infrastructure.config.settings import Settings
+from personalization.infrastructure.database.analysis_repository import (
+    SqlAlchemyAnalysisSourceRepository,
+)
 from personalization.infrastructure.database.engine import (
     create_database_engine,
 )
@@ -66,6 +76,10 @@ from personalization.infrastructure.database.template_repository import (
 )
 from personalization.infrastructure.database.thumbnail_repository import (
     SqlAlchemyThumbnailRepository,
+)
+from personalization.infrastructure.images.image_geometry import (
+    PillowImageGeometry,
+    UnavailableImageGeometry,
 )
 from personalization.infrastructure.images.pillow_image_inspector import (
     PillowImageInspector,
@@ -101,6 +115,8 @@ def create_app(
     thumbnail_repository: ThumbnailRepositoryPort | None = None,
     catalog_repository: PrintCatalogPort | None = None,
     template_repository: TemplateRepositoryPort | None = None,
+    analysis_sources: AnalysisSourcePort | None = None,
+    image_geometry: ImageGeometryPort | None = None,
 ) -> FastAPI:
     """Start independently and release resources on shutdown."""
     configuration = settings if settings is not None else Settings()
@@ -115,6 +131,7 @@ def create_app(
         or thumbnail_repository is None
         or catalog_repository is None
         or template_repository is None
+        or analysis_sources is None
     ):
         engine = create_database_engine(configuration)
         if readiness_port is None:
@@ -135,6 +152,10 @@ def create_app(
             )
         if template_repository is None:
             template_repository = SqlAlchemyTemplateRepository(engine)
+        if analysis_sources is None:
+            analysis_sources = SqlAlchemyAnalysisSourceRepository(
+                engine, configuration.storage_bucket
+            )
     outbound: SupabaseStorage | None = None
     if storage is None:
         if configuration.storage_enabled:
@@ -146,6 +167,12 @@ def create_app(
             storage = outbound
         else:
             storage = UnavailableStorage()
+    if image_geometry is None:
+        image_geometry = (
+            PillowImageGeometry(outbound, configuration.image_policy)
+            if outbound is not None
+            else UnavailableImageGeometry()
+        )
     provider = TracerProvider(
         resource=Resource.create(
             {
@@ -185,6 +212,12 @@ def create_app(
             catalog_repository, storage, configuration.download_url_ttl_seconds
         )
         app.state.template_service = TemplateService(template_repository)
+        app.state.design_analysis_service = DesignAnalysisService(
+            template_repository,
+            analysis_sources,
+            image_geometry,
+            configuration.min_print_dpi,
+        )
         app.state.upload_gate = asyncio.BoundedSemaphore(1)
         logger.info("Service started", extra={"event": "service.started"})
         try:
