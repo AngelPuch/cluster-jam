@@ -212,6 +212,95 @@
         "title": "CreatePrintVersionRequest",
         "type": "object"
       },
+      "CreateTemplateRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "back": {
+            "$ref": "#/components/schemas/DimensionsRequest"
+          },
+          "expectedVersion": {
+            "maximum": 2147483647.0,
+            "minimum": 0.0,
+            "title": "Expectedversion",
+            "type": "integer"
+          },
+          "front": {
+            "$ref": "#/components/schemas/DimensionsRequest"
+          },
+          "productId": {
+            "format": "uuid",
+            "title": "Productid",
+            "type": "string"
+          },
+          "sizeId": {
+            "maximum": 32767.0,
+            "minimum": 1.0,
+            "title": "Sizeid",
+            "type": "integer"
+          },
+          "zones": {
+            "items": {
+              "$ref": "#/components/schemas/ZoneRequest"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Zones",
+            "type": "array"
+          }
+        },
+        "required": [
+          "productId",
+          "sizeId",
+          "expectedVersion",
+          "front",
+          "back",
+          "zones"
+        ],
+        "title": "CreateTemplateRequest",
+        "type": "object"
+      },
+      "DimensionsRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "heightMm": {
+            "gt": 0,
+            "le": 10000,
+            "title": "Heightmm",
+            "type": "string"
+          },
+          "widthMm": {
+            "gt": 0,
+            "le": 10000,
+            "title": "Widthmm",
+            "type": "string"
+          }
+        },
+        "required": [
+          "widthMm",
+          "heightMm"
+        ],
+        "title": "DimensionsRequest",
+        "type": "object"
+      },
+      "DimensionsResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "heightMm": {
+            "title": "Heightmm",
+            "type": "string"
+          },
+          "widthMm": {
+            "title": "Widthmm",
+            "type": "string"
+          }
+        },
+        "required": [
+          "widthMm",
+          "heightMm"
+        ],
+        "title": "DimensionsResponse",
+        "type": "object"
+      },
       "DownloadResponse": {
         "additionalProperties": false,
         "description": "Return a short-lived bearer link without including it in repr.",
@@ -517,6 +606,232 @@
         "title": "ProblemDetails",
         "type": "object"
       },
+      "Side": {
+        "enum": [
+          "FRONT",
+          "BACK"
+        ],
+        "title": "Side",
+        "type": "string"
+      },
+      "SizeLabel": {
+        "enum": [
+          "SMALL",
+          "MEDIUM",
+          "LARGE"
+        ],
+        "title": "SizeLabel",
+        "type": "string"
+      },
+      "SizeRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "heightMm": {
+            "gt": 0,
+            "le": 10000,
+            "title": "Heightmm",
+            "type": "string"
+          },
+          "label": {
+            "$ref": "#/components/schemas/SizeLabel"
+          },
+          "surchargeCents": {
+            "maximum": 9007199254740991.0,
+            "minimum": 0.0,
+            "title": "Surchargecents",
+            "type": "integer"
+          },
+          "widthMm": {
+            "gt": 0,
+            "le": 10000,
+            "title": "Widthmm",
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "widthMm",
+          "heightMm",
+          "surchargeCents"
+        ],
+        "title": "SizeRequest",
+        "type": "object"
+      },
+      "SizeResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "const": "MXN",
+            "default": "MXN",
+            "title": "Currency",
+            "type": "string"
+          },
+          "heightCm": {
+            "title": "Heightcm",
+            "type": "string"
+          },
+          "heightMm": {
+            "title": "Heightmm",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "$ref": "#/components/schemas/SizeLabel"
+          },
+          "surchargeCents": {
+            "title": "Surchargecents",
+            "type": "integer"
+          },
+          "widthCm": {
+            "title": "Widthcm",
+            "type": "string"
+          },
+          "widthMm": {
+            "title": "Widthmm",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "widthMm",
+          "heightMm",
+          "widthCm",
+          "heightCm",
+          "surchargeCents"
+        ],
+        "title": "SizeResponse",
+        "type": "object"
+      },
+      "TemplateHeaderResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "back": {
+            "$ref": "#/components/schemas/DimensionsResponse"
+          },
+          "front": {
+            "$ref": "#/components/schemas/DimensionsResponse"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "number": {
+            "title": "Number",
+            "type": "integer"
+          },
+          "productId": {
+            "format": "uuid",
+            "title": "Productid",
+            "type": "string"
+          },
+          "sizeId": {
+            "title": "Sizeid",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "productId",
+          "sizeId",
+          "number",
+          "active",
+          "front",
+          "back"
+        ],
+        "title": "TemplateHeaderResponse",
+        "type": "object"
+      },
+      "TemplatePageResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TemplateHeaderResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nextcursor"
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "title": "TemplatePageResponse",
+        "type": "object"
+      },
+      "TemplateResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "back": {
+            "$ref": "#/components/schemas/DimensionsResponse"
+          },
+          "front": {
+            "$ref": "#/components/schemas/DimensionsResponse"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "number": {
+            "title": "Number",
+            "type": "integer"
+          },
+          "productId": {
+            "format": "uuid",
+            "title": "Productid",
+            "type": "string"
+          },
+          "sizeId": {
+            "title": "Sizeid",
+            "type": "integer"
+          },
+          "zones": {
+            "items": {
+              "$ref": "#/components/schemas/ZoneResponse"
+            },
+            "title": "Zones",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "productId",
+          "sizeId",
+          "number",
+          "active",
+          "front",
+          "back",
+          "zones"
+        ],
+        "title": "TemplateResponse",
+        "type": "object"
+      },
       "UpdatePrintRequest": {
         "additionalProperties": false,
         "description": "Keep omitted fields; allow null only for description.",
@@ -599,6 +914,115 @@
           "type"
         ],
         "title": "ValidationError",
+        "type": "object"
+      },
+      "ZoneRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "pattern": "^[a-z][a-z0-9-]{0,39}$",
+            "title": "Code",
+            "type": "string"
+          },
+          "heightMm": {
+            "gt": 0,
+            "le": 10000,
+            "title": "Heightmm",
+            "type": "string"
+          },
+          "side": {
+            "$ref": "#/components/schemas/Side"
+          },
+          "sizes": {
+            "items": {
+              "$ref": "#/components/schemas/SizeRequest"
+            },
+            "maxItems": 3,
+            "minItems": 1,
+            "title": "Sizes",
+            "type": "array"
+          },
+          "widthMm": {
+            "gt": 0,
+            "le": 10000,
+            "title": "Widthmm",
+            "type": "string"
+          },
+          "xMm": {
+            "ge": 0,
+            "le": 10000,
+            "title": "Xmm",
+            "type": "string"
+          },
+          "yMm": {
+            "ge": 0,
+            "le": 10000,
+            "title": "Ymm",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "side",
+          "xMm",
+          "yMm",
+          "widthMm",
+          "heightMm",
+          "sizes"
+        ],
+        "title": "ZoneRequest",
+        "type": "object"
+      },
+      "ZoneResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "heightMm": {
+            "title": "Heightmm",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "side": {
+            "$ref": "#/components/schemas/Side"
+          },
+          "sizes": {
+            "items": {
+              "$ref": "#/components/schemas/SizeResponse"
+            },
+            "title": "Sizes",
+            "type": "array"
+          },
+          "widthMm": {
+            "title": "Widthmm",
+            "type": "string"
+          },
+          "xMm": {
+            "title": "Xmm",
+            "type": "string"
+          },
+          "yMm": {
+            "title": "Ymm",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "code",
+          "side",
+          "xMm",
+          "yMm",
+          "widthMm",
+          "heightMm",
+          "sizes"
+        ],
+        "title": "ZoneResponse",
         "type": "object"
       }
     },
@@ -1922,6 +2346,427 @@
         "summary": "Create Thumbnail Download",
         "tags": [
           "Print administration"
+        ]
+      }
+    },
+    "/api/v1/admin/template-versions": {
+      "get": {
+        "operationId": "list_templates_api_v1_admin_template_versions_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "productId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Productid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sizeId",
+            "required": true,
+            "schema": {
+              "maximum": 32767,
+              "minimum": 1,
+              "title": "Sizeid",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 256,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplatePageResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Invalid or differently scoped cursor"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Missing or invalid user access token"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Invalid application role or insufficient permission"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Template version was not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Expected version is stale or version limit reached"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Invalid dimensions, zones, sizes, or money"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unexpected server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Required public signing keys are unavailable"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "RFC 9457 error with code and traceId"
+          }
+        },
+        "security": [
+          {
+            "supabase-jwt": []
+          }
+        ],
+        "summary": "List Templates",
+        "tags": [
+          "Draft template administration"
+        ]
+      },
+      "post": {
+        "operationId": "create_template_api_v1_admin_template_versions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTemplateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Invalid or differently scoped cursor"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Missing or invalid user access token"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Invalid application role or insufficient permission"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Template version was not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Expected version is stale or version limit reached"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Invalid dimensions, zones, sizes, or money"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unexpected server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Required public signing keys are unavailable"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "RFC 9457 error with code and traceId"
+          }
+        },
+        "security": [
+          {
+            "supabase-jwt": []
+          }
+        ],
+        "summary": "Create Template",
+        "tags": [
+          "Draft template administration"
+        ]
+      }
+    },
+    "/api/v1/admin/template-versions/{templateId}": {
+      "get": {
+        "operationId": "get_template_api_v1_admin_template_versions__templateId__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "templateId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Templateid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Invalid or differently scoped cursor"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Missing or invalid user access token"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Invalid application role or insufficient permission"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Template version was not found"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Expected version is stale or version limit reached"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Invalid dimensions, zones, sizes, or money"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unexpected server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Required public signing keys are unavailable"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "RFC 9457 error with code and traceId"
+          }
+        },
+        "security": [
+          {
+            "supabase-jwt": []
+          }
+        ],
+        "summary": "Get Template",
+        "tags": [
+          "Draft template administration"
         ]
       }
     },

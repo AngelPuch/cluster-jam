@@ -17,6 +17,9 @@ from personalization.interfaces.http.openapi import configure_openapi
 from personalization.interfaces.http.prints.thumbnails import (
     router as prints_router,
 )
+from personalization.interfaces.http.templates.routes import (
+    router as templates_router,
+)
 
 
 def create_http_app(lifespan: Lifespan[FastAPI] | None = None) -> FastAPI:
@@ -39,6 +42,7 @@ def create_http_app(lifespan: Lifespan[FastAPI] | None = None) -> FastAPI:
     app.include_router(files_router)
     app.include_router(prints_router)
     app.include_router(catalog_router)
+    app.include_router(templates_router)
     configure_exception_handlers(app)
     configure_openapi(app)
     return app

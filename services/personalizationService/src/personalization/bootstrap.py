@@ -32,10 +32,16 @@ from personalization.application.ports.private_storage_port import (
     PrivateStoragePort,
 )
 from personalization.application.ports.readiness_port import ReadinessPort
+from personalization.application.ports.template_repository_port import (
+    TemplateRepositoryPort,
+)
 from personalization.application.ports.thumbnail_ports import (
     ThumbnailRepositoryPort,
 )
 from personalization.application.prints.print_service import PrintService
+from personalization.application.templates.template_service import (
+    TemplateService,
+)
 from personalization.application.thumbnails.thumbnail_service import (
     ThumbnailService,
 )
@@ -54,6 +60,9 @@ from personalization.infrastructure.database.print_repository import (
 )
 from personalization.infrastructure.database.readiness import (
     SqlAlchemyReadinessAdapter,
+)
+from personalization.infrastructure.database.template_repository import (
+    SqlAlchemyTemplateRepository,
 )
 from personalization.infrastructure.database.thumbnail_repository import (
     SqlAlchemyThumbnailRepository,
@@ -91,6 +100,7 @@ def create_app(
     print_repository: PrintRepositoryPort | None = None,
     thumbnail_repository: ThumbnailRepositoryPort | None = None,
     catalog_repository: PrintCatalogPort | None = None,
+    template_repository: TemplateRepositoryPort | None = None,
 ) -> FastAPI:
     """Start independently and release resources on shutdown."""
     configuration = settings if settings is not None else Settings()
@@ -104,6 +114,7 @@ def create_app(
         or print_repository is None
         or thumbnail_repository is None
         or catalog_repository is None
+        or template_repository is None
     ):
         engine = create_database_engine(configuration)
         if readiness_port is None:
@@ -122,6 +133,8 @@ def create_app(
             catalog_repository = SqlAlchemyPrintCatalogRepository(
                 engine, configuration.storage_bucket
             )
+        if template_repository is None:
+            template_repository = SqlAlchemyTemplateRepository(engine)
     outbound: SupabaseStorage | None = None
     if storage is None:
         if configuration.storage_enabled:
@@ -171,6 +184,7 @@ def create_app(
         app.state.catalog_service = CatalogService(
             catalog_repository, storage, configuration.download_url_ttl_seconds
         )
+        app.state.template_service = TemplateService(template_repository)
         app.state.upload_gate = asyncio.BoundedSemaphore(1)
         logger.info("Service started", extra={"event": "service.started"})
         try:
