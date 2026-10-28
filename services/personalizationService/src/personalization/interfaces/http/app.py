@@ -11,6 +11,9 @@ from personalization.interfaces.http.errors.problem_handlers import (
 from personalization.interfaces.http.files.routes import router as files_router
 from personalization.interfaces.http.health.routes import router
 from personalization.interfaces.http.openapi import configure_openapi
+from personalization.interfaces.http.prints.routes import (
+    router as prints_router,
+)
 
 
 def create_http_app(lifespan: Lifespan[FastAPI] | None = None) -> FastAPI:
@@ -20,7 +23,8 @@ def create_http_app(lifespan: Lifespan[FastAPI] | None = None) -> FastAPI:
         version=version("cluster-jam-personalization-service"),
         description=(
             "Private image files with local JWT authorization, "
-            "validated originals, and short-lived download links."
+            "validated originals, short-lived downloads, and administrative "
+            "print versioning with atomic audit records."
         ),
         docs_url="/docs",
         redoc_url=None,
@@ -30,6 +34,7 @@ def create_http_app(lifespan: Lifespan[FastAPI] | None = None) -> FastAPI:
     )
     app.include_router(router)
     app.include_router(files_router)
+    app.include_router(prints_router)
     configure_exception_handlers(app)
     configure_openapi(app)
     return app

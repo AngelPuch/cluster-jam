@@ -1,0 +1,330 @@
+{
+  "info": {
+    "name": "Cluster JAM - Print Administration",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Use an existing administrator account. Requests use JSON or no body; none require file attachments. Set adminAccessToken and printFileId in the local environment."
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{adminAccessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "Crear estampado",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/admin/prints",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Logo de prueba\",\n  \"description\": \"Prueba de versionado\",\n  \"fileId\": \"{{printFileId}}\",\n  \"surchargeCents\": 1250\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+              "if (pm.response.code === 201) { const p = pm.response.json(); pm.environment.set(\"printId\", p.id); pm.environment.set(\"originalPrintVersionId\", p.latestVersion.id); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Listar estampados",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/admin/prints?limit=20"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Consultar estampado",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/admin/prints/{{printId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Crear versión 2",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/admin/prints/{{printId}}/versions",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"expectedVersion\": 1,\n  \"fileId\": \"{{printFileId}}\",\n  \"surchargeCents\": 2000\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+              "if (pm.response.code === 201) pm.environment.set(\"printVersionId\", pm.response.json().id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Consultar versión original",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/admin/prints/{{printId}}/versions/{{originalPrintVersionId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"Original unchanged\", () => { const v = pm.response.json(); pm.expect(v.number).to.eql(1); pm.expect(v.surchargeCents).to.eql(1250); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Consultar versión nueva",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/admin/prints/{{printId}}/versions/{{printVersionId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"New version\", () => { const v = pm.response.json(); pm.expect(v.number).to.eql(2); pm.expect(v.surchargeCents).to.eql(2000); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Listar versiones",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/admin/prints/{{printId}}/versions?limit=20"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"Two versions retained\", () => pm.expect(pm.response.json().items.map(v => v.number)).to.eql([1, 2]));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Versión desactualizada",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/admin/prints/{{printId}}/versions",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"expectedVersion\": 1,\n  \"fileId\": \"{{printFileId}}\",\n  \"surchargeCents\": 2500\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 409\", () => pm.response.to.have.status(409));",
+              "pm.test(\"Problem Details\", () => { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"); pm.expect(pm.response.json()).to.have.all.keys(\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"); });",
+              "pm.test(\"Error code\", () => pm.expect(pm.response.json().code).to.eql(\"PRINT_VERSION_CONFLICT\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Sin JWT",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/admin/prints",
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 401\", () => pm.response.to.have.status(401));",
+              "pm.test(\"Problem Details\", () => { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"); pm.expect(pm.response.json()).to.have.all.keys(\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Cliente sin permiso",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/admin/prints",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 403\", () => pm.response.to.have.status(403));",
+              "pm.test(\"Problem Details\", () => { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"); pm.expect(pm.response.json()).to.have.all.keys(\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"); });",
+              "pm.test(\"Error code\", () => pm.expect(pm.response.json().code).to.eql(\"FORBIDDEN\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Importe inválido",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/admin/prints",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Importe inv\\u00e1lido\",\n  \"fileId\": \"{{printFileId}}\",\n  \"surchargeCents\": 1.5\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 422\", () => pm.response.to.have.status(422));",
+              "pm.test(\"Problem Details\", () => { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"); pm.expect(pm.response.json()).to.have.all.keys(\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"); });",
+              "pm.test(\"Error code\", () => pm.expect(pm.response.json().code).to.eql(\"VALIDATION_ERROR\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Cursor inválido",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/admin/prints?cursor=incorrecto"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));",
+              "pm.test(\"Problem Details\", () => { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\"); pm.expect(pm.response.json()).to.have.all.keys(\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"); });",
+              "pm.test(\"Error code\", () => pm.expect(pm.response.json().code).to.eql(\"INVALID_CURSOR\"));"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

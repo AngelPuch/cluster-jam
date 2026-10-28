@@ -21,16 +21,23 @@ from personalization.application.images.validate_image_service import (
 from personalization.application.ports.file_repository_port import (
     FileRepositoryPort,
 )
+from personalization.application.ports.print_repository_port import (
+    PrintRepositoryPort,
+)
 from personalization.application.ports.private_storage_port import (
     PrivateStoragePort,
 )
 from personalization.application.ports.readiness_port import ReadinessPort
+from personalization.application.prints.print_service import PrintService
 from personalization.infrastructure.config.settings import Settings
 from personalization.infrastructure.database.engine import (
     create_database_engine,
 )
 from personalization.infrastructure.database.file_repository import (
     SqlAlchemyFileRepository,
+)
+from personalization.infrastructure.database.print_repository import (
+    SqlAlchemyPrintRepository,
 )
 from personalization.infrastructure.database.readiness import (
     SqlAlchemyReadinessAdapter,
@@ -65,6 +72,7 @@ def create_app(
     *,
     file_repository: FileRepositoryPort | None = None,
     storage: PrivateStoragePort | None = None,
+    print_repository: PrintRepositoryPort | None = None,
 ) -> FastAPI:
     """Start independently and release resources on shutdown."""
     configuration = settings if settings is not None else Settings()
@@ -72,12 +80,20 @@ def create_app(
         environment=configuration.app_env, log_level=configuration.log_level
     )
     engine: Engine | None = None
-    if readiness_port is None or file_repository is None:
+    if (
+        readiness_port is None
+        or file_repository is None
+        or print_repository is None
+    ):
         engine = create_database_engine(configuration)
         if readiness_port is None:
             readiness_port = SqlAlchemyReadinessAdapter(engine, configuration)
         if file_repository is None:
             file_repository = SqlAlchemyFileRepository(engine)
+        if print_repository is None:
+            print_repository = SqlAlchemyPrintRepository(
+                engine, configuration.storage_bucket
+            )
     outbound: SupabaseStorage | None = None
     if storage is None:
         if configuration.storage_enabled:
@@ -116,6 +132,7 @@ def create_app(
             configuration.storage_bucket,
             configuration.download_url_ttl_seconds,
         )
+        app.state.print_service = PrintService(print_repository)
         app.state.upload_gate = asyncio.BoundedSemaphore(1)
         logger.info("Service started", extra={"event": "service.started"})
         try:
