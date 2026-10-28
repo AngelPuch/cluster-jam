@@ -1,6 +1,147 @@
 {
   "components": {
     "schemas": {
+      "CatalogPageResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogPrintResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nextcursor"
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "title": "CatalogPageResponse",
+        "type": "object"
+      },
+      "CatalogPrintResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "thumbnail": {
+            "$ref": "#/components/schemas/CatalogThumbnailResponse"
+          },
+          "version": {
+            "$ref": "#/components/schemas/CatalogVersionResponse"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "version",
+          "thumbnail"
+        ],
+        "title": "CatalogPrintResponse",
+        "type": "object"
+      },
+      "CatalogThumbnailResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "downloadUrlEndpoint": {
+            "title": "Downloadurlendpoint",
+            "type": "string"
+          },
+          "heightPx": {
+            "title": "Heightpx",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "mimeType": {
+            "const": "image/png",
+            "default": "image/png",
+            "title": "Mimetype",
+            "type": "string"
+          },
+          "sizeBytes": {
+            "title": "Sizebytes",
+            "type": "integer"
+          },
+          "widthPx": {
+            "title": "Widthpx",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "widthPx",
+          "heightPx",
+          "sizeBytes",
+          "downloadUrlEndpoint"
+        ],
+        "title": "CatalogThumbnailResponse",
+        "type": "object"
+      },
+      "CatalogVersionResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "const": "MXN",
+            "default": "MXN",
+            "title": "Currency",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "number": {
+            "title": "Number",
+            "type": "integer"
+          },
+          "surchargeCents": {
+            "title": "Surchargecents",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "surchargeCents"
+        ],
+        "title": "CatalogVersionResponse",
+        "type": "object"
+      },
       "CreatePrintRequest": {
         "additionalProperties": false,
         "properties": {
@@ -2166,6 +2307,390 @@
         "summary": "Create Download Url",
         "tags": [
           "Files"
+        ]
+      }
+    },
+    "/api/v1/prints": {
+      "get": {
+        "operationId": "list_catalog_api_v1_prints_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 256,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogPageResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Invalid or differently scoped cursor"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Missing or invalid user access token"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Invalid application role or insufficient permission"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Print is unavailable or version is not current"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Invalid identifier or pagination limit"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unexpected server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Required public signing keys are unavailable"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "RFC 9457 error with code and traceId"
+          }
+        },
+        "security": [
+          {
+            "supabase-jwt": []
+          }
+        ],
+        "summary": "List Catalog",
+        "tags": [
+          "Print catalog"
+        ]
+      }
+    },
+    "/api/v1/prints/{printId}": {
+      "get": {
+        "operationId": "get_catalog_print_api_v1_prints__printId__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "printId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Printid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogPrintResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Invalid or differently scoped cursor"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Missing or invalid user access token"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Invalid application role or insufficient permission"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Print is unavailable or version is not current"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Invalid identifier or pagination limit"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unexpected server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Required public signing keys are unavailable"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "RFC 9457 error with code and traceId"
+          }
+        },
+        "security": [
+          {
+            "supabase-jwt": []
+          }
+        ],
+        "summary": "Get Catalog Print",
+        "tags": [
+          "Print catalog"
+        ]
+      }
+    },
+    "/api/v1/prints/{printId}/versions/{versionId}/thumbnail/download-urls": {
+      "post": {
+        "operationId": "create_thumbnail_download_api_v1_prints__printId__versions__versionId__thumbnail_download_urls_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "printId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Printid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "versionId",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Versionid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DownloadResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Invalid or differently scoped cursor"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Missing or invalid user access token"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Invalid application role or insufficient permission"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Print is unavailable or version is not current"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Invalid identifier or pagination limit"
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Unexpected server error"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "Required public signing keys are unavailable"
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description": "RFC 9457 error with code and traceId"
+          }
+        },
+        "security": [
+          {
+            "supabase-jwt": []
+          }
+        ],
+        "summary": "Create Thumbnail Download",
+        "tags": [
+          "Print catalog"
         ]
       }
     },

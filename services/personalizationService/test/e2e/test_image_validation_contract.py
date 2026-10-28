@@ -180,6 +180,9 @@ def test_production_app_exposes_no_temporary_image_route(
 ) -> None:
     assert client.post(PATH).status_code == 404
     assert set(client.get("/openapi.json").json()["paths"]) == {
+        "/api/v1/prints",
+        "/api/v1/prints/{printId}",
+        "/api/v1/prints/{printId}/versions/{versionId}/thumbnail/download-urls",
         "/health/live",
         "/health/ready",
         "/api/v1/files",

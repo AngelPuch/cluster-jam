@@ -11,6 +11,7 @@ from opentelemetry.sdk.trace import TracerProvider
 from sqlalchemy import Engine
 from starlette.concurrency import run_in_threadpool
 
+from personalization.application.catalog.catalog_service import CatalogService
 from personalization.application.files.file_service import FileService
 from personalization.application.health.readiness_service import (
     ReadinessService,
@@ -20,6 +21,9 @@ from personalization.application.images.validate_image_service import (
 )
 from personalization.application.ports.file_repository_port import (
     FileRepositoryPort,
+)
+from personalization.application.ports.print_catalog_port import (
+    PrintCatalogPort,
 )
 from personalization.application.ports.print_repository_port import (
     PrintRepositoryPort,
@@ -41,6 +45,9 @@ from personalization.infrastructure.database.engine import (
 )
 from personalization.infrastructure.database.file_repository import (
     SqlAlchemyFileRepository,
+)
+from personalization.infrastructure.database.print_catalog_repository import (
+    SqlAlchemyPrintCatalogRepository,
 )
 from personalization.infrastructure.database.print_repository import (
     SqlAlchemyPrintRepository,
@@ -83,6 +90,7 @@ def create_app(
     storage: PrivateStoragePort | None = None,
     print_repository: PrintRepositoryPort | None = None,
     thumbnail_repository: ThumbnailRepositoryPort | None = None,
+    catalog_repository: PrintCatalogPort | None = None,
 ) -> FastAPI:
     """Start independently and release resources on shutdown."""
     configuration = settings if settings is not None else Settings()
@@ -95,6 +103,7 @@ def create_app(
         or file_repository is None
         or print_repository is None
         or thumbnail_repository is None
+        or catalog_repository is None
     ):
         engine = create_database_engine(configuration)
         if readiness_port is None:
@@ -107,6 +116,10 @@ def create_app(
             )
         if thumbnail_repository is None:
             thumbnail_repository = SqlAlchemyThumbnailRepository(
+                engine, configuration.storage_bucket
+            )
+        if catalog_repository is None:
+            catalog_repository = SqlAlchemyPrintCatalogRepository(
                 engine, configuration.storage_bucket
             )
     outbound: SupabaseStorage | None = None
@@ -154,6 +167,9 @@ def create_app(
             storage,
             configuration.storage_bucket,
             configuration.download_url_ttl_seconds,
+        )
+        app.state.catalog_service = CatalogService(
+            catalog_repository, storage, configuration.download_url_ttl_seconds
         )
         app.state.upload_gate = asyncio.BoundedSemaphore(1)
         logger.info("Service started", extra={"event": "service.started"})
