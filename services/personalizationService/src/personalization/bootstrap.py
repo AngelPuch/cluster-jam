@@ -28,7 +28,13 @@ from personalization.application.ports.private_storage_port import (
     PrivateStoragePort,
 )
 from personalization.application.ports.readiness_port import ReadinessPort
+from personalization.application.ports.thumbnail_ports import (
+    ThumbnailRepositoryPort,
+)
 from personalization.application.prints.print_service import PrintService
+from personalization.application.thumbnails.thumbnail_service import (
+    ThumbnailService,
+)
 from personalization.infrastructure.config.settings import Settings
 from personalization.infrastructure.database.engine import (
     create_database_engine,
@@ -41,6 +47,9 @@ from personalization.infrastructure.database.print_repository import (
 )
 from personalization.infrastructure.database.readiness import (
     SqlAlchemyReadinessAdapter,
+)
+from personalization.infrastructure.database.thumbnail_repository import (
+    SqlAlchemyThumbnailRepository,
 )
 from personalization.infrastructure.images.pillow_image_inspector import (
     PillowImageInspector,
@@ -73,6 +82,7 @@ def create_app(
     file_repository: FileRepositoryPort | None = None,
     storage: PrivateStoragePort | None = None,
     print_repository: PrintRepositoryPort | None = None,
+    thumbnail_repository: ThumbnailRepositoryPort | None = None,
 ) -> FastAPI:
     """Start independently and release resources on shutdown."""
     configuration = settings if settings is not None else Settings()
@@ -84,6 +94,7 @@ def create_app(
         readiness_port is None
         or file_repository is None
         or print_repository is None
+        or thumbnail_repository is None
     ):
         engine = create_database_engine(configuration)
         if readiness_port is None:
@@ -92,6 +103,10 @@ def create_app(
             file_repository = SqlAlchemyFileRepository(engine)
         if print_repository is None:
             print_repository = SqlAlchemyPrintRepository(
+                engine, configuration.storage_bucket
+            )
+        if thumbnail_repository is None:
+            thumbnail_repository = SqlAlchemyThumbnailRepository(
                 engine, configuration.storage_bucket
             )
     outbound: SupabaseStorage | None = None
@@ -133,6 +148,13 @@ def create_app(
             configuration.download_url_ttl_seconds,
         )
         app.state.print_service = PrintService(print_repository)
+        app.state.thumbnail_service = ThumbnailService(
+            print_repository,
+            thumbnail_repository,
+            storage,
+            configuration.storage_bucket,
+            configuration.download_url_ttl_seconds,
+        )
         app.state.upload_gate = asyncio.BoundedSemaphore(1)
         logger.info("Service started", extra={"event": "service.started"})
         try:

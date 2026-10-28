@@ -1,0 +1,353 @@
+{
+  "info": {
+    "name": "Cluster JAM - Print Thumbnails",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Worker de miniaturas privadas. Ejecutar en orden. Sin multipart ni adjuntos. Reutilizar el entorno local con baseUrl, printId, adminAccessToken y accessToken. Los pasos 01 a 03 guardan las variables derivadas automáticamente. El enlace firmado es secreto y vence; no exportar valores locales."
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{adminAccessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "01 - Seleccionar la versión actual",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/admin/prints/{{printId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) {",
+              "  const version = pm.response.json().latestVersion;",
+              "  pm.environment.set(\"thumbnailVersionId\", version.id);",
+              "  pm.environment.set(\"thumbnailSourceSnapshot\", JSON.stringify(version));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - Consultar metadata de miniatura",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/admin/prints/{{printId}}/versions/{{thumbnailVersionId}}/thumbnail"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) {",
+              "  const body = pm.response.json();",
+              "  pm.test(\"PNG pequeño disponible\", () => {",
+              "    pm.expect(body.mimeType).to.eql(\"image/png\");",
+              "    pm.expect(body.state).to.eql(\"DISPONIBLE\");",
+              "    pm.expect(body.widthPx).to.be.within(1, 320);",
+              "    pm.expect(body.heightPx).to.be.within(1, 320);",
+              "    pm.expect(body.sha256).to.match(/^[0-9a-f]{64}$/);",
+              "  });",
+              "  pm.environment.set(\"thumbnailFileId\", body.id);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 - Crear enlace privado de miniatura",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/admin/prints/{{printId}}/versions/{{thumbnailVersionId}}/thumbnail/download-urls"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+              "if (pm.response.code === 201) {",
+              "  const body = pm.response.json();",
+              "  pm.test(\"Enlace para la miniatura seleccionada\", () => {",
+              "    pm.expect(body.fileId).to.eql(pm.environment.get(\"thumbnailFileId\"));",
+              "    pm.expect(body.downloadUrl).to.match(/^https:\\/\\//);",
+              "    pm.expect(pm.response.headers.get(\"Cache-Control\")).to.eql(\"no-store\");",
+              "  });",
+              "  pm.environment.set(\"thumbnailDownloadUrl\", body.downloadUrl);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 - Descargar miniatura antes de 60 segundos",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{thumbnailDownloadUrl}}",
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"Contenido PNG\", () => {",
+              "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"image/png\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 - Consultar de nuevo sin duplicar",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/admin/prints/{{printId}}/versions/{{thumbnailVersionId}}/thumbnail"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) {",
+              "  pm.test(\"Mismo archivo derivado\", () => {",
+              "    pm.expect(pm.response.json().id).to.eql(pm.environment.get(\"thumbnailFileId\"));",
+              "  });",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 - Comprobar versión original conservada",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/admin/prints/{{printId}}/versions/{{thumbnailVersionId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) {",
+              "  pm.test(\"Imagen y recargo originales conservados\", () => {",
+              "    pm.expect(pm.response.json()).to.eql(JSON.parse(pm.environment.get(\"thumbnailSourceSnapshot\")));",
+              "  });",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 - Cliente sin permiso para metadata",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/admin/prints/{{printId}}/versions/{{thumbnailVersionId}}/thumbnail",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 403\", () => pm.response.to.have.status(403));",
+              "pm.test(\"RFC 9457\", () => {",
+              "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "  const body = pm.response.json();",
+              "  pm.expect(Object.keys(body).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "  pm.expect(body.code).to.eql(\"FORBIDDEN\");",
+              "  pm.expect(body.traceId).to.match(/^[0-9a-f]{32}$/);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 - Cliente sin permiso para enlace",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/admin/prints/{{printId}}/versions/{{thumbnailVersionId}}/thumbnail/download-urls",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 403\", () => pm.response.to.have.status(403));",
+              "pm.test(\"RFC 9457\", () => {",
+              "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "  const body = pm.response.json();",
+              "  pm.expect(Object.keys(body).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "  pm.expect(body.code).to.eql(\"FORBIDDEN\");",
+              "  pm.expect(body.traceId).to.match(/^[0-9a-f]{32}$/);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 - Metadata sin JWT",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/admin/prints/{{printId}}/versions/{{thumbnailVersionId}}/thumbnail",
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 401\", () => pm.response.to.have.status(401));",
+              "pm.test(\"RFC 9457\", () => {",
+              "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "  const body = pm.response.json();",
+              "  pm.expect(Object.keys(body).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "  pm.expect(body.code).to.eql(\"INVALID_ACCESS_TOKEN\");",
+              "  pm.expect(body.traceId).to.match(/^[0-9a-f]{32}$/);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 - Versión inexistente",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/admin/prints/{{printId}}/versions/{{$guid}}/thumbnail"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 404\", () => pm.response.to.have.status(404));",
+              "pm.test(\"RFC 9457\", () => {",
+              "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "  const body = pm.response.json();",
+              "  pm.expect(Object.keys(body).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "  pm.expect(body.code).to.eql(\"PRINT_VERSION_NOT_FOUND\");",
+              "  pm.expect(body.traceId).to.match(/^[0-9a-f]{32}$/);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11 - Identificador inválido",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/admin/prints/{{printId}}/versions/not-a-uuid/thumbnail"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 422\", () => pm.response.to.have.status(422));",
+              "pm.test(\"RFC 9457\", () => {",
+              "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "  const body = pm.response.json();",
+              "  pm.expect(Object.keys(body).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "  pm.expect(body.code).to.eql(\"VALIDATION_ERROR\");",
+              "  pm.expect(body.traceId).to.match(/^[0-9a-f]{32}$/);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "12 - Miniatura no es un original",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/files/{{thumbnailFileId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 404\", () => pm.response.to.have.status(404));",
+              "pm.test(\"RFC 9457\", () => {",
+              "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "  const body = pm.response.json();",
+              "  pm.expect(Object.keys(body).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "  pm.expect(body.code).to.eql(\"FILE_NOT_FOUND\");",
+              "  pm.expect(body.traceId).to.match(/^[0-9a-f]{32}$/);",
+              "});"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

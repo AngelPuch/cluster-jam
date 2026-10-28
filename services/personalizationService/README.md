@@ -333,3 +333,15 @@ una versión nueva por su endpoint específico.
 Consultar [contrato y pruebas paso a paso](docs/print-lifecycle.md).
 La colección `print-lifecycle.postman_collection.json` reutiliza el entorno
 local y guarda automáticamente las etiquetas para sus pruebas.
+
+
+## Worker y miniaturas de estampados
+
+Un worker separado genera miniaturas privadas PNG de hasta 320 × 320 px
+para los originales usados por versiones de estampados. Revalida bytes,
+conserva originales, recupera intenciones pendientes y evita sobrescrituras.
+Hay consulta y enlace de descarga administrativos por versión. El catálogo
+para clientes se añadirá en el siguiente incremento.
+
+Consultar [la guía del worker](docs/print-thumbnails.md) para contratos,
+concurrencia, recuperación, Docker, límites y 12 pruebas con Postman.

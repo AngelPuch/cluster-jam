@@ -228,3 +228,16 @@ su configuración anterior. No hay migraciones SQL nuevas: se usa `archivo`.
 
 La configuración completa y pruebas con Postman se describen en
 [archivos privados](../../services/personalizationService/docs/private-files.md).
+
+
+## Worker de imágenes
+
+El perfil `images` añade `personalization-worker`, con la misma imagen del
+servicio y un comando independiente. Usar `compose.storage.yaml` para su
+red externa y secreto de Storage; no publica puertos. Procesa secuencialmente
+con 1 CPU, 512 MiB, raíz de solo lectura y cierre con gracia de 120 segundos.
+Los límites `WORKER_BATCH_SIZE` y `WORKER_POLL_SECONDS` están en .env.example.
+No agrega tablas ni ejecuta migraciones al arrancar.
+
+El arranque, diagnóstico con `--once` y cierre sin eliminar datos están en
+[miniaturas](../../services/personalizationService/docs/print-thumbnails.md).
