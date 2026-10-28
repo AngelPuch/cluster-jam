@@ -5,6 +5,9 @@ from importlib.metadata import version
 from fastapi import FastAPI
 from starlette.types import Lifespan
 
+from personalization.interfaces.http.catalog.routes import (
+    router as catalog_router,
+)
 from personalization.interfaces.http.errors.problem_handlers import (
     configure_exception_handlers,
 )
@@ -35,6 +38,7 @@ def create_http_app(lifespan: Lifespan[FastAPI] | None = None) -> FastAPI:
     app.include_router(router)
     app.include_router(files_router)
     app.include_router(prints_router)
+    app.include_router(catalog_router)
     configure_exception_handlers(app)
     configure_openapi(app)
     return app

@@ -313,8 +313,8 @@ en la misma transacción. `expectedVersion` detecta cambios concurrentes;
 los archivos y precios de versiones anteriores se conservan.
 
 Se usan las tablas existentes de la migración `0001_personalization`.
-No se requiere migración adicional. Las miniaturas y el catálogo de
-estampados para clientes se incorporarán en su propio incremento.
+No se requiere migración adicional. Las miniaturas y el catálogo para
+clientes se describen en sus secciones correspondientes más adelante.
 
 Consultar [contratos, decisiones y pruebas](docs/print-versioning.md).
 La colección de Postman es `prints.postman_collection.json`; usa
@@ -341,7 +341,19 @@ Un worker separado genera miniaturas privadas PNG de hasta 320 × 320 px
 para los originales usados por versiones de estampados. Revalida bytes,
 conserva originales, recupera intenciones pendientes y evita sobrescrituras.
 Hay consulta y enlace de descarga administrativos por versión. El catálogo
-para clientes se añadirá en el siguiente incremento.
+para clientes reutiliza estos derivados con permisos de lectura propios.
 
 Consultar [la guía del worker](docs/print-thumbnails.md) para contratos,
 concurrencia, recuperación, Docker, límites y 12 pruebas con Postman.
+
+
+## Catálogo de estampados
+
+`GET /api/v1/prints` y el detalle por ID permiten consultar estampados
+activos con versión vigente, miniatura disponible y recargo en MXN. Cliente
+y administrador pueden leer; los originales conservan sus permisos. El
+listado es paginado y no llama a Storage por elemento. El enlace temporal
+de miniatura se solicita mediante el recurso indicado en la respuesta.
+
+Consultar [la guía del catálogo](docs/print-catalog.md) para publicación,
+contratos, vigencia de enlaces, pruebas y colección Postman de 21 pasos.

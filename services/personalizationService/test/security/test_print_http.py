@@ -274,11 +274,10 @@ def test_failures_use_safe_correlated_problem_details(
     assert "SELECT" not in response.text
 
 
-def test_openapi_contains_only_admin_secured_print_contracts(
+def test_openapi_preserves_admin_secured_print_contracts(
     print_client: TestClient,
 ) -> None:
     schema = print_client.get("/openapi.json").json()
-    assert "/api/v1/prints" not in schema["paths"]
     for path, methods in schema["paths"].items():
         if path.startswith(BASE):
             for operation in methods.values():
