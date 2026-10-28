@@ -114,7 +114,7 @@ class StorageServer:
         if path.startswith("object/authenticated/"):
             target = path.removeprefix("object/authenticated/")
             if target not in self.objects:
-                return httpx.Response(404)
+                return httpx.Response(404, json={"code": "NoSuchKey"})
             return httpx.Response(200, content=self.objects[target])
         if path.startswith("object/") and request.method == "POST":
             target = path.removeprefix("object/")

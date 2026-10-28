@@ -1,5 +1,6 @@
 """Create immutable private objects with bounded HTTP operations."""
 
+import json
 from hashlib import sha256
 from urllib.parse import parse_qs, urlsplit
 
@@ -189,3 +190,45 @@ class SupabaseStorage:
             raise FileError(FileFailure.STORAGE_UNAVAILABLE) from None
         if count != record.size_bytes or digest.hexdigest() != record.sha256:
             raise FileError(FileFailure.FILE_INTEGRITY_MISMATCH)
+
+    def read_verified(
+        self, record: FileRecord, *, allow_missing: bool = False
+    ) -> bytes | None:
+        """Verify bounded bytes and explicit missing-key errors."""
+        path = "object/authenticated/" + self._object_path(record)
+        content = bytearray()
+        try:
+            with self._client.stream("GET", path) as response:
+                if allow_missing and response.status_code in (400, 404):
+                    # Bound error bodies as well as image bytes.
+                    error_body = bytearray()
+                    for chunk in response.iter_bytes(chunk_size=4096):
+                        error_body.extend(chunk)
+                        if len(error_body) > 8192:
+                            raise FileError(FileFailure.STORAGE_UNAVAILABLE)
+                    error: object = json.loads(error_body)
+                    if isinstance(error, dict) and (
+                        error.get("code") == "NoSuchKey"
+                        or (
+                            error.get("error") == "not_found"
+                            and str(error.get("statusCode")) == "404"
+                        )
+                    ):
+                        return None
+                response.raise_for_status()
+                for chunk in response.iter_bytes(chunk_size=65_536):
+                    content.extend(chunk)
+                    if (
+                        len(content) > record.size_bytes
+                        or len(content) > MAX_UPLOAD_BYTES
+                    ):
+                        raise FileError(FileFailure.FILE_INTEGRITY_MISMATCH)
+        except httpx.HTTPError, ValueError:
+            raise FileError(FileFailure.STORAGE_UNAVAILABLE) from None
+        result = bytes(content)
+        if (
+            len(result) != record.size_bytes
+            or sha256(result).hexdigest() != record.sha256
+        ):
+            raise FileError(FileFailure.FILE_INTEGRITY_MISMATCH)
+        return result

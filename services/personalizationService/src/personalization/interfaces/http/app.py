@@ -11,7 +11,7 @@ from personalization.interfaces.http.errors.problem_handlers import (
 from personalization.interfaces.http.files.routes import router as files_router
 from personalization.interfaces.http.health.routes import router
 from personalization.interfaces.http.openapi import configure_openapi
-from personalization.interfaces.http.prints.routes import (
+from personalization.interfaces.http.prints.thumbnails import (
     router as prints_router,
 )
 

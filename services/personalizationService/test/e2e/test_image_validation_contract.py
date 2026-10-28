@@ -189,4 +189,9 @@ def test_production_app_exposes_no_temporary_image_route(
         "/api/v1/admin/prints/{printId}",
         "/api/v1/admin/prints/{printId}/versions",
         "/api/v1/admin/prints/{printId}/versions/{versionId}",
+        "/api/v1/admin/prints/{printId}/versions/{versionId}/thumbnail",
+        (
+            "/api/v1/admin/prints/{printId}/versions/{versionId}"
+            "/thumbnail/download-urls"
+        ),
     }

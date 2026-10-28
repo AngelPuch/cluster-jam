@@ -108,6 +108,12 @@ class Settings(BaseSettings):
     download_url_ttl_seconds: int = Field(
         default=60, ge=1, le=300, validation_alias="DOWNLOAD_URL_TTL_SECONDS"
     )
+    worker_batch_size: int = Field(
+        default=10, ge=1, le=100, validation_alias="WORKER_BATCH_SIZE"
+    )
+    worker_poll_seconds: int = Field(
+        default=10, ge=1, le=300, validation_alias="WORKER_POLL_SECONDS"
+    )
     _storage_key: SecretStr | None = PrivateAttr(default=None)
     _database_password: SecretStr = PrivateAttr()
 

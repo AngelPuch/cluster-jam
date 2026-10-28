@@ -93,6 +93,19 @@ services:
             start_period: 10s
             retries: 3
 
+    personalization-worker:
+        <<: *personalization-service
+        profiles: ["images"]
+        command: ["python", "-m", "personalization.interfaces.workers.thumbnails"]
+        init: true
+        restart: unless-stopped
+        stop_grace_period: 120s
+        mem_limit: 512m
+        environment:
+            <<: *personalization-environment
+            WORKER_BATCH_SIZE: ${WORKER_BATCH_SIZE:-10}
+            WORKER_POLL_SECONDS: ${WORKER_POLL_SECONDS:-10}
+
     personalization-storage:
         <<: *personalization-service
         profiles: ["tools"]

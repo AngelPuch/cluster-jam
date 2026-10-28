@@ -18,6 +18,10 @@ ALLOWED_LOG_FIELDS = (
     "error_type",
     "code",
     "file_ids",
+    "completed",
+    "busy",
+    "failures",
+    "codes",
 )
 
 
