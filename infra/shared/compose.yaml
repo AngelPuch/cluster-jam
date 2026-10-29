@@ -1,0 +1,116 @@
+name: cluster-jam-shared
+
+x-logging: &logging
+    driver: json-file
+    options:
+        max-size: "10m"
+        max-file: "3"
+
+services:
+    nginx:
+        image: nginx:1.30.6-trixie@sha256:51047bea59fed88fbd1f52565d2f5fabcb82d311cf6c9e507a10ce74bb3bc3f0
+        user: "101:101"
+        entrypoint: ["nginx"]
+        command: ["-g", "daemon off;"]
+        read_only: true
+        cap_drop: ["ALL"]
+        security_opt: ["no-new-privileges:true"]
+        tmpfs:
+            - /tmp:size=64m,mode=1777
+        ports:
+            - "${HTTPS_BIND_IP:-0.0.0.0}:443:8443"
+        secrets:
+            - https_key
+        configs:
+            - source: nginx_config
+              target: /etc/nginx/nginx.conf
+            - source: nginx_proxy_config
+              target: /etc/nginx/cluster-proxy.conf
+            - source: https_certificate
+              target: /run/config/https.crt
+        networks: [backend]
+        healthcheck:
+            test: ["CMD", "curl", "-fsS", "--max-time", "2", "http://127.0.0.1:8080/health/live"]
+            interval: 10s
+            timeout: 3s
+            start_period: 10s
+            retries: 3
+        restart: unless-stopped
+        stop_signal: SIGQUIT
+        stop_grace_period: 30s
+        logging: *logging
+        mem_limit: 128m
+        cpus: 0.5
+        pids_limit: 128
+
+    rabbitmq:
+        image: rabbitmq:4.4.0@sha256:485319d42170eab53d8a030e1cc49d95e41f5d325479fa504736db8091981eb7
+        user: "999:999"
+        labels:
+            cluster-jam.configuration: ${BROKER_REVISION:-initial}
+        hostname: clusterjam-rabbitmq
+        environment:
+            RABBITMQ_NODENAME: rabbit@clusterjam-rabbitmq
+        read_only: true
+        cap_drop: ["ALL"]
+        security_opt: ["no-new-privileges:true"]
+        tmpfs:
+            - /tmp:size=32m,mode=1777
+        secrets:
+            - rabbitmq_key
+            - rabbitmq_definitions
+        configs:
+            - source: rabbitmq_config
+              target: /etc/rabbitmq/rabbitmq.conf
+            - source: rabbitmq_certificate
+              target: /run/config/rabbitmq.crt
+            - source: cluster_ca
+              target: /run/config/cluster-ca.crt
+        volumes:
+            - rabbitmq-data:/var/lib/rabbitmq
+        networks:
+            backend:
+                aliases: [clusterjam-rabbitmq]
+        healthcheck:
+            test: ["CMD", "rabbitmq-diagnostics", "-q", "check_running"]
+            interval: 10s
+            timeout: 10s
+            start_period: 30s
+            retries: 12
+        restart: unless-stopped
+        stop_grace_period: 60s
+        logging: *logging
+        mem_limit: 768m
+        cpus: 1.0
+        pids_limit: 256
+
+networks:
+    backend:
+        external: true
+        name: cluster-jam-backend
+
+volumes:
+    rabbitmq-data:
+        name: cluster-jam-rabbitmq-data
+
+secrets:
+    https_key:
+        file: ./.pki/https.key
+    rabbitmq_key:
+        file: ./.pki/rabbitmq.key
+    rabbitmq_definitions:
+        file: ./.secrets/rabbitmq_definitions.json
+
+configs:
+    nginx_config:
+        file: ./nginx.conf
+    nginx_proxy_config:
+        file: ./nginx-proxy.conf
+    rabbitmq_config:
+        file: ./rabbitmq.conf
+    cluster_ca:
+        file: ./.pki/ca.crt
+    https_certificate:
+        file: ./.pki/https.crt
+    rabbitmq_certificate:
+        file: ./.pki/rabbitmq.crt

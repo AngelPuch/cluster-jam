@@ -1,0 +1,7 @@
+*.sh text eol=lf
+*.py text eol=lf
+*.cjs text eol=lf
+*.conf text eol=lf
+*.yaml text eol=lf
+*.sql text eol=lf
+*.example text eol=lf

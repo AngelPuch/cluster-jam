@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_FILTER } from '@nestjs/core';
 
-import { environmentValidationSchema } from './infrastructure/config/environment.validation';
+import { validateEnvironment } from './infrastructure/config/environment.validate';
 import { ProblemDetailsFilter } from './interfaces/http/common/errors/problem-details.filter';
 import { HealthModule } from './interfaces/http/health/health.module';
 import { AuthModule } from './interfaces/http/auth/auth.module';
@@ -14,7 +14,7 @@ import { ObservabilityModule } from './infrastructure/observability/observabilit
     ConfigModule.forRoot({
       isGlobal: true,
       cache: true,
-      validationSchema: environmentValidationSchema,
+      validate: validateEnvironment,
     }),
     HealthModule,
     AuthModule,
