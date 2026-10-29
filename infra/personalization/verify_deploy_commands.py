@@ -3,6 +3,7 @@
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -15,6 +16,11 @@ def write_file(path: Path, content: str) -> None:
 
 
 def verify_deployment_commands() -> None:
+    # Keep private fixture files owned by the POSIX runner.
+    if sys.platform == "win32":
+        container_user = "0:0"
+    else:
+        container_user = f"{os.getuid()}:{os.getgid()}"
     image = "cluster-jam/personalization:" + os.environ.get(
         "PERSONALIZATION_IMAGE_TAG", "0.1.0-local"
     )
@@ -105,7 +111,7 @@ exit 0
                     "--network",
                     "none",
                     "--user",
-                    "0:0",
+                    container_user,
                     "--mount",
                     f"type=bind,source={root},target=/work",
                     "--env",
@@ -130,7 +136,11 @@ exit 0
             if result.returncode != expected:
                 raise RuntimeError(f"Deployment guard failed: {scenario}")
             log = root / "commands.log"
-            lines = log.read_text().splitlines() if log.exists() else []
+            lines = (
+                log.read_text(encoding="utf-8").splitlines()
+                if log.exists()
+                else []
+            )
             if scenario == "dirty":
                 if lines:
                     raise RuntimeError("Dirty deployment reached Docker")
