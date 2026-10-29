@@ -20,6 +20,66 @@ from personalization.infrastructure.database.models.print_version import (
 )
 
 
+def read_analysis_sources(
+    session: Session, bucket: str, selections: tuple[AnalysisSelection, ...]
+) -> tuple[ResolvedSource, ...]:
+    own_ids = {item.file_id for item in selections if item.file_id is not None}
+    version_ids = {
+        item.print_version_id
+        for item in selections
+        if item.print_version_id is not None
+    }
+
+    originals = (
+        {
+            row.id: ResolvedSource(map_file(row), 0)
+            for row in session.scalars(
+                select(FileModel).where(FileModel.id.in_(own_ids))
+            )
+        }
+        if own_ids
+        else {}
+    )
+    prints = (
+        {
+            version.id: ResolvedSource(map_file(row), version.surcharge_cents)
+            for version, row in session.execute(
+                select(PrintVersionModel, FileModel)
+                .join(
+                    FileModel,
+                    FileModel.id == PrintVersionModel.file_id,
+                )
+                .where(PrintVersionModel.id.in_(version_ids))
+            )
+        }
+        if version_ids
+        else {}
+    )
+    result: list[ResolvedSource] = []
+    for selection in selections:
+        if selection.print_version_id is not None:
+            source = prints.get(selection.print_version_id)
+        elif selection.file_id is not None:
+            source = originals.get(selection.file_id)
+        else:
+            raise DesignAnalysisError(AnalysisFailure.INVALID_DESIGN_ANALYSIS)
+        if source is None:
+            raise DesignAnalysisError(
+                AnalysisFailure.ANALYSIS_SOURCE_NOT_FOUND
+            )
+        record = source.file
+        if (
+            record.usage != "ORIGINAL"
+            or record.state is not FileState.AVAILABLE
+            or record.bucket != bucket
+        ):
+            raise DesignAnalysisError(
+                AnalysisFailure.ANALYSIS_SOURCE_NOT_READY
+            )
+        result.append(source)
+    return tuple(result)
+
+
 class SqlAlchemyAnalysisSourceRepository:
     def __init__(self, engine: Engine, bucket: str) -> None:
         self._engine = engine
@@ -28,68 +88,9 @@ class SqlAlchemyAnalysisSourceRepository:
     def resolve(
         self, selections: tuple[AnalysisSelection, ...]
     ) -> tuple[ResolvedSource, ...]:
-        own_ids = {
-            item.file_id for item in selections if item.file_id is not None
-        }
-        version_ids = {
-            item.print_version_id
-            for item in selections
-            if item.print_version_id is not None
-        }
         try:
             with Session(self._engine) as session:
-                originals = (
-                    {
-                        row.id: ResolvedSource(map_file(row), 0)
-                        for row in session.scalars(
-                            select(FileModel).where(FileModel.id.in_(own_ids))
-                        )
-                    }
-                    if own_ids
-                    else {}
-                )
-                prints = (
-                    {
-                        version.id: ResolvedSource(
-                            map_file(row), version.surcharge_cents
-                        )
-                        for version, row in session.execute(
-                            select(PrintVersionModel, FileModel)
-                            .join(
-                                FileModel,
-                                FileModel.id == PrintVersionModel.file_id,
-                            )
-                            .where(PrintVersionModel.id.in_(version_ids))
-                        )
-                    }
-                    if version_ids
-                    else {}
-                )
-                result: list[ResolvedSource] = []
-                for selection in selections:
-                    if selection.print_version_id is not None:
-                        source = prints.get(selection.print_version_id)
-                    elif selection.file_id is not None:
-                        source = originals.get(selection.file_id)
-                    else:
-                        raise DesignAnalysisError(
-                            AnalysisFailure.INVALID_DESIGN_ANALYSIS
-                        )
-                    if source is None:
-                        raise DesignAnalysisError(
-                            AnalysisFailure.ANALYSIS_SOURCE_NOT_FOUND
-                        )
-                    record = source.file
-                    if (
-                        record.usage != "ORIGINAL"
-                        or record.state is not FileState.AVAILABLE
-                        or record.bucket != self._bucket
-                    ):
-                        raise DesignAnalysisError(
-                            AnalysisFailure.ANALYSIS_SOURCE_NOT_READY
-                        )
-                    result.append(source)
-                return tuple(result)
+                return read_analysis_sources(session, self._bucket, selections)
         except SQLAlchemyError, ValueError:
             raise DesignAnalysisError(
                 AnalysisFailure.ANALYSIS_DATABASE_UNAVAILABLE

@@ -1,0 +1,1048 @@
+{
+  "info": {
+    "name": "Cluster JAM - Administrative Design Drafts",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "31 solicitudes en orden. Guardan dos borradores administrativos propios y una plantilla QA inactiva. Reutilizan printId y originales existentes; sin adjuntos. Catalog y checkout siguen pendientes. Configurar baseUrl, adminAccessToken y accessToken; los demás datos se capturan automáticamente."
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{adminAccessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "01 - Leer versión e imagen de referencia",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/admin/prints/{{printId}}",
+        "header": []
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) {",
+              "  const version = pm.response.json().latestVersion;",
+              "  pm.environment.set(\"draftPrintVersionId\", version.id);",
+              "  pm.environment.set(\"draftFileId\", version.fileId);",
+              "  pm.environment.set(\"draftPrintSurchargeCents\", version.surchargeCents);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - Crear plantilla QA inactiva",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/admin/template-versions",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"productId\": \"{{$guid}}\",\n  \"sizeId\": 1,\n  \"expectedVersion\": 0,\n  \"front\": {\n    \"widthMm\": \"400\",\n    \"heightMm\": \"600\"\n  },\n  \"back\": {\n    \"widthMm\": \"400\",\n    \"heightMm\": \"600\"\n  },\n  \"zones\": [\n    {\n      \"code\": \"chest\",\n      \"side\": \"FRONT\",\n      \"xMm\": \"50\",\n      \"yMm\": \"50\",\n      \"widthMm\": \"200\",\n      \"heightMm\": \"300\",\n      \"sizes\": [\n        {\n          \"label\": \"SMALL\",\n          \"widthMm\": \"100\",\n          \"heightMm\": \"150\",\n          \"surchargeCents\": 1250\n        }\n      ]\n    },\n    {\n      \"code\": \"upper-back\",\n      \"side\": \"BACK\",\n      \"xMm\": \"50\",\n      \"yMm\": \"50\",\n      \"widthMm\": \"200\",\n      \"heightMm\": \"300\",\n      \"sizes\": [\n        {\n          \"label\": \"SMALL\",\n          \"widthMm\": \"100\",\n          \"heightMm\": \"150\",\n          \"surchargeCents\": 1250\n        }\n      ]\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+              "if (pm.response.code === 201) {",
+              "  const value = pm.response.json();",
+              "  const front = value.zones.find(zone => zone.side === \"FRONT\");",
+              "  const back = value.zones.find(zone => zone.side === \"BACK\");",
+              "  pm.environment.set(\"draftTemplateId\", value.id);",
+              "  pm.environment.set(\"draftTemplateSnapshot\", JSON.stringify(value));",
+              "  pm.environment.set(\"draftFrontZoneId\", front.id);",
+              "  pm.environment.set(\"draftFrontSizeId\", front.sizes[0].id);",
+              "  pm.environment.set(\"draftBackZoneId\", back.id);",
+              "  pm.environment.set(\"draftBackSizeId\", back.sizes[0].id);",
+              "  pm.test(\"Borrador\", () => pm.expect(value.active).to.eql(false));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 - Crear borrador con dos caras",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/admin/design-drafts",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"variantId\": \"{{$guid}}\",\n  \"templateId\": \"{{draftTemplateId}}\",\n  \"applications\": [\n    {\n      \"zoneId\": \"{{draftFrontZoneId}}\",\n      \"zoneSizeId\": \"{{draftFrontSizeId}}\",\n      \"printVersionId\": \"{{draftPrintVersionId}}\"\n    },\n    {\n      \"zoneId\": \"{{draftBackZoneId}}\",\n      \"zoneSizeId\": \"{{draftBackSizeId}}\",\n      \"fileId\": \"{{draftFileId}}\"\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+              "if (pm.response.code === 201) {",
+              "const value = pm.response.json();",
+              "pm.environment.set(\"draftId\", value.id);",
+              "pm.environment.set(\"draftVariantId\", value.variantId);",
+              "pm.environment.set(\"draftEtag\", pm.response.headers.get(\"ETag\"));",
+              "pm.environment.set(\"draftOldEtag\", pm.response.headers.get(\"ETag\"));",
+              "pm.environment.set(\"draftSnapshot\", JSON.stringify(value));",
+              "pm.test(\"Borrador administrativo sin validación comercial\", () => {",
+              "  pm.expect(value.state).to.eql(\"BORRADOR\"); pm.expect(value.version).to.eql(1);",
+              "  pm.expect(value.applications.length).to.eql(2);",
+              "  pm.expect(value.catalogCompatibilityVerified).to.eql(false);",
+              "  pm.expect(value.checkoutReady).to.eql(false);",
+              "  pm.expect(value.frontPreviewId).to.eql(null); pm.expect(value.backPreviewId).to.eql(null);",
+              "  pm.expect(pm.response.headers.get(\"Location\")).to.eql(\"/api/v1/admin/design-drafts/\" + value.id);",
+              "});",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 - Consultar diseño guardado",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/admin/design-drafts/{{draftId}}",
+        "header": []
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) {",
+              "pm.test(\"Snapshot y ETag conservados\", () => {",
+              " pm.expect(pm.response.json()).to.eql(JSON.parse(pm.environment.get(\"draftSnapshot\")));",
+              " pm.expect(pm.response.headers.get(\"ETag\")).to.eql(pm.environment.get(\"draftEtag\"));",
+              "});",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 - Editar y retirar aplicación de espalda",
+      "request": {
+        "method": "PUT",
+        "url": "{{baseUrl}}/api/v1/admin/design-drafts/{{draftId}}",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "If-Match",
+            "value": "{{draftEtag}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"variantId\": \"{{draftVariantId}}\",\n  \"templateId\": \"{{draftTemplateId}}\",\n  \"applications\": [\n    {\n      \"zoneId\": \"{{draftFrontZoneId}}\",\n      \"zoneSizeId\": \"{{draftFrontSizeId}}\",\n      \"printVersionId\": \"{{draftPrintVersionId}}\"\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) {",
+              "const value = pm.response.json();",
+              "pm.test(\"Revisión nueva\", () => { pm.expect(value.version).to.eql(2); pm.expect(value.applications.length).to.eql(1); pm.expect(pm.response.headers.get(\"ETag\")).not.to.eql(pm.environment.get(\"draftOldEtag\")); });",
+              "pm.environment.set(\"draftEtag\", pm.response.headers.get(\"ETag\"));",
+              "pm.environment.set(\"draftSnapshot\", JSON.stringify(value));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 - Rechazar edición con ETag anterior",
+      "request": {
+        "method": "PUT",
+        "url": "{{baseUrl}}/api/v1/admin/design-drafts/{{draftId}}",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "If-Match",
+            "value": "{{draftOldEtag}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"variantId\": \"{{draftVariantId}}\",\n  \"templateId\": \"{{draftTemplateId}}\",\n  \"applications\": [\n    {\n      \"zoneId\": \"{{draftFrontZoneId}}\",\n      \"zoneSizeId\": \"{{draftFrontSizeId}}\",\n      \"printVersionId\": \"{{draftPrintVersionId}}\"\n    },\n    {\n      \"zoneId\": \"{{draftBackZoneId}}\",\n      \"zoneSizeId\": \"{{draftBackSizeId}}\",\n      \"fileId\": \"{{draftFileId}}\"\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 412\", () => pm.response.to.have.status(412));",
+              "pm.test(\"ProblemDetails DESIGN_PRECONDITION_FAILED\", () => {",
+              "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "  pm.expect(pm.response.json().code).to.eql(\"DESIGN_PRECONDITION_FAILED\");",
+              "  pm.expect(Object.keys(pm.response.json()).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 - Repetir contenido no cambia revisión",
+      "request": {
+        "method": "PUT",
+        "url": "{{baseUrl}}/api/v1/admin/design-drafts/{{draftId}}",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "If-Match",
+            "value": "{{draftEtag}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"variantId\": \"{{draftVariantId}}\",\n  \"templateId\": \"{{draftTemplateId}}\",\n  \"applications\": [\n    {\n      \"zoneId\": \"{{draftFrontZoneId}}\",\n      \"zoneSizeId\": \"{{draftFrontSizeId}}\",\n      \"printVersionId\": \"{{draftPrintVersionId}}\"\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) {",
+              "pm.test(\"Sin cambios ni otra revisión\", () => { pm.expect(pm.response.json()).to.eql(JSON.parse(pm.environment.get(\"draftSnapshot\"))); pm.expect(pm.response.headers.get(\"ETag\")).to.eql(pm.environment.get(\"draftEtag\")); });",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 - Crear copia independiente",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/admin/design-drafts/{{draftId}}/copies",
+        "header": []
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+              "if (pm.response.code === 201) {",
+              "const value = pm.response.json(); const source = JSON.parse(pm.environment.get(\"draftSnapshot\"));",
+              "pm.test(\"Nuevo ID y aplicaciones independientes\", () => { pm.expect(value.id).not.to.eql(source.id); pm.expect(value.version).to.eql(1); pm.expect(value.state).to.eql(\"BORRADOR\"); pm.expect(value.applications.length).to.eql(1); pm.expect(value.applications[0].id).not.to.eql(source.applications[0].id); pm.expect(value.applications[0].printVersionId).to.eql(source.applications[0].printVersionId); });",
+              "pm.environment.set(\"draftCopyId\", value.id); pm.environment.set(\"draftCopySnapshot\", JSON.stringify(value));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 - Original no cambia al copiar",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/admin/design-drafts/{{draftId}}",
+        "header": []
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) {",
+              "pm.test(\"Original conservado\", () => pm.expect(pm.response.json()).to.eql(JSON.parse(pm.environment.get(\"draftSnapshot\"))));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 - Retirar todas las aplicaciones",
+      "request": {
+        "method": "PUT",
+        "url": "{{baseUrl}}/api/v1/admin/design-drafts/{{draftId}}",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "If-Match",
+            "value": "{{draftEtag}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"variantId\": \"{{draftVariantId}}\",\n  \"templateId\": \"{{draftTemplateId}}\",\n  \"applications\": []\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) {",
+              "const value = pm.response.json();",
+              "pm.test(\"Vacío en versión 3\", () => { pm.expect(value.applications).to.eql([]); pm.expect(value.version).to.eql(3); });",
+              "pm.environment.set(\"draftEtag\", pm.response.headers.get(\"ETag\"));",
+              "pm.environment.set(\"draftSnapshot\", JSON.stringify(value));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11 - Consultar original sin aplicaciones",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/admin/design-drafts/{{draftId}}",
+        "header": []
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) {",
+              "pm.test(\"Vacío persistido\", () => pm.expect(pm.response.json()).to.eql(JSON.parse(pm.environment.get(\"draftSnapshot\"))));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "12 - Copia conserva su aplicación",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/admin/design-drafts/{{draftCopyId}}",
+        "header": []
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) {",
+              "pm.test(\"Copia intacta tras editar original\", () => pm.expect(pm.response.json()).to.eql(JSON.parse(pm.environment.get(\"draftCopySnapshot\"))));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "13 - Listar borradores propios y obtener cursor",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/admin/design-drafts?limit=1",
+        "header": []
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) {",
+              "const value = pm.response.json();",
+              "pm.test(\"Paginación de al menos dos borradores\", () => { pm.expect(value.items.length).to.eql(1); pm.expect(value.nextCursor).to.be.a(\"string\"); pm.expect(value.items[0].ownerId).to.eql(JSON.parse(pm.environment.get(\"draftSnapshot\")).ownerId); pm.expect(value.items[0]).not.to.have.property(\"applications\"); });",
+              "pm.environment.set(\"draftNextCursor\", value.nextCursor); pm.environment.set(\"draftFirstPageId\", value.items[0].id);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "14 - Consultar siguiente página",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/admin/design-drafts?limit=1&cursor={{draftNextCursor}}",
+        "header": []
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) {",
+              "pm.test(\"Página siguiente sin repetir\", () => { pm.expect(pm.response.json().items.length).to.eql(1); pm.expect(pm.response.json().items[0].id).not.to.eql(pm.environment.get(\"draftFirstPageId\")); });",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "15 - Editar sin If-Match",
+      "request": {
+        "method": "PUT",
+        "url": "{{baseUrl}}/api/v1/admin/design-drafts/{{draftId}}",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"variantId\": \"{{draftVariantId}}\",\n  \"templateId\": \"{{draftTemplateId}}\",\n  \"applications\": []\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 428\", () => pm.response.to.have.status(428));",
+              "pm.test(\"ProblemDetails DESIGN_PRECONDITION_REQUIRED\", () => {",
+              "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "  pm.expect(pm.response.json().code).to.eql(\"DESIGN_PRECONDITION_REQUIRED\");",
+              "  pm.expect(Object.keys(pm.response.json()).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "16 - If-Match sin comillas",
+      "request": {
+        "method": "PUT",
+        "url": "{{baseUrl}}/api/v1/admin/design-drafts/{{draftId}}",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "If-Match",
+            "value": "invalid"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"variantId\": \"{{draftVariantId}}\",\n  \"templateId\": \"{{draftTemplateId}}\",\n  \"applications\": []\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));",
+              "pm.test(\"ProblemDetails INVALID_DESIGN_PRECONDITION\", () => {",
+              "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "  pm.expect(pm.response.json().code).to.eql(\"INVALID_DESIGN_PRECONDITION\");",
+              "  pm.expect(Object.keys(pm.response.json()).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "17 - If-Match débil no sirve para editar",
+      "request": {
+        "method": "PUT",
+        "url": "{{baseUrl}}/api/v1/admin/design-drafts/{{draftId}}",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "If-Match",
+            "value": "W/{{draftEtag}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"variantId\": \"{{draftVariantId}}\",\n  \"templateId\": \"{{draftTemplateId}}\",\n  \"applications\": []\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 412\", () => pm.response.to.have.status(412));",
+              "pm.test(\"ProblemDetails DESIGN_PRECONDITION_FAILED\", () => {",
+              "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "  pm.expect(pm.response.json().code).to.eql(\"DESIGN_PRECONDITION_FAILED\");",
+              "  pm.expect(Object.keys(pm.response.json()).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "18 - No permitir propietario en cuerpo",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/admin/design-drafts",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"variantId\": \"{{draftVariantId}}\",\n  \"templateId\": \"{{draftTemplateId}}\",\n  \"applications\": [],\n  \"ownerId\": \"{{$guid}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 422\", () => pm.response.to.have.status(422));",
+              "pm.test(\"ProblemDetails VALIDATION_ERROR\", () => {",
+              "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "  pm.expect(pm.response.json().code).to.eql(\"VALIDATION_ERROR\");",
+              "  pm.expect(Object.keys(pm.response.json()).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "19 - No permitir congelar desde el cuerpo",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/admin/design-drafts",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"variantId\": \"{{draftVariantId}}\",\n  \"templateId\": \"{{draftTemplateId}}\",\n  \"applications\": [],\n  \"state\": \"CONGELADO\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 422\", () => pm.response.to.have.status(422));",
+              "pm.test(\"ProblemDetails VALIDATION_ERROR\", () => {",
+              "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "  pm.expect(pm.response.json().code).to.eql(\"VALIDATION_ERROR\");",
+              "  pm.expect(Object.keys(pm.response.json()).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "20 - Tamaño de otra zona",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/admin/design-drafts",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"variantId\": \"{{draftVariantId}}\",\n  \"templateId\": \"{{draftTemplateId}}\",\n  \"applications\": [\n    {\n      \"zoneId\": \"{{draftFrontZoneId}}\",\n      \"zoneSizeId\": \"{{draftBackSizeId}}\",\n      \"printVersionId\": \"{{draftPrintVersionId}}\"\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 422\", () => pm.response.to.have.status(422));",
+              "pm.test(\"ProblemDetails SIZE_NOT_IN_ZONE\", () => {",
+              "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "  pm.expect(pm.response.json().code).to.eql(\"SIZE_NOT_IN_ZONE\");",
+              "  pm.expect(Object.keys(pm.response.json()).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "21 - No duplicar aplicaciones en una zona",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/admin/design-drafts",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"variantId\": \"{{draftVariantId}}\",\n  \"templateId\": \"{{draftTemplateId}}\",\n  \"applications\": [\n    {\n      \"zoneId\": \"{{draftFrontZoneId}}\",\n      \"zoneSizeId\": \"{{draftFrontSizeId}}\",\n      \"printVersionId\": \"{{draftPrintVersionId}}\"\n    },\n    {\n      \"zoneId\": \"{{draftFrontZoneId}}\",\n      \"zoneSizeId\": \"{{draftFrontSizeId}}\",\n      \"printVersionId\": \"{{draftPrintVersionId}}\"\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 422\", () => pm.response.to.have.status(422));",
+              "pm.test(\"ProblemDetails DUPLICATE_ZONE_APPLICATION\", () => {",
+              "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "  pm.expect(pm.response.json().code).to.eql(\"DUPLICATE_ZONE_APPLICATION\");",
+              "  pm.expect(Object.keys(pm.response.json()).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "22 - No admitir dos fuentes",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/admin/design-drafts",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"variantId\": \"{{draftVariantId}}\",\n  \"templateId\": \"{{draftTemplateId}}\",\n  \"applications\": [\n    {\n      \"zoneId\": \"{{draftFrontZoneId}}\",\n      \"zoneSizeId\": \"{{draftFrontSizeId}}\",\n      \"printVersionId\": \"{{draftPrintVersionId}}\",\n      \"fileId\": \"{{draftFileId}}\"\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 422\", () => pm.response.to.have.status(422));",
+              "pm.test(\"ProblemDetails VALIDATION_ERROR\", () => {",
+              "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "  pm.expect(pm.response.json().code).to.eql(\"VALIDATION_ERROR\");",
+              "  pm.expect(Object.keys(pm.response.json()).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "23 - No admitir aplicación sin fuente",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/admin/design-drafts",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"variantId\": \"{{draftVariantId}}\",\n  \"templateId\": \"{{draftTemplateId}}\",\n  \"applications\": [\n    {\n      \"zoneId\": \"{{draftFrontZoneId}}\",\n      \"zoneSizeId\": \"{{draftFrontSizeId}}\"\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 422\", () => pm.response.to.have.status(422));",
+              "pm.test(\"ProblemDetails VALIDATION_ERROR\", () => {",
+              "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "  pm.expect(pm.response.json().code).to.eql(\"VALIDATION_ERROR\");",
+              "  pm.expect(Object.keys(pm.response.json()).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "24 - Fuente inexistente",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/admin/design-drafts",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"variantId\": \"{{draftVariantId}}\",\n  \"templateId\": \"{{draftTemplateId}}\",\n  \"applications\": [\n    {\n      \"zoneId\": \"{{draftFrontZoneId}}\",\n      \"zoneSizeId\": \"{{draftFrontSizeId}}\",\n      \"printVersionId\": \"{{$guid}}\"\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 404\", () => pm.response.to.have.status(404));",
+              "pm.test(\"ProblemDetails ANALYSIS_SOURCE_NOT_FOUND\", () => {",
+              "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "  pm.expect(pm.response.json().code).to.eql(\"ANALYSIS_SOURCE_NOT_FOUND\");",
+              "  pm.expect(Object.keys(pm.response.json()).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "25 - Diseño inexistente",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/admin/design-drafts/{{$guid}}",
+        "header": []
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 404\", () => pm.response.to.have.status(404));",
+              "pm.test(\"ProblemDetails DESIGN_NOT_FOUND\", () => {",
+              "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "  pm.expect(pm.response.json().code).to.eql(\"DESIGN_NOT_FOUND\");",
+              "  pm.expect(Object.keys(pm.response.json()).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "26 - Cursor inválido",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/admin/design-drafts?cursor=invalid",
+        "header": []
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));",
+              "pm.test(\"ProblemDetails INVALID_CURSOR\", () => {",
+              "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "  pm.expect(pm.response.json().code).to.eql(\"INVALID_CURSOR\");",
+              "  pm.expect(Object.keys(pm.response.json()).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "27 - Cliente sin permiso administrativo",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/admin/design-drafts",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 403\", () => pm.response.to.have.status(403));",
+              "pm.test(\"ProblemDetails FORBIDDEN\", () => {",
+              "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "  pm.expect(pm.response.json().code).to.eql(\"FORBIDDEN\");",
+              "  pm.expect(Object.keys(pm.response.json()).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "28 - Sin JWT",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/admin/design-drafts",
+        "header": [],
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 401\", () => pm.response.to.have.status(401));",
+              "pm.test(\"ProblemDetails INVALID_ACCESS_TOKEN\", () => {",
+              "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "  pm.expect(pm.response.json().code).to.eql(\"INVALID_ACCESS_TOKEN\");",
+              "  pm.expect(Object.keys(pm.response.json()).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "29 - No asignar previews desde cuerpo",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/admin/design-drafts",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"variantId\": \"{{draftVariantId}}\",\n  \"templateId\": \"{{draftTemplateId}}\",\n  \"applications\": [],\n  \"frontPreviewId\": \"{{draftFileId}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 422\", () => pm.response.to.have.status(422));",
+              "pm.test(\"ProblemDetails VALIDATION_ERROR\", () => {",
+              "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "  pm.expect(pm.response.json().code).to.eql(\"VALIDATION_ERROR\");",
+              "  pm.expect(Object.keys(pm.response.json()).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "30 - No exponer eliminación de diseño",
+      "request": {
+        "method": "DELETE",
+        "url": "{{baseUrl}}/api/v1/admin/design-drafts/{{draftId}}",
+        "header": []
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 405\", () => pm.response.to.have.status(405));",
+              "pm.test(\"ProblemDetails METHOD_NOT_ALLOWED\", () => {",
+              "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "  pm.expect(pm.response.json().code).to.eql(\"METHOD_NOT_ALLOWED\");",
+              "  pm.expect(Object.keys(pm.response.json()).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "31 - Borrador sigue intacto tras errores",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/admin/design-drafts/{{draftId}}",
+        "header": []
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) {",
+              "pm.test(\"Sin escrituras por peticiones rechazadas\", () => { pm.expect(pm.response.json()).to.eql(JSON.parse(pm.environment.get(\"draftSnapshot\"))); pm.expect(pm.response.headers.get(\"ETag\")).to.eql(pm.environment.get(\"draftEtag\")); pm.expect(pm.response.headers.get(\"Cache-Control\")).to.eql(\"no-store\"); });",
+              "}"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

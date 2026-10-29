@@ -15,6 +15,7 @@ from personalization.application.catalog.catalog_service import CatalogService
 from personalization.application.designs.design_analysis_service import (
     DesignAnalysisService,
 )
+from personalization.application.designs.draft_service import DraftService
 from personalization.application.files.file_service import FileService
 from personalization.application.health.readiness_service import (
     ReadinessService,
@@ -25,6 +26,9 @@ from personalization.application.images.validate_image_service import (
 from personalization.application.ports.design_analysis_ports import (
     AnalysisSourcePort,
     ImageGeometryPort,
+)
+from personalization.application.ports.design_repository_port import (
+    DesignRepositoryPort,
 )
 from personalization.application.ports.file_repository_port import (
     FileRepositoryPort,
@@ -55,6 +59,9 @@ from personalization.application.thumbnails.thumbnail_service import (
 from personalization.infrastructure.config.settings import Settings
 from personalization.infrastructure.database.analysis_repository import (
     SqlAlchemyAnalysisSourceRepository,
+)
+from personalization.infrastructure.database.design_repository import (
+    SqlAlchemyDesignRepository,
 )
 from personalization.infrastructure.database.engine import (
     create_database_engine,
@@ -117,6 +124,7 @@ def create_app(
     template_repository: TemplateRepositoryPort | None = None,
     analysis_sources: AnalysisSourcePort | None = None,
     image_geometry: ImageGeometryPort | None = None,
+    design_repository: DesignRepositoryPort | None = None,
 ) -> FastAPI:
     """Start independently and release resources on shutdown."""
     configuration = settings if settings is not None else Settings()
@@ -132,6 +140,7 @@ def create_app(
         or catalog_repository is None
         or template_repository is None
         or analysis_sources is None
+        or design_repository is None
     ):
         engine = create_database_engine(configuration)
         if readiness_port is None:
@@ -154,6 +163,10 @@ def create_app(
             template_repository = SqlAlchemyTemplateRepository(engine)
         if analysis_sources is None:
             analysis_sources = SqlAlchemyAnalysisSourceRepository(
+                engine, configuration.storage_bucket
+            )
+        if design_repository is None:
+            design_repository = SqlAlchemyDesignRepository(
                 engine, configuration.storage_bucket
             )
     outbound: SupabaseStorage | None = None
@@ -212,6 +225,9 @@ def create_app(
             catalog_repository, storage, configuration.download_url_ttl_seconds
         )
         app.state.template_service = TemplateService(template_repository)
+        app.state.draft_service = DraftService(
+            design_repository, template_repository
+        )
         app.state.design_analysis_service = DesignAnalysisService(
             template_repository,
             analysis_sources,
