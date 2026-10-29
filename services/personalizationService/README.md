@@ -394,3 +394,13 @@ copiar borradores propios con JWT administrador. Guarda `diseno` y
 Las referencias de Catalog siguen sin verificar y checkoutReady permanece
 false. No activa plantillas ni habilita diseños comerciales de clientes.
 Consultar [contrato y pruebas en Postman](docs/design-drafts.md).
+
+
+## Previews privadas de diseños
+
+El worker images procesa miniaturas y previews de ambas caras, fuera de
+HTTP. Las previews esquemáticas usan la geometría física de plantilla y
+fuentes originales, con recuperación de cargas y asociación a la revisión
+vigente. Se consultan y descargan mediante enlaces privados temporales.
+Catalog y checkout siguen pendientes; no se representa una prenda real.
+Consultar [operación y Postman](docs/design-previews.md).

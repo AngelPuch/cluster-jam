@@ -11,7 +11,7 @@ from personalization.interfaces.http.catalog.routes import (
 from personalization.interfaces.http.design_analyses.routes import (
     router as analyses_router,
 )
-from personalization.interfaces.http.design_drafts.routes import (
+from personalization.interfaces.http.design_drafts.previews import (
     router as drafts_router,
 )
 from personalization.interfaces.http.errors.problem_handlers import (
