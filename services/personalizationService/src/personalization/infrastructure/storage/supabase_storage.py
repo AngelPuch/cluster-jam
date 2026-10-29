@@ -1,6 +1,7 @@
 """Create immutable private objects with bounded HTTP operations."""
 
 import json
+from collections.abc import Callable
 from hashlib import sha256
 from urllib.parse import parse_qs, urlsplit
 
@@ -25,9 +26,11 @@ class SupabaseStorage:
         key: SecretStr,
         *,
         transport: httpx.BaseTransport | None = None,
+        on_progress: Callable[[], None] | None = None,
     ) -> None:
         self._base_url = project_url.rstrip("/") + "/storage/v1"
         self._bucket = bucket
+        self._on_progress = on_progress
         self._client = httpx.Client(
             base_url=self._base_url + "/",
             headers={"apikey": key.get_secret_value()},
@@ -40,6 +43,10 @@ class SupabaseStorage:
             transport=transport,
         )
 
+    def _progress(self) -> None:
+        if self._on_progress is not None:
+            self._on_progress()
+
     def close(self) -> None:
         """Release outbound connections during service shutdown."""
         self._client.close()
@@ -51,12 +58,14 @@ class SupabaseStorage:
         *,
         body: dict[str, object] | None = None,
     ) -> dict[str, object]:
+        self._progress()
         try:
             response = self._client.request(method, path, json=body)
             response.raise_for_status()
             result: object = response.json()
         except httpx.HTTPError, ValueError:
             raise FileError(FileFailure.STORAGE_UNAVAILABLE) from None
+        self._progress()
         if not isinstance(result, dict):
             raise FileError(FileFailure.STORAGE_UNAVAILABLE)
         return result
@@ -125,6 +134,7 @@ class SupabaseStorage:
             or sha256(content).hexdigest() != record.sha256
         ):
             raise FileError(FileFailure.FILE_INTEGRITY_MISMATCH)
+        self._progress()
         try:
             response = self._client.post(
                 "object/" + path,
@@ -139,6 +149,7 @@ class SupabaseStorage:
             result: object = response.json()
         except httpx.HTTPError, ValueError:
             raise FileError(FileFailure.STORAGE_UNAVAILABLE) from None
+        self._progress()
         if not isinstance(result, dict) or result.get("Key") != path:
             raise FileError(FileFailure.STORAGE_UNAVAILABLE)
 
@@ -178,10 +189,12 @@ class SupabaseStorage:
         path = "object/authenticated/" + self._object_path(record)
         digest = sha256()
         count = 0
+        self._progress()
         try:
             with self._client.stream("GET", path) as response:
                 response.raise_for_status()
                 for chunk in response.iter_bytes(chunk_size=65_536):
+                    self._progress()
                     count += len(chunk)
                     if count > record.size_bytes or count > MAX_UPLOAD_BYTES:
                         raise FileError(FileFailure.FILE_INTEGRITY_MISMATCH)
@@ -197,6 +210,7 @@ class SupabaseStorage:
         """Verify bounded bytes and explicit missing-key errors."""
         path = "object/authenticated/" + self._object_path(record)
         content = bytearray()
+        self._progress()
         try:
             with self._client.stream("GET", path) as response:
                 if allow_missing and response.status_code in (400, 404):
@@ -217,6 +231,7 @@ class SupabaseStorage:
                         return None
                 response.raise_for_status()
                 for chunk in response.iter_bytes(chunk_size=65_536):
+                    self._progress()
                     content.extend(chunk)
                     if (
                         len(content) > record.size_bytes

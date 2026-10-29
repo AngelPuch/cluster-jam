@@ -2,6 +2,7 @@
 
 import json
 import sys
+from collections.abc import Callable
 
 import pytest
 from pydantic import SecretStr
@@ -45,7 +46,11 @@ def test_once_runs_both_queues_even_if_thumbnail_batch_fails(
             return ready
 
     def storage(
-        project_url: str, bucket: str, key: SecretStr
+        project_url: str,
+        bucket: str,
+        key: SecretStr,
+        *,
+        on_progress: Callable[[], None] | None = None,
     ) -> SupabaseStorage:
         return server.adapter()
 

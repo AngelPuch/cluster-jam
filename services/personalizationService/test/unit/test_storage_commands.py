@@ -29,6 +29,7 @@ def settings(tmp_path: Path) -> Settings:
             "SUPABASE_ISSUER": "https://supabase.example.test/auth/v1",
             "SUPABASE_JWKS_URL": "https://supabase.example.test/auth/v1/.well-known/jwks.json",
             "STORAGE_ENABLED": True,
+            "WORKER_HEARTBEAT_FILE": tmp_path / "worker-health.json",
             "SUPABASE_STORAGE_KEY_FILE": secret,
         }
     )

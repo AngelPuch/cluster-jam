@@ -119,8 +119,7 @@ docker compose -f infra/personalization/compose.yaml down
 
 Este comando conserva el volumen. No añadir `--volumes` al proyecto de
 desarrollo si contiene datos que deban conservarse. La recreación de un
-contenedor conserva el volumen, pero no reemplaza un respaldo. El ejercicio
-de respaldo y restauración forma parte del incremento de operación.
+contenedor conserva el volumen, pero no reemplaza un respaldo. Las herramientas de respaldo y restauración se describen en Operación y recuperación.
 
 
 ## Docker Desktop no inicia en Windows
@@ -479,3 +478,164 @@ en la red compartida con el alias clusterjam-auth.
 Si se renuevan los certificados de staging con prepare.py --renew-certificates,
 ejecutar primero deploy.sh all y despues deploy.sh personalization. El segundo
 recrea RPC para cargar su certificado nuevo; all conserva su alcance Auth/shared.
+
+
+## Operación y recuperación
+
+Ejecutar desde la raíz del repositorio con Python 3.12 o posterior y Docker.
+En Windows usar `py -3.14`; en Ubuntu usar `python3`. Estas herramientas usan
+la biblioteca estándar del host. El microservicio conserva Python 3.14.
+
+### Diagnóstico
+
+```powershell
+py -3.14 infra/personalization/operations.py status --require-worker --require-rpc --require-https
+```
+
+Comprueba liveness/readiness REST, revisión Alembic, bucket privado, avance del
+worker, TLS gRPC y readiness a través de HTTPS. Devuelve un evento JSON con
+`OPERATIONS_HEALTHY` y salida 0, o `OPERATIONS_UNHEALTHY` y salida 1. Muestra
+cargas pendientes como conteo; no considera un pendiente un error por sí solo.
+Los componentes opcionales apagados se informan como `not_running_optional`;
+las opciones `--require-*` hacen que su ausencia sea un fallo.
+
+En Ubuntu desplegado:
+
+```bash
+python3 infra/personalization/operations.py --deployment status --require-worker --require-rpc --require-https
+```
+
+El diagnóstico no inicia, detiene ni reinicia servicios. El worker escribe un
+heartbeat privado y atómico en su tmpfs; lo actualiza por lote, por trabajo y
+durante transferencias de Storage. Docker comprueba su edad sin consultar BD ni
+Storage. Así una dependencia caída no provoca una falsa muerte del proceso.
+`WORKER_HEARTBEAT_MAX_AGE_SECONDS` tiene valor inicial 180, configurable entre
+30 y 3600; el límite efectivo permite al menos tres intervalos de polling.
+La supervisión de progreso no sustituye la revisión de fallos de negocio en
+los logs JSON. Los logs de despliegue conservan rotación de 10 MB × 3 archivos.
+
+### Crear un respaldo completo
+
+La BD debe estar iniciada y migrada. Storage debe estar configurado con su clave
+de servidor y bucket privado existentes. La API y el worker pueden seguir
+atendiendo; el respaldo SQL usa el snapshot consistente de pg_dump.
+
+```powershell
+py -3.14 infra/personalization/operations.py backup --output "C:/Users/zenbook i5/Sistemas_en_red/Proyecto/personalization-backups"
+```
+
+El destino es obligatorio, externo al repositorio y distinto del volumen de BD.
+En Ubuntu, usar una ruta privada persistente elegida por el operador y añadir
+`--deployment` antes de `backup` para usar deployment.env/release.env.
+
+Cada ejecución crea `personalization-<backup_id>` con:
+
+- `database.dump`: las nueve tablas y la revisión Alembic, en formato custom.
+- `objects/`: bytes de todos los archivos DISPONIBLE, incluidos originales,
+  miniaturas y previews históricos, con nombres UUID.
+- `manifest.json`: revisión, imagen PostgreSQL fijada, conteos e integridad SHA-256.
+
+Antes de copiar imágenes, la herramienta restaura el dump en un PostgreSQL
+temporal y obtiene de esa copia el inventario exacto. Así no mezcla metadata
+posterior con un dump anterior. Los objetos son inmutables y se validan por
+tamaño y SHA-256. Una imagen ausente o alterada impide publicar la copia.
+Las filas PENDIENTE_CARGA quedan en la BD y el manifiesto, pero sus objetos aún
+no publicados no se consideran archivos disponibles para recuperar.
+
+La publicación del directorio es atómica y no reemplaza copias existentes.
+No se incluyen contraseñas, claves, JWT ni certificados privados. En Linux, el
+directorio privado queda en modo 0700; Windows usa los permisos del perfil.
+El respaldo contiene datos privados y no se cifra automáticamente. Se debe
+guardar bajo acceso restringido y trasladar a un destino cifrado externo cuando
+el equipo lo defina. Una copia en el mismo servidor no cubre la pérdida del host.
+No se ha instalado un temporizador ni una regla de borrado o retención: el
+equipo todavía debe definir frecuencia, retención, destino, RPO y RTO.
+
+### Verificar y ensayar restauración
+
+Sustituir la ruta por el directorio concreto del respaldo creado:
+
+```powershell
+py -3.14 infra/personalization/operations.py verify --backup "<backup-directory>"
+py -3.14 infra/personalization/operations.py restore-check --backup "<backup-directory>"
+```
+
+`verify` funciona sin conexión a Docker o Storage y comprueba archivos, hashes,
+rutas UUID y compatibilidad de formato/esquema. SHA-256 detecta corrupción; el
+manifiesto no es una firma de autenticidad. Restaurar solo copias confiables.
+`restore-check` usa un clúster nuevo sin puertos publicados, restaura en una sola
+transacción, compara conteos e inventario y retira sus propios recursos al final.
+Nunca ejecuta restauraciones sobre la BD activa. Los recursos temporales usan
+el prefijo `personalization-recovery-` y contraseñas nuevas, no las originales.
+
+### Preparar un candidato recuperado
+
+```powershell
+py -3.14 infra/personalization/operations.py restore --backup "<backup-directory>" --workspace "<new-external-workspace>"
+```
+
+El workspace debe ser nuevo y externo al repositorio. La herramienta valida la
+restauración y conserva el candidato **detenido**, su volumen, `compose.json`,
+dos secretos nuevos y `recovery.override.yaml`. No modifica la BD activa.
+Ese workspace contiene credenciales de recuperación y debe quedar privado.
+
+Para inspeccionarlo sin reemplazar la instancia activa:
+
+```bash
+docker compose -f /path/to/recovery/compose.json up -d --wait
+docker compose -f /path/to/recovery/compose.json exec -T db-personalizacion psql -U app_personalizacion -d personalizacion_db -c 'SELECT version_num FROM app.alembic_version'
+docker compose -f /path/to/recovery/compose.json stop
+```
+
+Un cambio real de volumen requiere una ventana revisada: detener entradas,
+API, worker, RPC y BD actuales, mantener el candidato detenido y añadir el
+`recovery.override.yaml` al final de los archivos de Compose usados normalmente.
+Ese overlay selecciona el volumen recuperado y sus credenciales nuevas; conserva
+el volumen y los secretos originales para una reversión. Validar configuración,
+revisión Alembic, permisos, TLS, Storage y lecturas antes de reabrir el tráfico.
+No ejecutar dos instancias PostgreSQL sobre el mismo volumen.
+Esta rama prueba la recuperación aislada; no hace un cambio de volumen real.
+
+Si faltan imágenes en el bucket original, con el bucket privado ya preparado:
+
+```powershell
+py -3.14 infra/personalization/operations.py restore-objects --backup "<backup-directory>"
+```
+
+Exige el mismo proyecto de Storage, verifica primero la copia local y usa
+creación sin upsert. Un objeto existente con SHA/tamaño correctos se conserva;
+si difiere, la recuperación se detiene sin sobrescribirlo. La repetición es
+segura y confirma escrituras ambiguas mediante lectura verificada. No restaura
+otros proyectos ni administra usuarios de Auth. Las credenciales de servidor
+se vuelven a preparar fuera del respaldo; no se recuperan desde el dump.
+
+La edad del respaldo puede inspeccionarse sin imponer una política por defecto:
+
+```powershell
+py -3.14 infra/personalization/operations.py status --backup "<backup-directory>"
+# Añadir --max-backup-age-seconds solo con un umbral definido por el equipo.
+```
+
+### Pruebas automatizadas de operación
+
+```powershell
+py -3.14 -m uv run --locked --project services/personalizationService pytest infra/personalization/operation_tools --import-mode=prepend
+py -3.14 infra/personalization/verify_operations.py
+```
+
+La prueba integral utiliza exclusivamente PostgreSQL, claves e imágenes de
+prueba y un servidor HTTPS efímero. Comprueba todas las tablas, auditoría,
+consistencia frente a escrituras concurrentes, bytes de originales/previews,
+pendientes, corrupción, conflictos, rechazos de redirección, recuperación
+idempotente, cierre del worker y liveness durante una caída de su BD temporal.
+La CI repite estas pruebas en Ubuntu y compila las herramientas con Python 3.12.
+No se crean tablas de negocio al arrancar servicios; una restauración explícita
+reconstruye el esquema versionado del dump, con su historial de Alembic.
+
+Referencias: [pg_dump](https://www.postgresql.org/docs/17/app-pgdump.html),
+[pg_restore](https://www.postgresql.org/docs/17/app-pgrestore.html) y
+[alcance de los respaldos de Supabase](https://supabase.com/docs/guides/platform/backups).
+
+Los límites iniciales de las herramientas son 10 000 registros archivo y 10 GB
+por respaldo. No son una política de retención. No se admiten respaldos anidados
+ni workspaces de recuperación dentro de un respaldo ya publicado.

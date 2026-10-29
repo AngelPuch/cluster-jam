@@ -341,6 +341,9 @@ def verify_https() -> None:
         model["configs"]["personalization_https_certificate"]["file"] = str(
             directory / "https.crt"
         )
+        model["configs"]["personalization_https_ca"]["file"] = str(
+            directory / "https.crt"
+        )
         model["services"]["nginx"]["ports"] = [
             {"target": 8443, "published": "0", "host_ip": "127.0.0.1"}
         ]

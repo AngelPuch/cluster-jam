@@ -21,7 +21,7 @@ if [[ "$target" == personalization ]]; then
     unset PERSONALIZATION_IMAGE_TAG PERSONALIZATION_GIT_SHA SUPABASE_ISSUER
     unset SUPABASE_STORAGE_BUCKET DOWNLOAD_URL_TTL_SECONDS MIN_PRINT_DPI
     unset IMAGE_MAX_WIDTH_PX IMAGE_MAX_HEIGHT_PX IMAGE_MAX_PIXELS
-    unset WORKER_BATCH_SIZE WORKER_POLL_SECONDS
+    unset WORKER_BATCH_SIZE WORKER_POLL_SECONDS WORKER_HEARTBEAT_MAX_AGE_SECONDS
     arguments+=(-f infra/personalization/compose.yaml
         -f infra/personalization/compose.storage.yaml
         -f infra/personalization/compose.deploy.yaml)
