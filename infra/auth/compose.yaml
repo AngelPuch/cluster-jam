@@ -1,0 +1,69 @@
+name: cluster-jam-auth
+
+x-logging: &logging
+    driver: json-file
+    options:
+        max-size: "10m"
+        max-file: "3"
+
+services:
+    auth:
+        image: ${AUTH_IMAGE:-cluster-jam/auth:unbuilt}
+        pull_policy: never
+        environment:
+            NODE_ENV: production
+            APP_ENV: staging
+            HTTP_PORT: "8080"
+            LOG_LEVEL: ${LOG_LEVEL:-INFO}
+            SUPABASE_URL: ${SUPABASE_URL:?Set SUPABASE_URL}
+            SUPABASE_JWKS_URL: ${SUPABASE_JWKS_URL:?Set SUPABASE_JWKS_URL}
+            SUPABASE_PUBLISHABLE_KEY_FILE: /run/secrets/auth_supabase_publishable_key
+            OUTBOX_PUBLISHER_ENABLED: "true"
+            OUTBOX_DATABASE_URL_FILE: /run/secrets/auth_outbox_database_url
+            OUTBOX_DATABASE_SSL: "true"
+            OUTBOX_DATABASE_CA_PATH: /run/config/supabase-ca.crt
+            NODE_EXTRA_CA_CERTS: /run/config/cluster-ca.crt
+            RABBITMQ_URL_FILE: /run/secrets/auth_rabbitmq_url
+        secrets:
+            - auth_supabase_publishable_key
+            - auth_outbox_database_url
+            - auth_rabbitmq_url
+        configs:
+            - source: supabase_ca
+              target: /run/config/supabase-ca.crt
+            - source: cluster_ca
+              target: /run/config/cluster-ca.crt
+        networks:
+            backend:
+                aliases: [clusterjam-auth]
+        init: true
+        read_only: true
+        tmpfs:
+            - /tmp:size=16m,mode=1777
+        cap_drop: ["ALL"]
+        security_opt: ["no-new-privileges:true"]
+        restart: unless-stopped
+        stop_grace_period: 30s
+        logging: *logging
+        mem_limit: 512m
+        cpus: 1.0
+        pids_limit: 128
+
+networks:
+    backend:
+        external: true
+        name: cluster-jam-backend
+
+secrets:
+    auth_supabase_publishable_key:
+        file: ./.secrets/auth_supabase_publishable_key
+    auth_outbox_database_url:
+        file: ./.secrets/auth_outbox_database_url
+    auth_rabbitmq_url:
+        file: ./.secrets/auth_rabbitmq_url
+
+configs:
+    supabase_ca:
+        file: ./.certificates/supabase-trust.pem
+    cluster_ca:
+        file: ../shared/.pki/ca.crt

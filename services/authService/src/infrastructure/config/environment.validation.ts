@@ -1,7 +1,7 @@
 import * as Joi from 'joi';
 
 export const environmentValidationSchema = Joi.object({
-  APP_ENV: Joi.string().valid('development', 'test', 'production').required(),
+  APP_ENV: Joi.string().valid('development', 'test', 'staging', 'production').required(),
 
   LOG_LEVEL: Joi.string().valid('DEBUG', 'INFO', 'WARN', 'ERROR').default('INFO'),
 
@@ -27,7 +27,7 @@ export const environmentValidationSchema = Joi.object({
 
   OUTBOX_DATABASE_SSL: Joi.boolean()
     .default(true)
-    .when('APP_ENV', { is: 'production', then: Joi.valid(true) }),
+    .when('APP_ENV', { is: Joi.valid('staging', 'production'), then: Joi.valid(true) }),
 
   OUTBOX_DATABASE_CA_PATH: Joi.string(),
 
@@ -35,7 +35,7 @@ export const environmentValidationSchema = Joi.object({
     .uri({ scheme: ['amqp', 'amqps'] })
     .when('OUTBOX_PUBLISHER_ENABLED', { is: true, then: Joi.required() })
     .when('APP_ENV', {
-      is: 'production',
+      is: Joi.valid('staging', 'production'),
       then: Joi.string().uri({ scheme: ['amqps'] }),
     }),
 });
