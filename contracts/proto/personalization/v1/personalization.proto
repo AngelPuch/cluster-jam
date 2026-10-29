@@ -1,0 +1,53 @@
+syntax = "proto3";
+
+package clusterjam.personalization.v1;
+
+// Administrative inspection only. This contract does not authorize checkout.
+service PersonalizationDrafts {
+  rpc GetDesignDraft(GetDesignDraftRequest) returns (GetDesignDraftResponse);
+}
+
+message GetDesignDraftRequest {
+  string design_id = 1;
+}
+
+message DesignApplication {
+  string id = 1;
+  string zone_id = 2;
+  string zone_size_id = 3;
+  oneof source {
+    string print_version_id = 4;
+    string file_id = 5;
+  }
+}
+
+message DesignDraft {
+  string id = 1;
+  string owner_id = 2;
+  string variant_id = 3;
+  string template_id = 4;
+  string state = 5;
+  int32 version = 6;
+  optional string front_preview_id = 7;
+  optional string back_preview_id = 8;
+  repeated DesignApplication applications = 9;
+}
+
+enum CatalogValidation {
+  CATALOG_VALIDATION_UNSPECIFIED = 0;
+  CATALOG_VALIDATION_PENDING = 1;
+}
+
+enum CheckoutReadiness {
+  CHECKOUT_READINESS_UNSPECIFIED = 0;
+  CHECKOUT_BLOCKED = 1;
+}
+
+message GetDesignDraftResponse {
+  DesignDraft design = 1;
+  // Opaque strong HTTP-compatible validator, including quotes.
+  string etag = 2;
+  CatalogValidation catalog_validation = 3;
+  CheckoutReadiness checkout_readiness = 4;
+  bool diagnostic_only = 5;
+}

@@ -46,6 +46,15 @@ class Settings(BaseSettings):
     grpc_port: int = Field(
         default=50051, gt=0, le=65535, validation_alias="GRPC_PORT"
     )
+    grpc_host: Literal["127.0.0.1", "0.0.0.0"] = Field(
+        default="127.0.0.1", validation_alias="GRPC_HOST"
+    )
+    grpc_tls_certificate_file: Path | None = Field(
+        default=None, validation_alias="GRPC_TLS_CERTIFICATE_FILE"
+    )
+    grpc_tls_key_file: Path | None = Field(
+        default=None, validation_alias="GRPC_TLS_KEY_FILE"
+    )
     log_level: Literal["DEBUG", "INFO", "WARN", "ERROR"] = Field(
         default="INFO", validation_alias="LOG_LEVEL"
     )

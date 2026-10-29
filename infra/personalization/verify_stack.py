@@ -140,6 +140,30 @@ def verify_http(compose: list[str]) -> None:
     print("HTTP, OpenAPI, readiness recovery, and JSON log checks passed")
 
 
+def verify_rpc_configuration(compose: list[str]) -> None:
+    """Keep the RPC backend reachable without exposing its database."""
+    configuration = json.loads(
+        run_command(
+            [*compose, "--profile", "rpc", "config", "--format", "json"],
+            capture=True,
+        )
+    )
+    rpc = configuration["services"]["personalization-grpc"]
+    if set(rpc["networks"]) != {"personalization-db", "backend"}:
+        raise RuntimeError("RPC needs private database and backend networks")
+    if rpc.get("ports"):
+        raise RuntimeError("Base RPC must not publish a host port")
+    sources = {item["source"] for item in rpc["secrets"]}
+    if sources != {
+        "personalization_db_password",
+        "grpc_server_certificate",
+        "grpc_server_key",
+        "grpc_development_ca",
+    }:
+        raise RuntimeError("RPC must mount only its own required secrets")
+    print("RPC networks, unpublished base port, and scoped secrets verified")
+
+
 def verify_stack() -> None:
     """Delete only the temporary Compose project's test resources."""
     directory = Path(__file__).resolve().parent
@@ -153,6 +177,7 @@ def verify_stack() -> None:
         str(directory / "compose.yaml"),
     ]
     run_command([*compose, "config", "--quiet"])
+    verify_rpc_configuration(compose)
     run_command(
         [
             *compose,

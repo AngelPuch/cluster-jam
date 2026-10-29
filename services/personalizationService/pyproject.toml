@@ -10,12 +10,14 @@ readme = "README.md"
 requires-python = ">=3.14,<3.15"
 dependencies = [
     "alembic==1.20.1",
+    "cryptography==50.0.2",
     "fastapi==0.162.0",
     "grpcio==1.84.1",
     "httpx==0.28.1",
     "opentelemetry-api==1.45.1",
     "opentelemetry-sdk==1.45.1",
     "pillow==13.0.0",
+    "protobuf==7.36.2",
     "psycopg[binary]==3.3.6",
     "pydantic==2.14.1",
     "pydantic-settings==2.16.1",
@@ -33,6 +35,8 @@ dev = [
     "pytest==9.1.1",
     "pytest-cov==7.1.0",
     "ruff==0.17.2",
+    "types-grpcio==1.83.0.20260730",
+    "types-protobuf==7.35.1.20260906",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -42,6 +46,7 @@ packages = ["src/personalization"]
 required-version = "==0.13.5"
 
 [tool.ruff]
+extend-exclude = ["src/personalization/interfaces/grpc/generated"]
 required-version = "==0.17.2"
 target-version = "py314"
 line-length = 79
@@ -59,6 +64,7 @@ indent-style = "space"
 line-ending = "lf"
 
 [tool.mypy]
+exclude = ["src/personalization/interfaces/grpc/generated/.*_pb2_grpc.py$"]
 python_version = "3.14"
 strict = true
 files = ["src", "test"]
@@ -80,9 +86,18 @@ markers = [
 ]
 
 [tool.coverage.run]
+omit = ["*/interfaces/grpc/generated/*"]
 branch = true
 source = ["personalization"]
 
 [tool.coverage.report]
 show_missing = true
 skip_empty = true
+
+[[tool.mypy.overrides]]
+module = "personalization.interfaces.grpc.generated.personalization_pb2_grpc"
+follow_imports = "skip"
+
+[[tool.mypy.overrides]]
+module = "personalization.interfaces.grpc.generated.personalization_pb2"
+ignore_errors = true

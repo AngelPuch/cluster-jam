@@ -1,0 +1,68 @@
+{
+  "info": {
+    "name": "Cluster JAM - gRPC Preparation",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Dos lecturas HTTP para preparar un diseño propio de los incrementos anteriores. Ambas deben dar 200 y Tests aprobados. Guarda rpcDesignId/rpcRestEtag/rpcRestSnapshot. Después crear una solicitud gRPC con el proto versionado, TLS verificado y deadline de 8000 ms; ver los README de services/personalizationService e infra/personalization. No es una colección gRPC exportada."
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{adminAccessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "01 - Elegir un borrador propio",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/admin/design-drafts?limit=1",
+        "header": []
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) {",
+              " const value = pm.response.json();",
+              " pm.test(\"Existe un borrador administrativo propio\", () => pm.expect(value.items.length).to.eql(1));",
+              " if (value.items.length) { pm.environment.set(\"rpcDesignId\", value.items[0].id); }",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - Leer snapshot y ETag de referencia",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/admin/design-drafts/{{rpcDesignId}}",
+        "header": []
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) {",
+              " const value = pm.response.json();",
+              " pm.test(\"Diseño de referencia sin checkout\", () => { pm.expect(value.id).to.eql(pm.environment.get(\"rpcDesignId\")); pm.expect(value.checkoutReady).to.eql(false); });",
+              " pm.environment.set(\"rpcRestEtag\", pm.response.headers.get(\"ETag\"));",
+              " pm.environment.set(\"rpcRestSnapshot\", JSON.stringify(value));",
+              "}"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

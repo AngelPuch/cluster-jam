@@ -1,8 +1,8 @@
 # Personalization Service
 
-Backend de Cluster JAM con base HTTP FastAPI, configuración validada,
-PostgreSQL aislado y observabilidad JSON. Los recursos de personalización
-se incorporarán de forma incremental bajo `/api/v1`.
+Backend de Cluster JAM con REST FastAPI, gRPC con TLS, PostgreSQL aislado
+y observabilidad JSON. Administra archivos privados, estampados, plantillas,
+borradores y previews mediante contratos versionados.
 
 ## Ejecutar en Docker para desarrollo
 
@@ -21,9 +21,10 @@ docker compose -f infra/personalization/compose.yaml -f infra/personalization/co
 ```
 
 El archivo base mantiene PostgreSQL y la API sin puertos publicados. El
-archivo de desarrollo publica únicamente REST en `127.0.0.1:8082`, conectado
-al puerto 8080 del contenedor. Para cambiar el puerto local, definir
-`PERSONALIZATION_HTTP_PORT` antes de ejecutar Compose.
+archivo de desarrollo publica REST en `127.0.0.1:8082`, conectado al puerto
+8080 del contenedor. El perfil rpc publica TLS en `127.0.0.1:50051`.
+`PERSONALIZATION_HTTP_PORT` y `PERSONALIZATION_GRPC_PORT` permiten cambiar
+los puertos locales antes de ejecutar Compose.
 
 | Operación | URL local | Resultado |
 | --- | --- | --- |
@@ -38,9 +39,9 @@ límites de conexión y consulta. Si PostgreSQL cae, la API sigue viva y readine
 Recuperar la base permite volver a responder 200 sin reiniciar la API.
 
 La validación JWT y las políticas de acceso están implementadas y probadas.
-Los endpoints técnicos actuales son públicos; las operaciones de negocio
-se agregarán con sus políticas explícitas. El puerto 50051 queda reservado
-para el servidor gRPC de un incremento posterior.
+Los endpoints técnicos son públicos; las operaciones de negocio requieren
+sus políticas explícitas de JWT, rol y propiedad. El perfil rpc habilita
+la consulta administrativa protegida de borradores en 50051 con TLS.
 HTTPS y el proxy de despliegue se incorporarán en la fase de operación.
 
 ## Dependencias y configuración local
@@ -243,8 +244,8 @@ contratos HTTP/OpenAPI y privacidad de logs. No necesitan usuarios ni
 conectividad con Supabase. El verificador del stack Docker usa URLs de
 prueba para comprobar el arranque sin depender del proveedor externo.
 
-El contrato OpenAPI se regenera sin red y solo publica las rutas técnicas
-existentes. Las rutas protegidas de prueba viven exclusivamente en `test/`.
+El contrato OpenAPI se regenera sin red y describe las rutas técnicas y
+de negocio implementadas. Las rutas de prueba viven solo en `test/`.
 La persistencia se instala mediante Alembic antes de iniciar réplicas;
 no se crean tablas al arrancar la API.
 
@@ -261,9 +262,8 @@ explícitamente. Readiness comprueba que esté instalada. La suite Docker
 también verifica migración, reversión y restricciones contra PostgreSQL
 real en un proyecto desechable; nunca resetea la base de desarrollo.
 
-Consultar [decisiones, comandos y reversión](docs/database.md). La validación
-de originales ya está preparada; su almacenamiento, administración y
-diseños se incorporarán en siguientes incrementos.
+Los comandos de migración y verificación están en el
+[README de infraestructura](../../infra/personalization/README.md).
 
 
 ## Validación de imágenes
@@ -282,8 +282,6 @@ La subida persistente ya usa este validador en `POST /api/v1/files`.
 Requiere preparar el bucket privado y montar su clave de servidor.
 La configuración base mantiene Storage desactivado hasta ese momento.
 
-Consultar [reglas, errores y pruebas de imágenes](docs/image-validation.md).
-
 
 ## Archivos privados y Supabase Storage
 
@@ -299,7 +297,6 @@ El overlay `infra/personalization/compose.storage.yaml` monta esa clave y
 habilita Storage. La configuración base conserva la API operativa sin
 credenciales, con errores 503 para cargas que necesiten almacenamiento.
 
-Consultar [preparación, recuperación y Postman](docs/private-files.md).
 El entorno y colección de Postman están en `contracts/postman/personalization`.
 Los valores reales de JWT y enlaces temporales se mantienen fuera de Git.
 
@@ -316,7 +313,6 @@ Se usan las tablas existentes de la migración `0001_personalization`.
 No se requiere migración adicional. Las miniaturas y el catálogo para
 clientes se describen en sus secciones correspondientes más adelante.
 
-Consultar [contratos, decisiones y pruebas](docs/print-versioning.md).
 La colección de Postman es `prints.postman_collection.json`; usa
 `adminAccessToken` y no requiere adjuntar archivos en sus peticiones.
 
@@ -330,7 +326,6 @@ el cambio se confirma con su auditoría. Retirar o reactivar conserva todas
 las versiones y archivos; los cambios de imagen/precio siguen creando
 una versión nueva por su endpoint específico.
 
-Consultar [contrato y pruebas paso a paso](docs/print-lifecycle.md).
 La colección `print-lifecycle.postman_collection.json` reutiliza el entorno
 local y guarda automáticamente las etiquetas para sus pruebas.
 
@@ -343,8 +338,8 @@ conserva originales, recupera intenciones pendientes y evita sobrescrituras.
 Hay consulta y enlace de descarga administrativos por versión. El catálogo
 para clientes reutiliza estos derivados con permisos de lectura propios.
 
-Consultar [la guía del worker](docs/print-thumbnails.md) para contratos,
-concurrencia, recuperación, Docker, límites y 12 pruebas con Postman.
+La colección de prueba es `print-thumbnails.postman_collection.json`.
+La ejecución del worker está en el README de infraestructura.
 
 
 ## Catálogo de estampados
@@ -355,8 +350,8 @@ y administrador pueden leer; los originales conservan sus permisos. El
 listado es paginado y no llama a Storage por elemento. El enlace temporal
 de miniatura se solicita mediante el recurso indicado en la respuesta.
 
-Consultar [la guía del catálogo](docs/print-catalog.md) para publicación,
-contratos, vigencia de enlaces, pruebas y colección Postman de 21 pasos.
+La colección de prueba es `print-catalog.postman_collection.json`;
+los contratos vigentes están en OpenAPI.
 
 
 ## Plantillas versionadas en borrador
@@ -368,8 +363,8 @@ producto/talla. Todas las versiones se crean inactivas: Catalog Service
 todavía no existe y falta validar referencias y compatibilidad antes de
 habilitar publicación y diseños reales.
 
-Consultar [la guía de plantillas](docs/template-versioning.md) para el
-contrato, límites, geometría, dependencia pendiente y 25 pruebas Postman.
+La colección de prueba es `template-versions.postman_collection.json`.
+Las restricciones de geometría y permisos se prueban en `test/`.
 
 
 ## Reglas de diseño y diagnóstico administrativo
@@ -382,8 +377,8 @@ históricas. Catalog sigue pendiente y `MIN_PRINT_DPI` queda sin valor por
 defecto hasta que lo defina el equipo; un umbral ausente se informa como
 evaluación pendiente y nunca como calidad suficiente.
 
-Consultar [reglas y pruebas](docs/design-rules.md), incluida la colección
-Postman de 21 solicitudes y las limitaciones de este diagnóstico.
+La colección de prueba es `design-rules.postman_collection.json`.
+Los cálculos y sus límites se verifican en `test/designs/`.
 
 
 ## Borradores administrativos persistidos
@@ -393,7 +388,7 @@ copiar borradores propios con JWT administrador. Guarda `diseno` y
 `aplicacion` con auditoría atómica, ETag/If-Match y copias independientes.
 Las referencias de Catalog siguen sin verificar y checkoutReady permanece
 false. No activa plantillas ni habilita diseños comerciales de clientes.
-Consultar [contrato y pruebas en Postman](docs/design-drafts.md).
+La colección de prueba es `design-drafts.postman_collection.json`.
 
 
 ## Previews privadas de diseños
@@ -403,4 +398,25 @@ HTTP. Las previews esquemáticas usan la geometría física de plantilla y
 fuentes originales, con recuperación de cargas y asociación a la revisión
 vigente. Se consultan y descargan mediante enlaces privados temporales.
 Catalog y checkout siguen pendientes; no se representa una prenda real.
-Consultar [operación y Postman](docs/design-previews.md).
+La colección de prueba es `design-previews.postman_collection.json`.
+Con Send, repetir 04, 14 y 19 hasta READY antes de continuar; un 200 con
+PENDING no significa que el render haya terminado.
+
+
+## gRPC administrativo con TLS
+
+El perfil rpc ejecuta PersonalizationDrafts/GetDesignDraft en 50051 con
+TLS obligatorio, JWT local y propiedad del borrador. Comparte el caso de
+uso y ETag de REST; no escribe datos ni habilita checkout sin Catalog.
+El contrato está en `contracts/proto/personalization/v1/personalization.proto`.
+Para Postman, ejecutar primero las dos lecturas de
+`grpc-preparation.postman_collection.json`. En gRPC usar TLS verificado,
+Connection Timeout de 8000 ms y una sola metadata authorization con el JWT.
+El mensaje usa el nombre del campo del proto:
+
+```json
+{"design_id":"{{rpcDesignId}}"}
+```
+
+El éxito es 0 OK. La preparación de certificados, arranque y códigos de
+prueba están en el [README de infraestructura](../../infra/personalization/README.md#grpc-con-tls).

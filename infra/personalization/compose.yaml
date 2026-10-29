@@ -107,6 +107,34 @@ services:
             WORKER_BATCH_SIZE: ${WORKER_BATCH_SIZE:-10}
             WORKER_POLL_SECONDS: ${WORKER_POLL_SECONDS:-10}
 
+    personalization-grpc:
+        <<: *personalization-service
+        profiles: ["rpc"]
+        networks:
+            - personalization-db
+            - backend
+        command: ["python", "-m", "personalization.interfaces.grpc.server"]
+        init: true
+        restart: unless-stopped
+        stop_grace_period: 20s
+        environment:
+            <<: *personalization-environment
+            GRPC_HOST: 0.0.0.0
+            GRPC_TLS_CERTIFICATE_FILE: /run/secrets/grpc_server_certificate
+            GRPC_TLS_KEY_FILE: /run/secrets/grpc_server_key
+            GRPC_HEALTH_CA_FILE: /run/secrets/grpc_development_ca
+        secrets:
+            - personalization_db_password
+            - grpc_server_certificate
+            - grpc_server_key
+            - grpc_development_ca
+        healthcheck:
+            test: ["CMD", "python", "-m", "personalization.interfaces.grpc.health"]
+            interval: 10s
+            timeout: 4s
+            start_period: 10s
+            retries: 3
+
     personalization-storage:
         <<: *personalization-service
         profiles: ["tools"]
@@ -153,3 +181,9 @@ secrets:
         file: ./.secrets/postgres_admin_password
     personalization_db_password:
         file: ./.secrets/personalization_db_password
+    grpc_server_certificate:
+        file: ./.secrets/grpc_server_cert.pem
+    grpc_server_key:
+        file: ./.secrets/grpc_server_key.pem
+    grpc_development_ca:
+        file: ./.secrets/grpc_ca.crt

@@ -197,8 +197,9 @@ y comprueba restricciones, instalación, reversión y reaplicación. Rechaza
 esquemas previamente poblados. Usar ese verificador para QA y reservar
 `personalization-migrate` para preparar la base de desarrollo.
 
-El modelo, decisiones de tipos, comandos y reversión están en
-[la guía de persistencia](../../services/personalizationService/docs/database.md).
+Los modelos y migraciones están en el paquete database del servicio.
+No ejecutar downgrade sobre la base local poblada; usar la base desechable
+de verify_stack.py para comprobar reversión y reaplicación.
 
 
 ## Límites de validación de imágenes
@@ -210,8 +211,8 @@ antes del arranque; ampliar los techos exige revisar la política y recursos.
 El máximo de archivo permanece fijo en 10 000 000 bytes.
 
 Las comprobaciones y pruebas con Pillow se ejecutan al construir la imagen.
-El contrato HTTP actual sigue exponiendo las rutas técnicas; el endpoint
-de carga persistente se incorporará junto con Supabase Storage.
+La carga persistente usa POST /api/v1/files y las validaciones del
+servicio; sus contratos y errores están en OpenAPI.
 
 
 ## Habilitar Storage privado
@@ -226,8 +227,8 @@ La API utiliza un tmpfs de 32 MiB en `/tmp` para el spool multipart, con una
 subida activa por proceso. Las demás rutas y la raíz de ejecución mantienen
 su configuración anterior. No hay migraciones SQL nuevas: se usa `archivo`.
 
-La configuración completa y pruebas con Postman se describen en
-[archivos privados](../../services/personalizationService/docs/private-files.md).
+Usar la colección files.postman_collection.json de
+contracts/postman/personalization para comprobar cargas y descargas.
 
 
 ## Worker de imágenes
@@ -239,8 +240,17 @@ con 1 CPU, 512 MiB, raíz de solo lectura y cierre con gracia de 120 segundos.
 Los límites `WORKER_BATCH_SIZE` y `WORKER_POLL_SECONDS` están en .env.example.
 No agrega tablas ni ejecuta migraciones al arrancar.
 
-El arranque, diagnóstico con `--once` y cierre sin eliminar datos están en
-[miniaturas](../../services/personalizationService/docs/print-thumbnails.md).
+El comando actual del worker es personalization.interfaces.workers.images;
+procesa miniaturas y previews de diseños. Desde la raíz:
+
+```powershell
+docker compose -f infra/personalization/compose.yaml -f infra/personalization/compose.storage.yaml --profile images up -d --build personalization-worker
+docker compose -f infra/personalization/compose.yaml -f infra/personalization/compose.storage.yaml --profile images run --rm --no-deps personalization-worker python -m personalization.interfaces.workers.images --once
+```
+
+--once procesa un lote por cola. Las intenciones duraderas permiten recuperar
+cargas; una revisión obsoleta no se asocia al diseño vigente. Los originales
+y derivados históricos permanecen privados.
 
 
 ## Umbral de resolución de impresión
@@ -249,4 +259,71 @@ El arranque, diagnóstico con `--once` y cierre sin eliminar datos están en
 la evaluación pendiente; no hay un mínimo implícito. Configurar un entero
 de 1 a 2400 solo cuando el equipo acuerde el valor y recrear la API. El
 análisis usa este valor para un aviso, no para rechazar la imagen.
-Consultar [reglas de diseño](../../services/personalizationService/docs/design-rules.md).
+La colección de prueba es design-rules.postman_collection.json.
+
+
+## gRPC con TLS
+
+El perfil rpc ejecuta PersonalizationDrafts/GetDesignDraft en un proceso
+separado, con JWT local y propiedad del borrador. Es de solo lectura:
+CATALOG_VALIDATION_PENDING, CHECKOUT_BLOCKED y diagnostic_only=true. No
+congela ni cotiza sin la integración real de Catalog.
+
+Preparar certificados de desarrollo e iniciar desde la raíz:
+
+```powershell
+py -3.14 -m uv run --locked --project services/personalizationService python infra/personalization/provision_grpc_tls.py
+docker compose -f infra/personalization/compose.yaml -f infra/personalization/compose.dev.yaml -f infra/personalization/compose.storage.yaml --profile rpc up -d --build --wait personalization personalization-grpc
+```
+
+El provisionador preserva los archivos existentes en .secrets. El certificado
+de desarrollo dura 30 días; la clave privada de CA no se guarda. Producción
+requiere sus propios certificados y rotación. Los secretos no entran a Git.
+RPC monta clave/certificado TLS, CA y contraseña de su BD; no monta la clave
+de Storage. Usa las redes backend y personalization-db. La configuración
+base no publica 50051; el overlay dev lo expone solo en 127.0.0.1:50051.
+El healthcheck verifica TLS/h2, no readiness de PostgreSQL.
+
+En Postman:
+
+1. Ejecutar las dos solicitudes HTTP de grpc-preparation.postman_collection.json
+   con adminAccessToken vigente: ambas 200 y Tests aprobados.
+2. Settings → Certificates → CA Certificates: importar .secrets/grpc_ca.crt.
+3. New → gRPC, localhost:50051, TLS y verificación de certificado activados.
+4. Service definition: importar contracts/proto/personalization/v1/personalization.proto
+   y seleccionar PersonalizationDrafts/GetDesignDraft. No hay reflexión.
+5. Connection Timeout = 8000 ms. Authorization = No Auth; en Metadata añadir
+   solo authorization = Bearer {{adminAccessToken}}.
+6. Message: {"design_id":"{{rpcDesignId}}"}. El campo se llama design_id
+   en el proto; Use Example Message genera su estructura.
+
+| Caso | Resultado esperado |
+| --- | --- |
+| Administrador y diseño propio válido | 0 OK |
+| Sin metadata authorization | 16 UNAUTHENTICATED |
+| JWT cliente vigente o distinto propietario | 7 PERMISSION_DENIED |
+| UUID válido inexistente | 5 NOT_FOUND |
+| design_id=not-a-uuid | 3 INVALID_ARGUMENT, INVALID_DESIGN_ID |
+| Timeout 15000 con administrador y UUID válido | 3 INVALID_ARGUMENT, INVALID_RPC_DEADLINE |
+
+Al terminar, restaurar timeout 8000, JWT administrador e ID válido y repetir
+0 OK. La respuesta conserva el snapshot/ETag de REST; campos opcionales
+ausentes pueden omitirse. Trailers incluyen error-code y trace-id. gRPC usa
+sus estados propios; los errores HTTP mantienen RFC 9457.
+
+La lectura limita mensajes a 65 536 bytes y exige deadline de hasta 10 s.
+El contrato .proto y sus bindings se comprueban en CI. Para regenerar,
+desde services/personalizationService:
+
+```powershell
+py -3.14 -m uv run --locked python -m personalization.interfaces.grpc.codegen --proto ../../contracts/proto/personalization/v1/personalization.proto --output src/personalization/interfaces/grpc/generated
+```
+
+Añadir --check verifica que las bindings coincidan. No editar los archivos
+generados manualmente.
+
+Para detener los procesos Docker conservando el volumen y los archivos:
+
+```powershell
+docker compose -f infra/personalization/compose.yaml -f infra/personalization/compose.storage.yaml --profile rpc --profile images stop personalization-worker personalization-grpc personalization db-personalizacion
+```

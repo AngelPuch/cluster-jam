@@ -5,6 +5,7 @@ on:
         paths:
             - "services/personalizationService/**"
             - "infra/personalization/**"
+            - "contracts/proto/personalization/**"
             - "contracts/openapi/personalization/**"
             - "contracts/postman/personalization/**"
             - ".github/workflows/personalization-ci.yml"
@@ -15,6 +16,7 @@ on:
         paths:
             - "services/personalizationService/**"
             - "infra/personalization/**"
+            - "contracts/proto/personalization/**"
             - "contracts/openapi/personalization/**"
             - "contracts/postman/personalization/**"
             - ".github/workflows/personalization-ci.yml"
@@ -69,6 +71,13 @@ jobs:
                   personalization.interfaces.http.export_openapi
                   --check --output
                   ../../contracts/openapi/personalization/v1/openapi.json
+            - name: Verify versioned protobuf bindings
+              run: >-
+                  python -m uv run --locked python -m
+                  personalization.interfaces.grpc.codegen
+                  --check --proto
+                  ../../contracts/proto/personalization/v1/personalization.proto
+                  --output src/personalization/interfaces/grpc/generated
             - name: Build package
               run: python -m uv build --no-sources
 
