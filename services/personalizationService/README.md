@@ -42,7 +42,8 @@ La validación JWT y las políticas de acceso están implementadas y probadas.
 Los endpoints técnicos son públicos; las operaciones de negocio requieren
 sus políticas explícitas de JWT, rol y propiedad. El perfil rpc habilita
 la consulta administrativa protegida de borradores en 50051 con TLS.
-HTTPS y el proxy de despliegue se incorporarán en la fase de operación.
+HTTPS se publica mediante el Nginx compartido; el despliegue Ubuntu tiene
+un overlay separado de la configuración local.
 
 ## Dependencias y configuración local
 
@@ -168,12 +169,6 @@ Alembic versionada. El arranque HTTP no crea tablas ni ejecuta migraciones. La m
 prueba se completará con las funcionalidades, sin equiparar cobertura de
 líneas con RNF09.
 
-Rama: `feat/personalization/private-file-storage`.
-Commit y título del PR:
-
-```text
-feat(personalization): store private original files
-```
 
 
 ## Autenticación local y autorización
@@ -420,3 +415,34 @@ El mensaje usa el nombre del campo del proto:
 
 El éxito es 0 OK. La preparación de certificados, arranque y códigos de
 prueba están en el [README de infraestructura](../../infra/personalization/README.md#grpc-con-tls).
+
+
+## Despliegue HTTPS con Nginx
+
+`infra/personalization/compose.https.dev.yaml` permite comprobar HTTPS local
+en `https://localhost:8443`, con el mismo Nginx compartido. Las rutas REST
+conservan `/api/v1/...`; salud se publica como `/health/personalization/live`
+y `/health/personalization/ready`, y el contrato como
+`/openapi/personalization.json`. `/docs` y `/openapi.json` del proxy siguen
+perteneciendo a Auth. El código del servicio no cambia esos contratos.
+
+El límite del proxy para `/api/v1/files` es 10 131 072 bytes, incluidos los
+131 072 bytes de margen multipart. El original sigue limitado por Python
+a 10 000 000 bytes. Las demás rutas admiten cuerpos de hasta 256 KiB.
+El proxy limita tráfico por IP: 20 peticiones/s y ráfaga 40 para REST,
+1 petición/s y ráfaga 2 en `/api/v1/files`. Devuelve Problem Details para
+sus errores; los errores, ETag, If-Match, Authorization y traceparent del
+servicio se conservan. Los logs del proxy omiten query, cuerpos y tokens
+y correlacionan el trace_id devuelto por el servicio.
+
+La colección `https-deployment.postman_collection.json` usa `httpsBaseUrl`
+y JWT vigentes. Sus nueve peticiones no requieren adjuntar archivos. La
+guía de preparación local y Ubuntu está en el
+[README de infraestructura](../../infra/personalization/README.md#https-local-y-despliegue-ubuntu).
+
+En Ubuntu, `compose.deploy.yaml` usa el backend compartido y configuración
+production, imágenes por revisión y certificados de la PKI de staging.
+REST, PostgreSQL y gRPC no publican puertos al host. El script de despliegue
+aplica Alembic explícitamente antes de iniciar la versión, verifica Storage,
+readiness y TLS de RPC, y recrea únicamente el proxy compartido.
+No se habilitan Catalog, Orders ni funcionalidades comerciales pendientes.

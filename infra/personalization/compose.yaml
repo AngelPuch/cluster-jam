@@ -122,12 +122,12 @@ services:
             GRPC_HOST: 0.0.0.0
             GRPC_TLS_CERTIFICATE_FILE: /run/secrets/grpc_server_certificate
             GRPC_TLS_KEY_FILE: /run/secrets/grpc_server_key
-            GRPC_HEALTH_CA_FILE: /run/secrets/grpc_development_ca
+            GRPC_HEALTH_CA_FILE: /run/secrets/grpc_trusted_ca
         secrets:
             - personalization_db_password
             - grpc_server_certificate
             - grpc_server_key
-            - grpc_development_ca
+            - grpc_trusted_ca
         healthcheck:
             test: ["CMD", "python", "-m", "personalization.interfaces.grpc.health"]
             interval: 10s
@@ -185,5 +185,5 @@ secrets:
         file: ./.secrets/grpc_server_cert.pem
     grpc_server_key:
         file: ./.secrets/grpc_server_key.pem
-    grpc_development_ca:
+    grpc_trusted_ca:
         file: ./.secrets/grpc_ca.crt

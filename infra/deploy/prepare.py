@@ -276,7 +276,9 @@ def leaf(name: str, names: list[str], renew: bool) -> None:
     extensions.write_text(
         "basicConstraints=critical,CA:FALSE\n"
         "keyUsage=critical,digitalSignature,keyEncipherment\n"
-        "extendedKeyUsage=serverAuth\nsubjectAltName="
+        "extendedKeyUsage=serverAuth\n"
+        "subjectKeyIdentifier=hash\nauthorityKeyIdentifier=keyid,issuer\n"
+        "subjectAltName="
         + ",".join(names)
         + "\n",
         encoding="utf-8",
@@ -385,6 +387,11 @@ def main() -> int:
             renew,
         )
         leaf("rabbitmq", ["DNS:rabbitmq", "DNS:clusterjam-rabbitmq"], renew)
+        leaf(
+            "personalization-grpc",
+            ["DNS:personalization-grpc", "DNS:clusterjam-personalization-grpc"],
+            renew,
+        )
         if renew:
             save(SHARED / ".pki" / "recreate-required", b"renewed\n", 0o600)
     except (OSError, ValueError, KeyError):

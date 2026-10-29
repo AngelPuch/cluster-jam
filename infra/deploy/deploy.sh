@@ -3,7 +3,10 @@ set -euo pipefail
 task_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$task_root"
 target="${1:-all}"
-case "$target" in auth|shared|all|build) ;; *) exit 2 ;; esac
+case "$target" in auth|shared|all|build|personalization) ;; *) exit 2 ;; esac
+if [[ "$target" == personalization ]]; then
+    exec bash infra/deploy/deploy-personalization.sh
+fi
 if [[ -n "$(git status --porcelain)" ]]; then
     printf 'Commit or preserve source changes before deployment.\n' >&2
     exit 1
