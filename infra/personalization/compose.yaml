@@ -97,7 +97,7 @@ services:
     personalization-worker:
         <<: *personalization-service
         profiles: ["images"]
-        command: ["python", "-m", "personalization.interfaces.workers.thumbnails"]
+        command: ["python", "-m", "personalization.interfaces.workers.images"]
         init: true
         restart: unless-stopped
         stop_grace_period: 120s

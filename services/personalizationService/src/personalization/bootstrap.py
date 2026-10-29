@@ -33,6 +33,9 @@ from personalization.application.ports.design_repository_port import (
 from personalization.application.ports.file_repository_port import (
     FileRepositoryPort,
 )
+from personalization.application.ports.preview_ports import (
+    PreviewRepositoryPort,
+)
 from personalization.application.ports.print_catalog_port import (
     PrintCatalogPort,
 )
@@ -49,6 +52,7 @@ from personalization.application.ports.template_repository_port import (
 from personalization.application.ports.thumbnail_ports import (
     ThumbnailRepositoryPort,
 )
+from personalization.application.previews.preview_service import PreviewService
 from personalization.application.prints.print_service import PrintService
 from personalization.application.templates.template_service import (
     TemplateService,
@@ -68,6 +72,9 @@ from personalization.infrastructure.database.engine import (
 )
 from personalization.infrastructure.database.file_repository import (
     SqlAlchemyFileRepository,
+)
+from personalization.infrastructure.database.preview_repository import (
+    SqlAlchemyPreviewRepository,
 )
 from personalization.infrastructure.database.print_catalog_repository import (
     SqlAlchemyPrintCatalogRepository,
@@ -125,6 +132,7 @@ def create_app(
     analysis_sources: AnalysisSourcePort | None = None,
     image_geometry: ImageGeometryPort | None = None,
     design_repository: DesignRepositoryPort | None = None,
+    preview_repository: PreviewRepositoryPort | None = None,
 ) -> FastAPI:
     """Start independently and release resources on shutdown."""
     configuration = settings if settings is not None else Settings()
@@ -141,6 +149,7 @@ def create_app(
         or template_repository is None
         or analysis_sources is None
         or design_repository is None
+        or preview_repository is None
     ):
         engine = create_database_engine(configuration)
         if readiness_port is None:
@@ -167,6 +176,10 @@ def create_app(
             )
         if design_repository is None:
             design_repository = SqlAlchemyDesignRepository(
+                engine, configuration.storage_bucket
+            )
+        if preview_repository is None:
+            preview_repository = SqlAlchemyPreviewRepository(
                 engine, configuration.storage_bucket
             )
     outbound: SupabaseStorage | None = None
@@ -227,6 +240,13 @@ def create_app(
         app.state.template_service = TemplateService(template_repository)
         app.state.draft_service = DraftService(
             design_repository, template_repository
+        )
+        app.state.preview_service = PreviewService(
+            app.state.draft_service,
+            preview_repository,
+            storage,
+            configuration.storage_bucket,
+            configuration.download_url_ttl_seconds,
         )
         app.state.design_analysis_service = DesignAnalysisService(
             template_repository,

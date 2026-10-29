@@ -189,6 +189,8 @@ def test_production_app_exposes_no_temporary_image_route(
         "/api/v1/admin/design-drafts",
         "/api/v1/admin/design-drafts/{designId}",
         "/api/v1/admin/design-drafts/{designId}/copies",
+        "/api/v1/admin/design-drafts/{designId}/previews",
+        "/api/v1/admin/design-drafts/{designId}/previews/{side}/download-urls",
         "/health/live",
         "/health/ready",
         "/api/v1/files",
