@@ -16,6 +16,7 @@ x-personalization-service: &personalization-service
         STORAGE_ENABLED: "false"
         SUPABASE_STORAGE_BUCKET: ${SUPABASE_STORAGE_BUCKET:-personalization-originals}
         DOWNLOAD_URL_TTL_SECONDS: ${DOWNLOAD_URL_TTL_SECONDS:-60}
+        MIN_PRINT_DPI: ${MIN_PRINT_DPI:-}
         IMAGE_MAX_WIDTH_PX: ${IMAGE_MAX_WIDTH_PX:-8192}
         IMAGE_MAX_HEIGHT_PX: ${IMAGE_MAX_HEIGHT_PX:-8192}
         IMAGE_MAX_PIXELS: ${IMAGE_MAX_PIXELS:-16000000}
@@ -92,6 +93,19 @@ services:
             timeout: 3s
             start_period: 10s
             retries: 3
+
+    personalization-worker:
+        <<: *personalization-service
+        profiles: ["images"]
+        command: ["python", "-m", "personalization.interfaces.workers.images"]
+        init: true
+        restart: unless-stopped
+        stop_grace_period: 120s
+        mem_limit: 512m
+        environment:
+            <<: *personalization-environment
+            WORKER_BATCH_SIZE: ${WORKER_BATCH_SIZE:-10}
+            WORKER_POLL_SECONDS: ${WORKER_POLL_SECONDS:-10}
 
     personalization-storage:
         <<: *personalization-service

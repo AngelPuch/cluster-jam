@@ -5,14 +5,26 @@ from importlib.metadata import version
 from fastapi import FastAPI
 from starlette.types import Lifespan
 
+from personalization.interfaces.http.catalog.routes import (
+    router as catalog_router,
+)
+from personalization.interfaces.http.design_analyses.routes import (
+    router as analyses_router,
+)
+from personalization.interfaces.http.design_drafts.previews import (
+    router as drafts_router,
+)
 from personalization.interfaces.http.errors.problem_handlers import (
     configure_exception_handlers,
 )
 from personalization.interfaces.http.files.routes import router as files_router
 from personalization.interfaces.http.health.routes import router
 from personalization.interfaces.http.openapi import configure_openapi
-from personalization.interfaces.http.prints.routes import (
+from personalization.interfaces.http.prints.thumbnails import (
     router as prints_router,
+)
+from personalization.interfaces.http.templates.routes import (
+    router as templates_router,
 )
 
 
@@ -35,6 +47,10 @@ def create_http_app(lifespan: Lifespan[FastAPI] | None = None) -> FastAPI:
     app.include_router(router)
     app.include_router(files_router)
     app.include_router(prints_router)
+    app.include_router(catalog_router)
+    app.include_router(templates_router)
+    app.include_router(analyses_router)
+    app.include_router(drafts_router)
     configure_exception_handlers(app)
     configure_openapi(app)
     return app

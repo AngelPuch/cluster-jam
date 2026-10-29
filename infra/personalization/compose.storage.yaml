@@ -6,6 +6,16 @@ services:
         secrets:
             - supabase_storage_key
 
+    personalization-worker:
+        environment:
+            STORAGE_ENABLED: "true"
+            SUPABASE_STORAGE_KEY_FILE: /run/secrets/supabase_storage_key
+        secrets:
+            - supabase_storage_key
+        networks:
+            - personalization-db
+            - backend
+
     personalization-storage:
         environment:
             STORAGE_ENABLED: "true"

@@ -180,6 +180,17 @@ def test_production_app_exposes_no_temporary_image_route(
 ) -> None:
     assert client.post(PATH).status_code == 404
     assert set(client.get("/openapi.json").json()["paths"]) == {
+        "/api/v1/prints",
+        "/api/v1/prints/{printId}",
+        "/api/v1/prints/{printId}/versions/{versionId}/thumbnail/download-urls",
+        "/api/v1/admin/template-versions",
+        "/api/v1/admin/template-versions/{templateId}",
+        "/api/v1/admin/template-versions/{templateId}/design-analyses",
+        "/api/v1/admin/design-drafts",
+        "/api/v1/admin/design-drafts/{designId}",
+        "/api/v1/admin/design-drafts/{designId}/copies",
+        "/api/v1/admin/design-drafts/{designId}/previews",
+        "/api/v1/admin/design-drafts/{designId}/previews/{side}/download-urls",
         "/health/live",
         "/health/ready",
         "/api/v1/files",
@@ -189,4 +200,9 @@ def test_production_app_exposes_no_temporary_image_route(
         "/api/v1/admin/prints/{printId}",
         "/api/v1/admin/prints/{printId}/versions",
         "/api/v1/admin/prints/{printId}/versions/{versionId}",
+        "/api/v1/admin/prints/{printId}/versions/{versionId}/thumbnail",
+        (
+            "/api/v1/admin/prints/{printId}/versions/{versionId}"
+            "/thumbnail/download-urls"
+        ),
     }

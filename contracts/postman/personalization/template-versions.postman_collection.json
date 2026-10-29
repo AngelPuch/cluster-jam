@@ -1,0 +1,849 @@
+{
+  "info": {
+    "name": "Cluster JAM - Draft Template Versions",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "25 pruebas en orden. Usa el entorno actual y JWT de administrador/cliente. ProductId técnico de QA se genera automáticamente; sizeId 1 no implica talla real. Todas las versiones quedan inactivas, sin validar Catalog ni publicar para clientes. No requiere imágenes ni servicios de Catalog. Repetir desde 01 genera otra serie QA."
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{adminAccessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "01 - Crear v1 en borrador con frente y espalda",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/admin/template-versions",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"productId\": \"{{$guid}}\",\n  \"sizeId\": 1,\n  \"expectedVersion\": 0,\n  \"front\": {\n    \"widthMm\": \"400\",\n    \"heightMm\": \"600\"\n  },\n  \"back\": {\n    \"widthMm\": \"400\",\n    \"heightMm\": \"600\"\n  },\n  \"zones\": [\n    {\n      \"code\": \"chest\",\n      \"side\": \"FRONT\",\n      \"xMm\": \"50\",\n      \"yMm\": \"50\",\n      \"widthMm\": \"200\",\n      \"heightMm\": \"300\",\n      \"sizes\": [\n        {\n          \"label\": \"SMALL\",\n          \"widthMm\": \"100.125\",\n          \"heightMm\": \"150\",\n          \"surchargeCents\": 1250\n        },\n        {\n          \"label\": \"MEDIUM\",\n          \"widthMm\": \"150\",\n          \"heightMm\": \"200\",\n          \"surchargeCents\": 2000\n        },\n        {\n          \"label\": \"LARGE\",\n          \"widthMm\": \"200\",\n          \"heightMm\": \"300\",\n          \"surchargeCents\": 3000\n        }\n      ]\n    },\n    {\n      \"code\": \"upper-back\",\n      \"side\": \"BACK\",\n      \"xMm\": \"50\",\n      \"yMm\": \"50\",\n      \"widthMm\": \"200\",\n      \"heightMm\": \"300\",\n      \"sizes\": [\n        {\n          \"label\": \"SMALL\",\n          \"widthMm\": \"100.125\",\n          \"heightMm\": \"150\",\n          \"surchargeCents\": 1250\n        },\n        {\n          \"label\": \"MEDIUM\",\n          \"widthMm\": \"150\",\n          \"heightMm\": \"200\",\n          \"surchargeCents\": 2000\n        },\n        {\n          \"label\": \"LARGE\",\n          \"widthMm\": \"200\",\n          \"heightMm\": \"300\",\n          \"surchargeCents\": 3000\n        }\n      ]\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+              "if (pm.response.code === 201) {",
+              "  const value = pm.response.json();",
+              "  pm.environment.set(\"templateProductId\", value.productId);",
+              "  pm.environment.set(\"templateFirstId\", value.id);",
+              "  pm.environment.set(\"templateV1Snapshot\", JSON.stringify(value));",
+              "  pm.test(\"Borrador versionado\", () => {",
+              "    pm.expect(value.number).to.eql(1);",
+              "    pm.expect(value.active).to.eql(false);",
+              "    pm.expect(value.zones.length).to.eql(2);",
+              "  });",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - Consultar v1 y medidas en centímetros",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/admin/template-versions/{{templateFirstId}}",
+        "header": []
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) {",
+              "  const value = pm.response.json();",
+              "  pm.test(\"Medidas exactas y tres tamaños\", () => {",
+              "    pm.expect(value).to.eql(JSON.parse(pm.environment.get(\"templateV1Snapshot\")));",
+              "    const sizes = value.zones[0].sizes;",
+              "    pm.expect(sizes.map(item => item.label)).to.eql([\"SMALL\", \"MEDIUM\", \"LARGE\"]);",
+              "    pm.expect(sizes[0].widthMm).to.eql(\"100.125\");",
+              "    pm.expect(sizes[0].widthCm).to.eql(\"10.0125\");",
+              "    pm.expect(sizes[0].currency).to.eql(\"MXN\");",
+              "  });",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 - ExpectedVersion anterior",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/admin/template-versions",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"productId\": \"{{templateProductId}}\",\n  \"sizeId\": 1,\n  \"expectedVersion\": 0,\n  \"front\": {\n    \"widthMm\": \"400\",\n    \"heightMm\": \"600\"\n  },\n  \"back\": {\n    \"widthMm\": \"400\",\n    \"heightMm\": \"600\"\n  },\n  \"zones\": [\n    {\n      \"code\": \"chest\",\n      \"side\": \"FRONT\",\n      \"xMm\": \"50\",\n      \"yMm\": \"50\",\n      \"widthMm\": \"200\",\n      \"heightMm\": \"300\",\n      \"sizes\": [\n        {\n          \"label\": \"SMALL\",\n          \"widthMm\": \"100.125\",\n          \"heightMm\": \"150\",\n          \"surchargeCents\": 1250\n        },\n        {\n          \"label\": \"MEDIUM\",\n          \"widthMm\": \"150\",\n          \"heightMm\": \"200\",\n          \"surchargeCents\": 2000\n        },\n        {\n          \"label\": \"LARGE\",\n          \"widthMm\": \"200\",\n          \"heightMm\": \"300\",\n          \"surchargeCents\": 3000\n        }\n      ]\n    },\n    {\n      \"code\": \"upper-back\",\n      \"side\": \"BACK\",\n      \"xMm\": \"50\",\n      \"yMm\": \"50\",\n      \"widthMm\": \"200\",\n      \"heightMm\": \"300\",\n      \"sizes\": [\n        {\n          \"label\": \"SMALL\",\n          \"widthMm\": \"100.125\",\n          \"heightMm\": \"150\",\n          \"surchargeCents\": 1250\n        },\n        {\n          \"label\": \"MEDIUM\",\n          \"widthMm\": \"150\",\n          \"heightMm\": \"200\",\n          \"surchargeCents\": 2000\n        },\n        {\n          \"label\": \"LARGE\",\n          \"widthMm\": \"200\",\n          \"heightMm\": \"300\",\n          \"surchargeCents\": 3000\n        }\n      ]\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 409\", () => pm.response.to.have.status(409));",
+              "pm.test(\"RFC 9457\", () => {",
+              "  const body = pm.response.json();",
+              "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "  pm.expect(Object.keys(body).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "  pm.expect(body.code).to.eql(\"TEMPLATE_VERSION_CONFLICT\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 - Crear v2 con geometría y recargo nuevos",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/admin/template-versions",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"productId\": \"{{templateProductId}}\",\n  \"sizeId\": 1,\n  \"expectedVersion\": 1,\n  \"front\": {\n    \"widthMm\": \"400\",\n    \"heightMm\": \"600\"\n  },\n  \"back\": {\n    \"widthMm\": \"400\",\n    \"heightMm\": \"600\"\n  },\n  \"zones\": [\n    {\n      \"code\": \"chest\",\n      \"side\": \"FRONT\",\n      \"xMm\": \"60\",\n      \"yMm\": \"50\",\n      \"widthMm\": \"200\",\n      \"heightMm\": \"300\",\n      \"sizes\": [\n        {\n          \"label\": \"SMALL\",\n          \"widthMm\": \"100.125\",\n          \"heightMm\": \"150\",\n          \"surchargeCents\": 1300\n        },\n        {\n          \"label\": \"MEDIUM\",\n          \"widthMm\": \"150\",\n          \"heightMm\": \"200\",\n          \"surchargeCents\": 2000\n        },\n        {\n          \"label\": \"LARGE\",\n          \"widthMm\": \"200\",\n          \"heightMm\": \"300\",\n          \"surchargeCents\": 3000\n        }\n      ]\n    },\n    {\n      \"code\": \"upper-back\",\n      \"side\": \"BACK\",\n      \"xMm\": \"50\",\n      \"yMm\": \"50\",\n      \"widthMm\": \"200\",\n      \"heightMm\": \"300\",\n      \"sizes\": [\n        {\n          \"label\": \"SMALL\",\n          \"widthMm\": \"100.125\",\n          \"heightMm\": \"150\",\n          \"surchargeCents\": 1250\n        },\n        {\n          \"label\": \"MEDIUM\",\n          \"widthMm\": \"150\",\n          \"heightMm\": \"200\",\n          \"surchargeCents\": 2000\n        },\n        {\n          \"label\": \"LARGE\",\n          \"widthMm\": \"200\",\n          \"heightMm\": \"300\",\n          \"surchargeCents\": 3000\n        }\n      ]\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+              "if (pm.response.code === 201) {",
+              "  const value = pm.response.json();",
+              "  pm.environment.set(\"templateSecondId\", value.id);",
+              "  pm.test(\"Nueva versión, nuevos IDs y sin publicar\", () => {",
+              "    const previous = JSON.parse(pm.environment.get(\"templateV1Snapshot\"));",
+              "    pm.expect(value.number).to.eql(2);",
+              "    pm.expect(value.active).to.eql(false);",
+              "    pm.expect(value.id).not.to.eql(previous.id);",
+              "    pm.expect(value.zones[0].id).not.to.eql(previous.zones[0].id);",
+              "    pm.expect(value.zones[0].sizes[0].id).not.to.eql(previous.zones[0].sizes[0].id);",
+              "  });",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 - V1 conserva sus zonas tamaños y recargos",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/admin/template-versions/{{templateFirstId}}",
+        "header": []
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) { pm.test(\"Historial intacto\", () => pm.expect(pm.response.json()).to.eql(JSON.parse(pm.environment.get(\"templateV1Snapshot\")))); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 - Consultar nuevos datos de v2",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/admin/template-versions/{{templateSecondId}}",
+        "header": []
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) {",
+              "  pm.test(\"Cambio solo en v2\", () => {",
+              "    pm.expect(pm.response.json().zones[0].xMm).to.eql(\"60.000\");",
+              "    pm.expect(pm.response.json().zones[0].sizes[0].surchargeCents).to.eql(1300);",
+              "  });",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 - Primera página de versiones",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/admin/template-versions?productId={{templateProductId}}&sizeId=1&limit=1",
+        "header": []
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) {",
+              "  const page = pm.response.json();",
+              "  pm.test(\"Primera página\", () => {",
+              "    pm.expect(page.items.length).to.eql(1);",
+              "    pm.expect(page.items[0].number).to.eql(1);",
+              "    pm.expect(page.nextCursor).to.be.a(\"string\");",
+              "  });",
+              "  pm.environment.set(\"templateNextCursor\", page.nextCursor);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 - Segunda página de versiones",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/admin/template-versions?productId={{templateProductId}}&sizeId=1&limit=1&cursor={{templateNextCursor}}",
+        "header": []
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) { pm.test(\"Última página\", () => { pm.expect(pm.response.json().items[0].number).to.eql(2); pm.expect(pm.response.json().nextCursor).to.eql(null); }); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 - Otra talla no comparte la serie",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/admin/template-versions?productId={{templateProductId}}&sizeId=2",
+        "header": []
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) { pm.test(\"Serie vacía\", () => pm.expect(pm.response.json()).to.eql({items: [], nextCursor: null})); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 - Cursor de otra talla rechazado",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/admin/template-versions?productId={{templateProductId}}&sizeId=2&cursor={{templateNextCursor}}",
+        "header": []
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));",
+              "pm.test(\"RFC 9457\", () => {",
+              "  const body = pm.response.json();",
+              "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "  pm.expect(Object.keys(body).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "  pm.expect(body.code).to.eql(\"INVALID_CURSOR\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11 - Cursor inválido",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/admin/template-versions?productId={{templateProductId}}&sizeId=1&cursor=invalid",
+        "header": []
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));",
+              "pm.test(\"RFC 9457\", () => {",
+              "  const body = pm.response.json();",
+              "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "  pm.expect(Object.keys(body).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "  pm.expect(body.code).to.eql(\"INVALID_CURSOR\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "12 - No se permite publicar desde el cuerpo",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/admin/template-versions",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"productId\": \"{{templateProductId}}\",\n  \"sizeId\": 1,\n  \"expectedVersion\": 2,\n  \"front\": {\n    \"widthMm\": \"400\",\n    \"heightMm\": \"600\"\n  },\n  \"back\": {\n    \"widthMm\": \"400\",\n    \"heightMm\": \"600\"\n  },\n  \"zones\": [\n    {\n      \"code\": \"chest\",\n      \"side\": \"FRONT\",\n      \"xMm\": \"50\",\n      \"yMm\": \"50\",\n      \"widthMm\": \"200\",\n      \"heightMm\": \"300\",\n      \"sizes\": [\n        {\n          \"label\": \"SMALL\",\n          \"widthMm\": \"100.125\",\n          \"heightMm\": \"150\",\n          \"surchargeCents\": 1250\n        },\n        {\n          \"label\": \"MEDIUM\",\n          \"widthMm\": \"150\",\n          \"heightMm\": \"200\",\n          \"surchargeCents\": 2000\n        },\n        {\n          \"label\": \"LARGE\",\n          \"widthMm\": \"200\",\n          \"heightMm\": \"300\",\n          \"surchargeCents\": 3000\n        }\n      ]\n    },\n    {\n      \"code\": \"upper-back\",\n      \"side\": \"BACK\",\n      \"xMm\": \"50\",\n      \"yMm\": \"50\",\n      \"widthMm\": \"200\",\n      \"heightMm\": \"300\",\n      \"sizes\": [\n        {\n          \"label\": \"SMALL\",\n          \"widthMm\": \"100.125\",\n          \"heightMm\": \"150\",\n          \"surchargeCents\": 1250\n        },\n        {\n          \"label\": \"MEDIUM\",\n          \"widthMm\": \"150\",\n          \"heightMm\": \"200\",\n          \"surchargeCents\": 2000\n        },\n        {\n          \"label\": \"LARGE\",\n          \"widthMm\": \"200\",\n          \"heightMm\": \"300\",\n          \"surchargeCents\": 3000\n        }\n      ]\n    }\n  ],\n  \"active\": true\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 422\", () => pm.response.to.have.status(422));",
+              "pm.test(\"RFC 9457\", () => {",
+              "  const body = pm.response.json();",
+              "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "  pm.expect(Object.keys(body).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "  pm.expect(body.code).to.eql(\"VALIDATION_ERROR\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "13 - Medidas deben ser cadenas decimales",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/admin/template-versions",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"productId\": \"{{templateProductId}}\",\n  \"sizeId\": 1,\n  \"expectedVersion\": 2,\n  \"front\": {\n    \"widthMm\": 400,\n    \"heightMm\": \"600\"\n  },\n  \"back\": {\n    \"widthMm\": \"400\",\n    \"heightMm\": \"600\"\n  },\n  \"zones\": [\n    {\n      \"code\": \"chest\",\n      \"side\": \"FRONT\",\n      \"xMm\": \"50\",\n      \"yMm\": \"50\",\n      \"widthMm\": \"200\",\n      \"heightMm\": \"300\",\n      \"sizes\": [\n        {\n          \"label\": \"SMALL\",\n          \"widthMm\": \"100.125\",\n          \"heightMm\": \"150\",\n          \"surchargeCents\": 1250\n        },\n        {\n          \"label\": \"MEDIUM\",\n          \"widthMm\": \"150\",\n          \"heightMm\": \"200\",\n          \"surchargeCents\": 2000\n        },\n        {\n          \"label\": \"LARGE\",\n          \"widthMm\": \"200\",\n          \"heightMm\": \"300\",\n          \"surchargeCents\": 3000\n        }\n      ]\n    },\n    {\n      \"code\": \"upper-back\",\n      \"side\": \"BACK\",\n      \"xMm\": \"50\",\n      \"yMm\": \"50\",\n      \"widthMm\": \"200\",\n      \"heightMm\": \"300\",\n      \"sizes\": [\n        {\n          \"label\": \"SMALL\",\n          \"widthMm\": \"100.125\",\n          \"heightMm\": \"150\",\n          \"surchargeCents\": 1250\n        },\n        {\n          \"label\": \"MEDIUM\",\n          \"widthMm\": \"150\",\n          \"heightMm\": \"200\",\n          \"surchargeCents\": 2000\n        },\n        {\n          \"label\": \"LARGE\",\n          \"widthMm\": \"200\",\n          \"heightMm\": \"300\",\n          \"surchargeCents\": 3000\n        }\n      ]\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 422\", () => pm.response.to.have.status(422));",
+              "pm.test(\"RFC 9457\", () => {",
+              "  const body = pm.response.json();",
+              "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "  pm.expect(Object.keys(body).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "  pm.expect(body.code).to.eql(\"VALIDATION_ERROR\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "14 - Zona fuera de la cara",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/admin/template-versions",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"productId\": \"{{templateProductId}}\",\n  \"sizeId\": 1,\n  \"expectedVersion\": 2,\n  \"front\": {\n    \"widthMm\": \"400\",\n    \"heightMm\": \"600\"\n  },\n  \"back\": {\n    \"widthMm\": \"400\",\n    \"heightMm\": \"600\"\n  },\n  \"zones\": [\n    {\n      \"code\": \"chest\",\n      \"side\": \"FRONT\",\n      \"xMm\": \"201\",\n      \"yMm\": \"50\",\n      \"widthMm\": \"200\",\n      \"heightMm\": \"300\",\n      \"sizes\": [\n        {\n          \"label\": \"SMALL\",\n          \"widthMm\": \"100.125\",\n          \"heightMm\": \"150\",\n          \"surchargeCents\": 1250\n        },\n        {\n          \"label\": \"MEDIUM\",\n          \"widthMm\": \"150\",\n          \"heightMm\": \"200\",\n          \"surchargeCents\": 2000\n        },\n        {\n          \"label\": \"LARGE\",\n          \"widthMm\": \"200\",\n          \"heightMm\": \"300\",\n          \"surchargeCents\": 3000\n        }\n      ]\n    },\n    {\n      \"code\": \"upper-back\",\n      \"side\": \"BACK\",\n      \"xMm\": \"50\",\n      \"yMm\": \"50\",\n      \"widthMm\": \"200\",\n      \"heightMm\": \"300\",\n      \"sizes\": [\n        {\n          \"label\": \"SMALL\",\n          \"widthMm\": \"100.125\",\n          \"heightMm\": \"150\",\n          \"surchargeCents\": 1250\n        },\n        {\n          \"label\": \"MEDIUM\",\n          \"widthMm\": \"150\",\n          \"heightMm\": \"200\",\n          \"surchargeCents\": 2000\n        },\n        {\n          \"label\": \"LARGE\",\n          \"widthMm\": \"200\",\n          \"heightMm\": \"300\",\n          \"surchargeCents\": 3000\n        }\n      ]\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 422\", () => pm.response.to.have.status(422));",
+              "pm.test(\"RFC 9457\", () => {",
+              "  const body = pm.response.json();",
+              "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "  pm.expect(Object.keys(body).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "  pm.expect(body.code).to.eql(\"ZONE_OUTSIDE_TEMPLATE\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "15 - Zonas superpuestas en la misma cara",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/admin/template-versions",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"productId\": \"{{templateProductId}}\",\n  \"sizeId\": 1,\n  \"expectedVersion\": 2,\n  \"front\": {\n    \"widthMm\": \"400\",\n    \"heightMm\": \"600\"\n  },\n  \"back\": {\n    \"widthMm\": \"400\",\n    \"heightMm\": \"600\"\n  },\n  \"zones\": [\n    {\n      \"code\": \"chest\",\n      \"side\": \"FRONT\",\n      \"xMm\": \"50\",\n      \"yMm\": \"50\",\n      \"widthMm\": \"200\",\n      \"heightMm\": \"300\",\n      \"sizes\": [\n        {\n          \"label\": \"SMALL\",\n          \"widthMm\": \"100.125\",\n          \"heightMm\": \"150\",\n          \"surchargeCents\": 1250\n        },\n        {\n          \"label\": \"MEDIUM\",\n          \"widthMm\": \"150\",\n          \"heightMm\": \"200\",\n          \"surchargeCents\": 2000\n        },\n        {\n          \"label\": \"LARGE\",\n          \"widthMm\": \"200\",\n          \"heightMm\": \"300\",\n          \"surchargeCents\": 3000\n        }\n      ]\n    },\n    {\n      \"code\": \"upper-back\",\n      \"side\": \"FRONT\",\n      \"xMm\": \"50\",\n      \"yMm\": \"50\",\n      \"widthMm\": \"200\",\n      \"heightMm\": \"300\",\n      \"sizes\": [\n        {\n          \"label\": \"SMALL\",\n          \"widthMm\": \"100.125\",\n          \"heightMm\": \"150\",\n          \"surchargeCents\": 1250\n        },\n        {\n          \"label\": \"MEDIUM\",\n          \"widthMm\": \"150\",\n          \"heightMm\": \"200\",\n          \"surchargeCents\": 2000\n        },\n        {\n          \"label\": \"LARGE\",\n          \"widthMm\": \"200\",\n          \"heightMm\": \"300\",\n          \"surchargeCents\": 3000\n        }\n      ]\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 422\", () => pm.response.to.have.status(422));",
+              "pm.test(\"RFC 9457\", () => {",
+              "  const body = pm.response.json();",
+              "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "  pm.expect(Object.keys(body).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "  pm.expect(body.code).to.eql(\"ZONES_OVERLAP\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "16 - Tamaño duplicado en una zona",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/admin/template-versions",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"productId\": \"{{templateProductId}}\",\n  \"sizeId\": 1,\n  \"expectedVersion\": 2,\n  \"front\": {\n    \"widthMm\": \"400\",\n    \"heightMm\": \"600\"\n  },\n  \"back\": {\n    \"widthMm\": \"400\",\n    \"heightMm\": \"600\"\n  },\n  \"zones\": [\n    {\n      \"code\": \"chest\",\n      \"side\": \"FRONT\",\n      \"xMm\": \"50\",\n      \"yMm\": \"50\",\n      \"widthMm\": \"200\",\n      \"heightMm\": \"300\",\n      \"sizes\": [\n        {\n          \"label\": \"SMALL\",\n          \"widthMm\": \"100.125\",\n          \"heightMm\": \"150\",\n          \"surchargeCents\": 1250\n        },\n        {\n          \"label\": \"SMALL\",\n          \"widthMm\": \"150\",\n          \"heightMm\": \"200\",\n          \"surchargeCents\": 2000\n        },\n        {\n          \"label\": \"LARGE\",\n          \"widthMm\": \"200\",\n          \"heightMm\": \"300\",\n          \"surchargeCents\": 3000\n        }\n      ]\n    },\n    {\n      \"code\": \"upper-back\",\n      \"side\": \"BACK\",\n      \"xMm\": \"50\",\n      \"yMm\": \"50\",\n      \"widthMm\": \"200\",\n      \"heightMm\": \"300\",\n      \"sizes\": [\n        {\n          \"label\": \"SMALL\",\n          \"widthMm\": \"100.125\",\n          \"heightMm\": \"150\",\n          \"surchargeCents\": 1250\n        },\n        {\n          \"label\": \"MEDIUM\",\n          \"widthMm\": \"150\",\n          \"heightMm\": \"200\",\n          \"surchargeCents\": 2000\n        },\n        {\n          \"label\": \"LARGE\",\n          \"widthMm\": \"200\",\n          \"heightMm\": \"300\",\n          \"surchargeCents\": 3000\n        }\n      ]\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 422\", () => pm.response.to.have.status(422));",
+              "pm.test(\"RFC 9457\", () => {",
+              "  const body = pm.response.json();",
+              "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "  pm.expect(Object.keys(body).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "  pm.expect(body.code).to.eql(\"DUPLICATE_ZONE_SIZE\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "17 - Tamaño que no cabe en la zona",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/admin/template-versions",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"productId\": \"{{templateProductId}}\",\n  \"sizeId\": 1,\n  \"expectedVersion\": 2,\n  \"front\": {\n    \"widthMm\": \"400\",\n    \"heightMm\": \"600\"\n  },\n  \"back\": {\n    \"widthMm\": \"400\",\n    \"heightMm\": \"600\"\n  },\n  \"zones\": [\n    {\n      \"code\": \"chest\",\n      \"side\": \"FRONT\",\n      \"xMm\": \"50\",\n      \"yMm\": \"50\",\n      \"widthMm\": \"200\",\n      \"heightMm\": \"300\",\n      \"sizes\": [\n        {\n          \"label\": \"SMALL\",\n          \"widthMm\": \"201\",\n          \"heightMm\": \"150\",\n          \"surchargeCents\": 1250\n        },\n        {\n          \"label\": \"MEDIUM\",\n          \"widthMm\": \"150\",\n          \"heightMm\": \"200\",\n          \"surchargeCents\": 2000\n        },\n        {\n          \"label\": \"LARGE\",\n          \"widthMm\": \"200\",\n          \"heightMm\": \"300\",\n          \"surchargeCents\": 3000\n        }\n      ]\n    },\n    {\n      \"code\": \"upper-back\",\n      \"side\": \"BACK\",\n      \"xMm\": \"50\",\n      \"yMm\": \"50\",\n      \"widthMm\": \"200\",\n      \"heightMm\": \"300\",\n      \"sizes\": [\n        {\n          \"label\": \"SMALL\",\n          \"widthMm\": \"100.125\",\n          \"heightMm\": \"150\",\n          \"surchargeCents\": 1250\n        },\n        {\n          \"label\": \"MEDIUM\",\n          \"widthMm\": \"150\",\n          \"heightMm\": \"200\",\n          \"surchargeCents\": 2000\n        },\n        {\n          \"label\": \"LARGE\",\n          \"widthMm\": \"200\",\n          \"heightMm\": \"300\",\n          \"surchargeCents\": 3000\n        }\n      ]\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 422\", () => pm.response.to.have.status(422));",
+              "pm.test(\"RFC 9457\", () => {",
+              "  const body = pm.response.json();",
+              "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "  pm.expect(Object.keys(body).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "  pm.expect(body.code).to.eql(\"SIZE_OUTSIDE_ZONE\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "18 - Recargo negativo",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/admin/template-versions",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"productId\": \"{{templateProductId}}\",\n  \"sizeId\": 1,\n  \"expectedVersion\": 2,\n  \"front\": {\n    \"widthMm\": \"400\",\n    \"heightMm\": \"600\"\n  },\n  \"back\": {\n    \"widthMm\": \"400\",\n    \"heightMm\": \"600\"\n  },\n  \"zones\": [\n    {\n      \"code\": \"chest\",\n      \"side\": \"FRONT\",\n      \"xMm\": \"50\",\n      \"yMm\": \"50\",\n      \"widthMm\": \"200\",\n      \"heightMm\": \"300\",\n      \"sizes\": [\n        {\n          \"label\": \"SMALL\",\n          \"widthMm\": \"100.125\",\n          \"heightMm\": \"150\",\n          \"surchargeCents\": -1\n        },\n        {\n          \"label\": \"MEDIUM\",\n          \"widthMm\": \"150\",\n          \"heightMm\": \"200\",\n          \"surchargeCents\": 2000\n        },\n        {\n          \"label\": \"LARGE\",\n          \"widthMm\": \"200\",\n          \"heightMm\": \"300\",\n          \"surchargeCents\": 3000\n        }\n      ]\n    },\n    {\n      \"code\": \"upper-back\",\n      \"side\": \"BACK\",\n      \"xMm\": \"50\",\n      \"yMm\": \"50\",\n      \"widthMm\": \"200\",\n      \"heightMm\": \"300\",\n      \"sizes\": [\n        {\n          \"label\": \"SMALL\",\n          \"widthMm\": \"100.125\",\n          \"heightMm\": \"150\",\n          \"surchargeCents\": 1250\n        },\n        {\n          \"label\": \"MEDIUM\",\n          \"widthMm\": \"150\",\n          \"heightMm\": \"200\",\n          \"surchargeCents\": 2000\n        },\n        {\n          \"label\": \"LARGE\",\n          \"widthMm\": \"200\",\n          \"heightMm\": \"300\",\n          \"surchargeCents\": 3000\n        }\n      ]\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 422\", () => pm.response.to.have.status(422));",
+              "pm.test(\"RFC 9457\", () => {",
+              "  const body = pm.response.json();",
+              "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "  pm.expect(Object.keys(body).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "  pm.expect(body.code).to.eql(\"VALIDATION_ERROR\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "19 - Sin JWT",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/admin/template-versions/{{templateFirstId}}",
+        "header": [],
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 401\", () => pm.response.to.have.status(401));",
+              "pm.test(\"RFC 9457\", () => {",
+              "  const body = pm.response.json();",
+              "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "  pm.expect(Object.keys(body).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "  pm.expect(body.code).to.eql(\"INVALID_ACCESS_TOKEN\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "20 - Cliente no consulta borradores",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/admin/template-versions/{{templateFirstId}}",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 403\", () => pm.response.to.have.status(403));",
+              "pm.test(\"RFC 9457\", () => {",
+              "  const body = pm.response.json();",
+              "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "  pm.expect(Object.keys(body).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "  pm.expect(body.code).to.eql(\"FORBIDDEN\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "21 - Cliente no crea versiones",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/admin/template-versions",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"productId\": \"{{templateProductId}}\",\n  \"sizeId\": 1,\n  \"expectedVersion\": 2,\n  \"front\": {\n    \"widthMm\": \"400\",\n    \"heightMm\": \"600\"\n  },\n  \"back\": {\n    \"widthMm\": \"400\",\n    \"heightMm\": \"600\"\n  },\n  \"zones\": [\n    {\n      \"code\": \"chest\",\n      \"side\": \"FRONT\",\n      \"xMm\": \"50\",\n      \"yMm\": \"50\",\n      \"widthMm\": \"200\",\n      \"heightMm\": \"300\",\n      \"sizes\": [\n        {\n          \"label\": \"SMALL\",\n          \"widthMm\": \"100.125\",\n          \"heightMm\": \"150\",\n          \"surchargeCents\": 1250\n        },\n        {\n          \"label\": \"MEDIUM\",\n          \"widthMm\": \"150\",\n          \"heightMm\": \"200\",\n          \"surchargeCents\": 2000\n        },\n        {\n          \"label\": \"LARGE\",\n          \"widthMm\": \"200\",\n          \"heightMm\": \"300\",\n          \"surchargeCents\": 3000\n        }\n      ]\n    },\n    {\n      \"code\": \"upper-back\",\n      \"side\": \"BACK\",\n      \"xMm\": \"50\",\n      \"yMm\": \"50\",\n      \"widthMm\": \"200\",\n      \"heightMm\": \"300\",\n      \"sizes\": [\n        {\n          \"label\": \"SMALL\",\n          \"widthMm\": \"100.125\",\n          \"heightMm\": \"150\",\n          \"surchargeCents\": 1250\n        },\n        {\n          \"label\": \"MEDIUM\",\n          \"widthMm\": \"150\",\n          \"heightMm\": \"200\",\n          \"surchargeCents\": 2000\n        },\n        {\n          \"label\": \"LARGE\",\n          \"widthMm\": \"200\",\n          \"heightMm\": \"300\",\n          \"surchargeCents\": 3000\n        }\n      ]\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 403\", () => pm.response.to.have.status(403));",
+              "pm.test(\"RFC 9457\", () => {",
+              "  const body = pm.response.json();",
+              "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "  pm.expect(Object.keys(body).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "  pm.expect(body.code).to.eql(\"FORBIDDEN\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "22 - Plantilla inexistente",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/admin/template-versions/{{$guid}}",
+        "header": []
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 404\", () => pm.response.to.have.status(404));",
+              "pm.test(\"RFC 9457\", () => {",
+              "  const body = pm.response.json();",
+              "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "  pm.expect(Object.keys(body).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "  pm.expect(body.code).to.eql(\"TEMPLATE_NOT_FOUND\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "23 - No editar una versión existente",
+      "request": {
+        "method": "PATCH",
+        "url": "{{baseUrl}}/api/v1/admin/template-versions/{{templateFirstId}}",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"active\": true\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 405\", () => pm.response.to.have.status(405));",
+              "pm.test(\"RFC 9457\", () => {",
+              "  const body = pm.response.json();",
+              "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "  pm.expect(Object.keys(body).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "  pm.expect(body.code).to.eql(\"METHOD_NOT_ALLOWED\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "24 - No borrar una versión histórica",
+      "request": {
+        "method": "DELETE",
+        "url": "{{baseUrl}}/api/v1/admin/template-versions/{{templateFirstId}}",
+        "header": []
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 405\", () => pm.response.to.have.status(405));",
+              "pm.test(\"RFC 9457\", () => {",
+              "  const body = pm.response.json();",
+              "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "  pm.expect(Object.keys(body).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "  pm.expect(body.code).to.eql(\"METHOD_NOT_ALLOWED\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "25 - Borrador no expuesto como plantilla de cliente",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/templates/{{templateFirstId}}",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 404\", () => pm.response.to.have.status(404));",
+              "pm.test(\"RFC 9457\", () => {",
+              "  const body = pm.response.json();",
+              "  pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "  pm.expect(Object.keys(body).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "  pm.expect(body.code).to.eql(\"NOT_FOUND\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

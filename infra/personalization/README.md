@@ -228,3 +228,25 @@ su configuración anterior. No hay migraciones SQL nuevas: se usa `archivo`.
 
 La configuración completa y pruebas con Postman se describen en
 [archivos privados](../../services/personalizationService/docs/private-files.md).
+
+
+## Worker de imágenes
+
+El perfil `images` añade `personalization-worker`, con la misma imagen del
+servicio y un comando independiente. Usar `compose.storage.yaml` para su
+red externa y secreto de Storage; no publica puertos. Procesa secuencialmente
+con 1 CPU, 512 MiB, raíz de solo lectura y cierre con gracia de 120 segundos.
+Los límites `WORKER_BATCH_SIZE` y `WORKER_POLL_SECONDS` están en .env.example.
+No agrega tablas ni ejecuta migraciones al arrancar.
+
+El arranque, diagnóstico con `--once` y cierre sin eliminar datos están en
+[miniaturas](../../services/personalizationService/docs/print-thumbnails.md).
+
+
+## Umbral de resolución de impresión
+
+`MIN_PRINT_DPI` se pasa a los procesos del servicio. Omitido o vacío deja
+la evaluación pendiente; no hay un mínimo implícito. Configurar un entero
+de 1 a 2400 solo cuando el equipo acuerde el valor y recrear la API. El
+análisis usa este valor para un aviso, no para rechazar la imagen.
+Consultar [reglas de diseño](../../services/personalizationService/docs/design-rules.md).

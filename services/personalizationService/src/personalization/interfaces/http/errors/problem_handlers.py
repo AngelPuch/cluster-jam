@@ -8,6 +8,14 @@ from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException
 from starlette.responses import JSONResponse
 
+from personalization.application.errors.design_analysis_error import (
+    AnalysisFailure,
+    DesignAnalysisError,
+)
+from personalization.application.errors.design_error import (
+    DesignError,
+    DesignFailure,
+)
 from personalization.application.errors.file_error import (
     FileError,
     FileFailure,
@@ -26,6 +34,10 @@ from personalization.application.errors.security_error import (
 )
 from personalization.application.errors.service_not_ready_error import (
     ServiceNotReadyError,
+)
+from personalization.application.errors.template_error import (
+    TemplateError,
+    TemplateFailure,
 )
 from personalization.interfaces.http.dto.problem_details import ProblemDetails
 
@@ -352,8 +364,174 @@ async def print_exception_handler(
     )
 
 
+async def template_exception_handler(
+    request: Request, exception: Exception
+) -> JSONResponse:
+    if not isinstance(exception, TemplateError):
+        return unexpected_problem(request)
+    status, detail = {
+        TemplateFailure.TEMPLATE_NOT_FOUND: (
+            404,
+            "The template version was not found.",
+        ),
+        TemplateFailure.TEMPLATE_VERSION_CONFLICT: (
+            409,
+            "The template series changed; reload its latest version.",
+        ),
+        TemplateFailure.TEMPLATE_VERSION_LIMIT: (
+            409,
+            "The template series cannot accept another version.",
+        ),
+        TemplateFailure.TEMPLATE_DATABASE_UNAVAILABLE: (
+            503,
+            "Template metadata is temporarily unavailable.",
+        ),
+        TemplateFailure.INVALID_TEMPLATE_DATA: (
+            422,
+            "Template data does not meet the required constraints.",
+        ),
+        TemplateFailure.INVALID_CURSOR: (
+            400,
+            "The cursor is invalid for this template series.",
+        ),
+        TemplateFailure.DUPLICATE_ZONE: (
+            422,
+            "Zone codes must be unique on each side.",
+        ),
+        TemplateFailure.DUPLICATE_ZONE_SIZE: (
+            422,
+            "Size labels must be unique within a zone.",
+        ),
+        TemplateFailure.ZONE_OUTSIDE_TEMPLATE: (
+            422,
+            "A zone exceeds its template side.",
+        ),
+        TemplateFailure.ZONES_OVERLAP: (
+            422,
+            "Zones on the same side must not overlap.",
+        ),
+        TemplateFailure.SIZE_OUTSIDE_ZONE: (
+            422,
+            "An allowed size exceeds its zone.",
+        ),
+    }[exception.failure]
+    return problem_response(
+        request,
+        status_code=status,
+        code=exception.failure.value,
+        detail=detail,
+    )
+
+
+async def design_analysis_exception_handler(
+    request: Request, exception: Exception
+) -> JSONResponse:
+    if not isinstance(exception, DesignAnalysisError):
+        return unexpected_problem(request)
+    status, detail = {
+        AnalysisFailure.INVALID_DESIGN_ANALYSIS: (
+            422,
+            "Choose valid unique applications and exactly one image source.",
+        ),
+        AnalysisFailure.ZONE_NOT_IN_TEMPLATE: (
+            422,
+            "The selected zone does not belong to this template.",
+        ),
+        AnalysisFailure.SIZE_NOT_IN_ZONE: (
+            422,
+            "The selected size does not belong to this zone.",
+        ),
+        AnalysisFailure.DUPLICATE_ZONE_APPLICATION: (
+            422,
+            "Only one application is allowed in each zone.",
+        ),
+        AnalysisFailure.ANALYSIS_SOURCE_NOT_FOUND: (
+            404,
+            "The selected original or print version was not found.",
+        ),
+        AnalysisFailure.ANALYSIS_SOURCE_NOT_READY: (
+            409,
+            "The selected source is not an available service original.",
+        ),
+        AnalysisFailure.INVALID_IMAGE_GEOMETRY: (
+            409,
+            "The original image dimensions cannot be used.",
+        ),
+        AnalysisFailure.PERSONALIZATION_AMOUNT_OVERFLOW: (
+            422,
+            "The personalization surcharge exceeds safe integer cents.",
+        ),
+        AnalysisFailure.ANALYSIS_DATABASE_UNAVAILABLE: (
+            503,
+            "Analysis source metadata is temporarily unavailable.",
+        ),
+    }[exception.failure]
+    return problem_response(
+        request,
+        status_code=status,
+        code=exception.failure.value,
+        detail=detail,
+    )
+
+
+async def design_exception_handler(
+    request: Request, exception: Exception
+) -> JSONResponse:
+    if not isinstance(exception, DesignError):
+        return unexpected_problem(request)
+    status, detail = {
+        DesignFailure.DESIGN_NOT_FOUND: (
+            404,
+            "The saved draft was not found.",
+        ),
+        DesignFailure.DESIGN_NOT_EDITABLE: (
+            409,
+            "A frozen design cannot change; create a copy before editing.",
+        ),
+        DesignFailure.DESIGN_VERSION_LIMIT: (
+            409,
+            "This draft cannot accept another revision.",
+        ),
+        DesignFailure.INVALID_DESIGN_DATA: (
+            422,
+            "Draft references do not meet the required constraints.",
+        ),
+        DesignFailure.DESIGN_DATABASE_UNAVAILABLE: (
+            503,
+            "Draft persistence is temporarily unavailable.",
+        ),
+        DesignFailure.DESIGN_PRECONDITION_REQUIRED: (
+            428,
+            "Read the draft and send its ETag in If-Match.",
+        ),
+        DesignFailure.INVALID_DESIGN_PRECONDITION: (
+            400,
+            "If-Match must contain a valid bounded entity-tag list.",
+        ),
+        DesignFailure.DESIGN_PRECONDITION_FAILED: (
+            412,
+            "The draft changed; read it again before editing.",
+        ),
+        DesignFailure.INVALID_CURSOR: (
+            400,
+            "The cursor is invalid for this owner's draft collection.",
+        ),
+    }[exception.failure]
+    return problem_response(
+        request,
+        status_code=status,
+        code=exception.failure.value,
+        detail=detail,
+    )
+
+
 def configure_exception_handlers(app: FastAPI) -> None:
     """Override framework defaults at the HTTP boundary."""
+    app.add_exception_handler(DesignError, design_exception_handler)
+    app.add_exception_handler(
+        DesignAnalysisError, design_analysis_exception_handler
+    )
+    app.add_exception_handler(TemplateError, template_exception_handler)
     app.add_exception_handler(PrintError, print_exception_handler)
     app.add_exception_handler(FileError, file_exception_handler)
     app.add_exception_handler(

@@ -9,6 +9,7 @@ from pydantic import (
     Field,
     PrivateAttr,
     SecretStr,
+    field_validator,
     model_validator,
 )
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -108,8 +109,26 @@ class Settings(BaseSettings):
     download_url_ttl_seconds: int = Field(
         default=60, ge=1, le=300, validation_alias="DOWNLOAD_URL_TTL_SECONDS"
     )
+    worker_batch_size: int = Field(
+        default=10, ge=1, le=100, validation_alias="WORKER_BATCH_SIZE"
+    )
+    worker_poll_seconds: int = Field(
+        default=10, ge=1, le=300, validation_alias="WORKER_POLL_SECONDS"
+    )
+    min_print_dpi: int | None = Field(
+        default=None, ge=1, le=2400, validation_alias="MIN_PRINT_DPI"
+    )
     _storage_key: SecretStr | None = PrivateAttr(default=None)
     _database_password: SecretStr = PrivateAttr()
+
+    @field_validator("min_print_dpi", mode="before")
+    @classmethod
+    def optional_dpi(cls, value: object) -> object:
+        if value == "":
+            return None
+        if isinstance(value, bool):
+            raise ValueError("DPI must be a positive integer or unset")
+        return value
 
     @property
     def storage_project_url(self) -> str:

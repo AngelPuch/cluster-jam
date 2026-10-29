@@ -313,8 +313,8 @@ en la misma transacción. `expectedVersion` detecta cambios concurrentes;
 los archivos y precios de versiones anteriores se conservan.
 
 Se usan las tablas existentes de la migración `0001_personalization`.
-No se requiere migración adicional. Las miniaturas y el catálogo de
-estampados para clientes se incorporarán en su propio incremento.
+No se requiere migración adicional. Las miniaturas y el catálogo para
+clientes se describen en sus secciones correspondientes más adelante.
 
 Consultar [contratos, decisiones y pruebas](docs/print-versioning.md).
 La colección de Postman es `prints.postman_collection.json`; usa
@@ -333,3 +333,74 @@ una versión nueva por su endpoint específico.
 Consultar [contrato y pruebas paso a paso](docs/print-lifecycle.md).
 La colección `print-lifecycle.postman_collection.json` reutiliza el entorno
 local y guarda automáticamente las etiquetas para sus pruebas.
+
+
+## Worker y miniaturas de estampados
+
+Un worker separado genera miniaturas privadas PNG de hasta 320 × 320 px
+para los originales usados por versiones de estampados. Revalida bytes,
+conserva originales, recupera intenciones pendientes y evita sobrescrituras.
+Hay consulta y enlace de descarga administrativos por versión. El catálogo
+para clientes reutiliza estos derivados con permisos de lectura propios.
+
+Consultar [la guía del worker](docs/print-thumbnails.md) para contratos,
+concurrencia, recuperación, Docker, límites y 12 pruebas con Postman.
+
+
+## Catálogo de estampados
+
+`GET /api/v1/prints` y el detalle por ID permiten consultar estampados
+activos con versión vigente, miniatura disponible y recargo en MXN. Cliente
+y administrador pueden leer; los originales conservan sus permisos. El
+listado es paginado y no llama a Storage por elemento. El enlace temporal
+de miniatura se solicita mediante el recurso indicado en la respuesta.
+
+Consultar [la guía del catálogo](docs/print-catalog.md) para publicación,
+contratos, vigencia de enlaces, pruebas y colección Postman de 21 pasos.
+
+
+## Plantillas versionadas en borrador
+
+La API administrativa `/api/v1/admin/template-versions` crea y consulta
+versiones inmutables con zonas y tamaños, medidas exactas en mm/cm y
+recargos MXN. La creación y auditoría son atómicas y serializan cada serie
+producto/talla. Todas las versiones se crean inactivas: Catalog Service
+todavía no existe y falta validar referencias y compatibilidad antes de
+habilitar publicación y diseños reales.
+
+Consultar [la guía de plantillas](docs/template-versioning.md) para el
+contrato, límites, geometría, dependencia pendiente y 25 pruebas Postman.
+
+
+## Reglas de diseño y diagnóstico administrativo
+
+`POST /api/v1/admin/template-versions/{templateId}/design-analyses` calcula
+ajuste proporcional centrado, DPI efectivo y recargos por unidad con datos
+guardados. Usa geometría exacta y centavos enteros; no crea diseños ni
+cotizaciones. Solo administrador puede analizar borradores o versiones
+históricas. Catalog sigue pendiente y `MIN_PRINT_DPI` queda sin valor por
+defecto hasta que lo defina el equipo; un umbral ausente se informa como
+evaluación pendiente y nunca como calidad suficiente.
+
+Consultar [reglas y pruebas](docs/design-rules.md), incluida la colección
+Postman de 21 solicitudes y las limitaciones de este diagnóstico.
+
+
+## Borradores administrativos persistidos
+
+La API `/api/v1/admin/design-drafts` permite crear, consultar, reemplazar y
+copiar borradores propios con JWT administrador. Guarda `diseno` y
+`aplicacion` con auditoría atómica, ETag/If-Match y copias independientes.
+Las referencias de Catalog siguen sin verificar y checkoutReady permanece
+false. No activa plantillas ni habilita diseños comerciales de clientes.
+Consultar [contrato y pruebas en Postman](docs/design-drafts.md).
+
+
+## Previews privadas de diseños
+
+El worker images procesa miniaturas y previews de ambas caras, fuera de
+HTTP. Las previews esquemáticas usan la geometría física de plantilla y
+fuentes originales, con recuperación de cargas y asociación a la revisión
+vigente. Se consultan y descargan mediante enlaces privados temporales.
+Catalog y checkout siguen pendientes; no se representa una prenda real.
+Consultar [operación y Postman](docs/design-previews.md).

@@ -1,0 +1,881 @@
+{
+  "info": {
+    "name": "Cluster JAM - Private Design Previews (rev. 2)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "26 solicitudes. Ejecutar localmente con Collection Runner, una iteración y Delay 1000 ms. Los pasos 04,14,19 se repiten hasta READY (máximo 60 consultas cada uno). Sin archivos adjuntos. Requiere worker images activo, printId y JWT vigentes. Previews esquemáticas privadas; Catalog, checkout y umbral DPI siguen pendientes. Los GET de enlaces firmados llevan No Auth. Revisión 2: al usar Send hay que esperar READY en 04/14/19. 05 y 11 capturan el ETag listo; 06/08 también capturan IDs; 12/15 comprueban variables antes de enviar. Un 200 PENDING no permite continuar."
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{adminAccessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "01 - Leer versión e imagen de referencia",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/admin/prints/{{printId}}",
+        "header": []
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) {",
+              "  const version = pm.response.json().latestVersion;",
+              "  pm.environment.set(\"previewPrintVersionId\", version.id);",
+              "  pm.environment.set(\"previewFileId\", version.fileId);",
+              "  pm.environment.set(\"previewPrintSurchargeCents\", version.surchargeCents);",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - Crear plantilla QA inactiva",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/admin/template-versions",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"productId\": \"{{$guid}}\",\n  \"sizeId\": 1,\n  \"expectedVersion\": 0,\n  \"front\": {\n    \"widthMm\": \"400\",\n    \"heightMm\": \"600\"\n  },\n  \"back\": {\n    \"widthMm\": \"400\",\n    \"heightMm\": \"600\"\n  },\n  \"zones\": [\n    {\n      \"code\": \"chest\",\n      \"side\": \"FRONT\",\n      \"xMm\": \"50\",\n      \"yMm\": \"50\",\n      \"widthMm\": \"200\",\n      \"heightMm\": \"300\",\n      \"sizes\": [\n        {\n          \"label\": \"SMALL\",\n          \"widthMm\": \"100\",\n          \"heightMm\": \"150\",\n          \"surchargeCents\": 1250\n        }\n      ]\n    },\n    {\n      \"code\": \"upper-back\",\n      \"side\": \"BACK\",\n      \"xMm\": \"50\",\n      \"yMm\": \"50\",\n      \"widthMm\": \"200\",\n      \"heightMm\": \"300\",\n      \"sizes\": [\n        {\n          \"label\": \"SMALL\",\n          \"widthMm\": \"100\",\n          \"heightMm\": \"150\",\n          \"surchargeCents\": 1250\n        }\n      ]\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+              "if (pm.response.code === 201) {",
+              "  const value = pm.response.json();",
+              "  const front = value.zones.find(zone => zone.side === \"FRONT\");",
+              "  const back = value.zones.find(zone => zone.side === \"BACK\");",
+              "  pm.environment.set(\"previewTemplateId\", value.id);",
+              "  pm.environment.set(\"previewTemplateSnapshot\", JSON.stringify(value));",
+              "  pm.environment.set(\"previewFrontZoneId\", front.id);",
+              "  pm.environment.set(\"previewFrontSizeId\", front.sizes[0].id);",
+              "  pm.environment.set(\"previewBackZoneId\", back.id);",
+              "  pm.environment.set(\"previewBackSizeId\", back.sizes[0].id);",
+              "  pm.test(\"Borrador\", () => pm.expect(value.active).to.eql(false));",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 - Crear borrador para previews",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/admin/design-drafts",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"variantId\": \"{{$guid}}\",\n  \"templateId\": \"{{previewTemplateId}}\",\n  \"applications\": [\n    {\n      \"zoneId\": \"{{previewFrontZoneId}}\",\n      \"zoneSizeId\": \"{{previewFrontSizeId}}\",\n      \"printVersionId\": \"{{previewPrintVersionId}}\"\n    },\n    {\n      \"zoneId\": \"{{previewBackZoneId}}\",\n      \"zoneSizeId\": \"{{previewBackSizeId}}\",\n      \"fileId\": \"{{previewFileId}}\"\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+              "if (pm.response.code === 201) {",
+              "for (const key of [\"previewFrontId\", \"previewBackId\", \"previewSnapshot\", \"previewEtag\", \"previewEditEtag\", \"previewFrontDownloadUrl\", \"previewBackDownloadUrl\", \"previewV2FrontId\", \"previewV2BackId\", \"previewV2Snapshot\", \"previewV2Etag\", \"previewV2BackDownloadUrl\", \"previewCopyDesignId\", \"previewCopyFrontId\", \"previewCopyBackId\", \"previewCopySnapshot\", \"previewCopyEtag\"]) { pm.environment.set(key, \"\"); }",
+              "const value = pm.response.json(); pm.environment.set(\"previewDesignId\", value.id);",
+              "pm.environment.set(\"previewVariantId\", value.variantId); pm.environment.set(\"previewOldEtag\", pm.response.headers.get(\"ETag\"));",
+              "pm.environment.set(\"previewPollCount\", 0);",
+              "pm.test(\"Borrador con dos aplicaciones\", () => { pm.expect(value.state).to.eql(\"BORRADOR\"); pm.expect(value.applications.length).to.eql(2); });",
+              "}",
+              "if (pm.response.code !== 201) { pm.execution.setNextRequest(null); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 - Esperar previews de ambas caras",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/admin/design-drafts/{{previewDesignId}}/previews",
+        "header": []
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) {",
+              "const value = pm.response.json();",
+              "pm.test(\"Estado asíncrono válido\", () => pm.expect([\"PENDING\",\"READY\"].includes(value.status)).to.eql(true));",
+              "if (value.status === \"READY\") {",
+              " pm.environment.set(\"previewFrontId\", value.front.id); pm.environment.set(\"previewBackId\", value.back.id);",
+              " pm.environment.set(\"previewSnapshot\", JSON.stringify(value));",
+              " pm.environment.set(\"previewEtag\", pm.response.headers.get(\"ETag\"));",
+              " pm.environment.set(\"previewPollCount\", 0);",
+              " pm.test(\"Ambas caras listas en versión 1\", () => {",
+              "  pm.expect(value.designVersion).to.eql(1);",
+              "  pm.expect(value.front.mimeType).to.eql(\"image/png\"); pm.expect(value.back.mimeType).to.eql(\"image/png\");",
+              "  pm.expect(value.front.state).to.eql(\"DISPONIBLE\"); pm.expect(value.back.state).to.eql(\"DISPONIBLE\");",
+              "  pm.expect(value.front.widthPx).to.eql(683); pm.expect(value.front.heightPx).to.eql(1024);",
+              "  pm.expect(value.back.widthPx).to.eql(683); pm.expect(value.back.heightPx).to.eql(1024);",
+              "  pm.expect(value.front.id).not.to.eql(value.back.id);",
+              "  pm.expect(value.approximate).to.eql(true); pm.expect(value.representation).to.eql(\"SCHEMATIC_TEMPLATE\");",
+              "  pm.expect(value.catalogCompatibilityVerified).to.eql(false); pm.expect(value.checkoutReady).to.eql(false);",
+              " });",
+              "} else if (value.status === \"PENDING\") {",
+              " const attempts = Number(pm.environment.get(\"previewPollCount\") || 0) + 1;",
+              " pm.environment.set(\"previewPollCount\", attempts);",
+              " if (attempts >= 60) {",
+              "  pm.test(\"El worker terminó antes del límite\", () => pm.expect(value.status).to.eql(\"READY\"));",
+              "  pm.execution.setNextRequest(null);",
+              " } else {",
+              "  pm.execution.setNextRequest(\"04 - Esperar previews de ambas caras\");",
+              " }",
+              "}",
+              "}",
+              "if (pm.response.code !== 200) { pm.execution.setNextRequest(null); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 - Consultar referencias y ETag actuales",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/admin/design-drafts/{{previewDesignId}}",
+        "header": []
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) {",
+              " const value = pm.response.json();",
+              " const ready = Boolean(value.frontPreviewId && value.backPreviewId);",
+              " pm.test(\"Previews listas: si falla, repite 04 hasta READY y luego 05\", () => pm.expect(ready).to.eql(true));",
+              " if (ready) {",
+              "  pm.environment.set(\"previewFrontId\", value.frontPreviewId); pm.environment.set(\"previewBackId\", value.backPreviewId);",
+              "  pm.environment.set(\"previewEditEtag\", pm.response.headers.get(\"ETag\"));",
+              "  pm.test(\"Revisión inicial lista\", () => pm.expect(value.version).to.eql(1));",
+              " } else { pm.environment.set(\"previewEditEtag\", \"\"); pm.execution.setNextRequest(\"04 - Esperar previews de ambas caras\"); }",
+              "} else { pm.execution.setNextRequest(null); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 - Crear enlace de preview frontal",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/admin/design-drafts/{{previewDesignId}}/previews/FRONT/download-urls",
+        "header": []
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+              "if (pm.response.code === 201) {",
+              "pm.environment.set(\"previewFrontId\", pm.response.json().fileId);",
+              "pm.environment.set(\"previewFrontDownloadUrl\", pm.response.json().downloadUrl);",
+              "pm.test(\"Enlace privado de corta duración\", () => { pm.expect(pm.response.json().downloadUrl.startsWith(\"https://\")).to.eql(true); pm.expect(pm.response.headers.get(\"Cache-Control\")).to.eql(\"no-store\"); });",
+              "}",
+              "if (pm.response.code !== 201) { pm.execution.setNextRequest(null); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 - Descargar preview frontal",
+      "request": {
+        "method": "GET",
+        "url": "{{previewFrontDownloadUrl}}",
+        "header": [],
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) {",
+              "pm.test(\"PNG descargado\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"image/png\"));",
+              "}",
+              "if (pm.response.code !== 200) { pm.execution.setNextRequest(null); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 - Crear enlace de preview posterior",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/admin/design-drafts/{{previewDesignId}}/previews/BACK/download-urls",
+        "header": []
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+              "if (pm.response.code === 201) {",
+              "pm.environment.set(\"previewBackId\", pm.response.json().fileId);",
+              "pm.environment.set(\"previewBackDownloadUrl\", pm.response.json().downloadUrl);",
+              "pm.test(\"Enlace privado de corta duración\", () => { pm.expect(pm.response.json().downloadUrl.startsWith(\"https://\")).to.eql(true); pm.expect(pm.response.headers.get(\"Cache-Control\")).to.eql(\"no-store\"); });",
+              "}",
+              "if (pm.response.code !== 201) { pm.execution.setNextRequest(null); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 - Descargar preview posterior",
+      "request": {
+        "method": "GET",
+        "url": "{{previewBackDownloadUrl}}",
+        "header": [],
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) {",
+              "pm.test(\"PNG descargado\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"image/png\"));",
+              "}",
+              "if (pm.response.code !== 200) { pm.execution.setNextRequest(null); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 - Consultar proporciones y resolución efectiva",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/admin/template-versions/{{previewTemplateId}}/design-analyses",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"applications\": [\n    {\n      \"zoneId\": \"{{previewFrontZoneId}}\",\n      \"zoneSizeId\": \"{{previewFrontSizeId}}\",\n      \"printVersionId\": \"{{previewPrintVersionId}}\"\n    },\n    {\n      \"zoneId\": \"{{previewBackZoneId}}\",\n      \"zoneSizeId\": \"{{previewBackSizeId}}\",\n      \"fileId\": \"{{previewFileId}}\"\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) {",
+              "const value = pm.response.json();",
+              "pm.test(\"Diagnóstico separado con umbral pendiente\", () => { pm.expect(value.applications.length).to.eql(2); pm.expect(value.minimumDpi).to.eql(null); pm.expect(value.diagnosticOnly).to.eql(true); pm.expect(value.catalogCompatibilityVerified).to.eql(false); for (const item of value.applications) { pm.expect(item.resolutionStatus).to.eql(\"THRESHOLD_NOT_CONFIGURED\"); } });",
+              "}",
+              "if (pm.response.code !== 200) { pm.execution.setNextRequest(null); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11 - Consultar de nuevo no regenera imágenes",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/admin/design-drafts/{{previewDesignId}}/previews",
+        "header": []
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) {",
+              " const value = pm.response.json();",
+              " pm.test(\"Previews READY antes de editar\", () => pm.expect(value.status).to.eql(\"READY\"));",
+              " if (value.status === \"READY\") {",
+              "  pm.environment.set(\"previewEditEtag\", pm.response.headers.get(\"ETag\"));",
+              "  pm.environment.set(\"previewFrontId\", value.front.id); pm.environment.set(\"previewBackId\", value.back.id);",
+              "  const saved = pm.environment.get(\"previewSnapshot\");",
+              "  pm.test(\"Mismos archivos y ETag: primero completa 04 hasta READY\", () => {",
+              "   pm.expect(Boolean(saved)).to.eql(true);",
+              "   pm.expect(value).to.eql(JSON.parse(saved));",
+              "   pm.expect(pm.response.headers.get(\"ETag\")).to.eql(pm.environment.get(\"previewEtag\"));",
+              "  });",
+              " } else { pm.environment.set(\"previewEditEtag\", \"\"); pm.execution.setNextRequest(\"04 - Esperar previews de ambas caras\"); }",
+              "} else { pm.execution.setNextRequest(null); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "12 - Editar y quitar aplicación posterior",
+      "request": {
+        "method": "PUT",
+        "url": "{{baseUrl}}/api/v1/admin/design-drafts/{{previewDesignId}}",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "If-Match",
+            "value": "{{previewEditEtag}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"variantId\": \"{{previewVariantId}}\",\n  \"templateId\": \"{{previewTemplateId}}\",\n  \"applications\": [\n    {\n      \"zoneId\": \"{{previewFrontZoneId}}\",\n      \"zoneSizeId\": \"{{previewFrontSizeId}}\",\n      \"printVersionId\": \"{{previewPrintVersionId}}\"\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const tag = pm.environment.get(\"previewEditEtag\");",
+              "if (typeof tag !== \"string\" || !/^\"[a-f0-9]{64}\"$/.test(tag)) {",
+              " throw new Error(\"Primero repite 04 hasta READY, ejecuta 05 y 11; después envía 12 una sola vez\");",
+              "}"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) {",
+              "const value = pm.response.json();",
+              "pm.test(\"Nueva revisión invalida las dos previews\", () => { pm.expect(value.version).to.eql(2); pm.expect(value.frontPreviewId).to.eql(null); pm.expect(value.backPreviewId).to.eql(null); pm.expect(value.applications.length).to.eql(1); });",
+              "pm.environment.set(\"previewPollCount\", 0);",
+              "}",
+              "if (pm.response.code !== 200) { pm.execution.setNextRequest(null); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "13 - Edición con ETag anterior rechazada",
+      "request": {
+        "method": "PUT",
+        "url": "{{baseUrl}}/api/v1/admin/design-drafts/{{previewDesignId}}",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "If-Match",
+            "value": "{{previewOldEtag}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"variantId\": \"{{previewVariantId}}\",\n  \"templateId\": \"{{previewTemplateId}}\",\n  \"applications\": [\n    {\n      \"zoneId\": \"{{previewFrontZoneId}}\",\n      \"zoneSizeId\": \"{{previewFrontSizeId}}\",\n      \"printVersionId\": \"{{previewPrintVersionId}}\"\n    },\n    {\n      \"zoneId\": \"{{previewBackZoneId}}\",\n      \"zoneSizeId\": \"{{previewBackSizeId}}\",\n      \"fileId\": \"{{previewFileId}}\"\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 412\", () => pm.response.to.have.status(412));",
+              "pm.test(\"ProblemDetails DESIGN_PRECONDITION_FAILED\", () => {",
+              " pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              " pm.expect(pm.response.json().code).to.eql(\"DESIGN_PRECONDITION_FAILED\");",
+              " pm.expect(Object.keys(pm.response.json()).sort()).to.eql([\"type\",\"title\",\"status\",\"detail\",\"instance\",\"code\",\"traceId\"].sort());",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "14 - Esperar previews de la nueva revisión",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/admin/design-drafts/{{previewDesignId}}/previews",
+        "header": []
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) {",
+              "const value = pm.response.json();",
+              "pm.test(\"Estado asíncrono válido\", () => pm.expect([\"PENDING\",\"READY\"].includes(value.status)).to.eql(true));",
+              "if (value.status === \"READY\") {",
+              " pm.environment.set(\"previewV2FrontId\", value.front.id); pm.environment.set(\"previewV2BackId\", value.back.id);",
+              " pm.environment.set(\"previewV2Snapshot\", JSON.stringify(value));",
+              " pm.environment.set(\"previewV2Etag\", pm.response.headers.get(\"ETag\"));",
+              " pm.environment.set(\"previewPollCount\", 0);",
+              " pm.test(\"Ambas caras listas en versión 2\", () => {",
+              "  pm.expect(value.designVersion).to.eql(2);",
+              "  pm.expect(value.front.mimeType).to.eql(\"image/png\"); pm.expect(value.back.mimeType).to.eql(\"image/png\");",
+              "  pm.expect(value.front.state).to.eql(\"DISPONIBLE\"); pm.expect(value.back.state).to.eql(\"DISPONIBLE\");",
+              "  pm.expect(value.front.widthPx).to.eql(683); pm.expect(value.front.heightPx).to.eql(1024);",
+              "  pm.expect(value.back.widthPx).to.eql(683); pm.expect(value.back.heightPx).to.eql(1024);",
+              "  pm.expect(value.front.id).not.to.eql(value.back.id);",
+              "  pm.expect(value.approximate).to.eql(true); pm.expect(value.representation).to.eql(\"SCHEMATIC_TEMPLATE\");",
+              "  pm.expect(value.catalogCompatibilityVerified).to.eql(false); pm.expect(value.checkoutReady).to.eql(false);",
+              " });",
+              "} else if (value.status === \"PENDING\") {",
+              " const attempts = Number(pm.environment.get(\"previewPollCount\") || 0) + 1;",
+              " pm.environment.set(\"previewPollCount\", attempts);",
+              " if (attempts >= 60) {",
+              "  pm.test(\"El worker terminó antes del límite\", () => pm.expect(value.status).to.eql(\"READY\"));",
+              "  pm.execution.setNextRequest(null);",
+              " } else {",
+              "  pm.execution.setNextRequest(\"14 - Esperar previews de la nueva revisión\");",
+              " }",
+              "}",
+              "}",
+              "if (pm.response.code !== 200) { pm.execution.setNextRequest(null); }",
+              "if (pm.response.code === 200 && pm.response.json().status === \"READY\") { pm.test(\"Nuevas claves tras editar\", () => { pm.expect(pm.response.json().front.id).not.to.eql(pm.environment.get(\"previewFrontId\")); pm.expect(pm.response.json().back.id).not.to.eql(pm.environment.get(\"previewBackId\")); }); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "15 - Derivados no se exponen como originales",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/files/{{previewFrontId}}",
+        "header": []
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const id = pm.environment.get(\"previewFrontId\");",
+              "if (typeof id !== \"string\" || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(id)) {",
+              " throw new Error(\"Falta previewFrontId: repite 04 hasta READY y luego ejecuta 05 antes de probar 15\");",
+              "}"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 404\", () => pm.response.to.have.status(404));",
+              "pm.test(\"Preview fuera de API de originales\", () => {",
+              " pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              " pm.expect(pm.response.json().code).to.eql(\"FILE_NOT_FOUND\");",
+              " pm.expect(Object.keys(pm.response.json()).sort()).to.eql([\"type\",\"title\",\"status\",\"detail\",\"instance\",\"code\",\"traceId\"].sort());",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "16 - Crear enlace de espalda sin aplicación",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/admin/design-drafts/{{previewDesignId}}/previews/BACK/download-urls",
+        "header": []
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+              "if (pm.response.code === 201) {",
+              "pm.environment.set(\"previewV2BackDownloadUrl\", pm.response.json().downloadUrl);",
+              "pm.test(\"Enlace privado de corta duración\", () => { pm.expect(pm.response.json().downloadUrl.startsWith(\"https://\")).to.eql(true); pm.expect(pm.response.headers.get(\"Cache-Control\")).to.eql(\"no-store\"); });",
+              "}",
+              "if (pm.response.code !== 201) { pm.execution.setNextRequest(null); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "17 - Descargar espalda con zona vacía",
+      "request": {
+        "method": "GET",
+        "url": "{{previewV2BackDownloadUrl}}",
+        "header": [],
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) {",
+              "pm.test(\"PNG descargado\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"image/png\"));",
+              "}",
+              "if (pm.response.code !== 200) { pm.execution.setNextRequest(null); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "18 - Copiar diseño sin reutilizar previews",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/admin/design-drafts/{{previewDesignId}}/copies",
+        "header": []
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+              "if (pm.response.code === 201) {",
+              "const value = pm.response.json(); pm.environment.set(\"previewCopyDesignId\", value.id); pm.environment.set(\"previewPollCount\", 0);",
+              "pm.test(\"Copia nueva sin previews heredadas\", () => { pm.expect(value.id).not.to.eql(pm.environment.get(\"previewDesignId\")); pm.expect(value.version).to.eql(1); pm.expect(value.frontPreviewId).to.eql(null); pm.expect(value.backPreviewId).to.eql(null); });",
+              "}",
+              "if (pm.response.code !== 201) { pm.execution.setNextRequest(null); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "19 - Esperar previews propias de la copia",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/admin/design-drafts/{{previewCopyDesignId}}/previews",
+        "header": []
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) {",
+              "const value = pm.response.json();",
+              "pm.test(\"Estado asíncrono válido\", () => pm.expect([\"PENDING\",\"READY\"].includes(value.status)).to.eql(true));",
+              "if (value.status === \"READY\") {",
+              " pm.environment.set(\"previewCopyFrontId\", value.front.id); pm.environment.set(\"previewCopyBackId\", value.back.id);",
+              " pm.environment.set(\"previewCopySnapshot\", JSON.stringify(value));",
+              " pm.environment.set(\"previewCopyEtag\", pm.response.headers.get(\"ETag\"));",
+              " pm.environment.set(\"previewPollCount\", 0);",
+              " pm.test(\"Ambas caras listas en versión 1\", () => {",
+              "  pm.expect(value.designVersion).to.eql(1);",
+              "  pm.expect(value.front.mimeType).to.eql(\"image/png\"); pm.expect(value.back.mimeType).to.eql(\"image/png\");",
+              "  pm.expect(value.front.state).to.eql(\"DISPONIBLE\"); pm.expect(value.back.state).to.eql(\"DISPONIBLE\");",
+              "  pm.expect(value.front.widthPx).to.eql(683); pm.expect(value.front.heightPx).to.eql(1024);",
+              "  pm.expect(value.back.widthPx).to.eql(683); pm.expect(value.back.heightPx).to.eql(1024);",
+              "  pm.expect(value.front.id).not.to.eql(value.back.id);",
+              "  pm.expect(value.approximate).to.eql(true); pm.expect(value.representation).to.eql(\"SCHEMATIC_TEMPLATE\");",
+              "  pm.expect(value.catalogCompatibilityVerified).to.eql(false); pm.expect(value.checkoutReady).to.eql(false);",
+              " });",
+              "} else if (value.status === \"PENDING\") {",
+              " const attempts = Number(pm.environment.get(\"previewPollCount\") || 0) + 1;",
+              " pm.environment.set(\"previewPollCount\", attempts);",
+              " if (attempts >= 60) {",
+              "  pm.test(\"El worker terminó antes del límite\", () => pm.expect(value.status).to.eql(\"READY\"));",
+              "  pm.execution.setNextRequest(null);",
+              " } else {",
+              "  pm.execution.setNextRequest(\"19 - Esperar previews propias de la copia\");",
+              " }",
+              "}",
+              "}",
+              "if (pm.response.code !== 200) { pm.execution.setNextRequest(null); }",
+              "if (pm.response.code === 200 && pm.response.json().status === \"READY\") { pm.test(\"Copia con claves independientes\", () => { pm.expect(pm.response.json().front.id).not.to.eql(pm.environment.get(\"previewV2FrontId\")); pm.expect(pm.response.json().back.id).not.to.eql(pm.environment.get(\"previewV2BackId\")); }); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "20 - Cliente sin acceso a previews administrativas",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/admin/design-drafts/{{previewDesignId}}/previews",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 403\", () => pm.response.to.have.status(403));",
+              "pm.test(\"ProblemDetails FORBIDDEN\", () => {",
+              " pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              " pm.expect(pm.response.json().code).to.eql(\"FORBIDDEN\");",
+              " pm.expect(Object.keys(pm.response.json()).sort()).to.eql([\"type\",\"title\",\"status\",\"detail\",\"instance\",\"code\",\"traceId\"].sort());",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "21 - Consultar sin JWT",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/admin/design-drafts/{{previewDesignId}}/previews",
+        "header": [],
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 401\", () => pm.response.to.have.status(401));",
+              "pm.test(\"ProblemDetails INVALID_ACCESS_TOKEN\", () => {",
+              " pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              " pm.expect(pm.response.json().code).to.eql(\"INVALID_ACCESS_TOKEN\");",
+              " pm.expect(Object.keys(pm.response.json()).sort()).to.eql([\"type\",\"title\",\"status\",\"detail\",\"instance\",\"code\",\"traceId\"].sort());",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "22 - Diseño inexistente",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/admin/design-drafts/{{$guid}}/previews",
+        "header": []
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 404\", () => pm.response.to.have.status(404));",
+              "pm.test(\"ProblemDetails DESIGN_NOT_FOUND\", () => {",
+              " pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              " pm.expect(pm.response.json().code).to.eql(\"DESIGN_NOT_FOUND\");",
+              " pm.expect(Object.keys(pm.response.json()).sort()).to.eql([\"type\",\"title\",\"status\",\"detail\",\"instance\",\"code\",\"traceId\"].sort());",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "23 - Cara inválida",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/admin/design-drafts/{{previewDesignId}}/previews/SIDE/download-urls",
+        "header": []
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 422\", () => pm.response.to.have.status(422));",
+              "pm.test(\"ProblemDetails VALIDATION_ERROR\", () => {",
+              " pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              " pm.expect(pm.response.json().code).to.eql(\"VALIDATION_ERROR\");",
+              " pm.expect(Object.keys(pm.response.json()).sort()).to.eql([\"type\",\"title\",\"status\",\"detail\",\"instance\",\"code\",\"traceId\"].sort());",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "24 - Cliente sin permiso de enlace",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/admin/design-drafts/{{previewDesignId}}/previews/FRONT/download-urls",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 403\", () => pm.response.to.have.status(403));",
+              "pm.test(\"ProblemDetails FORBIDDEN\", () => {",
+              " pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              " pm.expect(pm.response.json().code).to.eql(\"FORBIDDEN\");",
+              " pm.expect(Object.keys(pm.response.json()).sort()).to.eql([\"type\",\"title\",\"status\",\"detail\",\"instance\",\"code\",\"traceId\"].sort());",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "25 - Crear enlace sin JWT",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/v1/admin/design-drafts/{{previewDesignId}}/previews/BACK/download-urls",
+        "header": [],
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 401\", () => pm.response.to.have.status(401));",
+              "pm.test(\"ProblemDetails INVALID_ACCESS_TOKEN\", () => {",
+              " pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              " pm.expect(pm.response.json().code).to.eql(\"INVALID_ACCESS_TOKEN\");",
+              " pm.expect(Object.keys(pm.response.json()).sort()).to.eql([\"type\",\"title\",\"status\",\"detail\",\"instance\",\"code\",\"traceId\"].sort());",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "26 - Original conserva sus previews actuales",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/admin/design-drafts/{{previewDesignId}}/previews",
+        "header": []
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+              "if (pm.response.code === 200) {",
+              "pm.test(\"Original intacto tras copiar y rechazar errores\", () => { pm.expect(pm.response.json()).to.eql(JSON.parse(pm.environment.get(\"previewV2Snapshot\"))); pm.expect(pm.response.headers.get(\"ETag\")).to.eql(pm.environment.get(\"previewV2Etag\")); });",
+              "}",
+              "if (pm.response.code !== 200) { pm.execution.setNextRequest(null); }"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
