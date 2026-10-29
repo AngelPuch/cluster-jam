@@ -10,6 +10,8 @@ from importlib.metadata import version
 from opentelemetry import trace
 
 ALLOWED_LOG_FIELDS = (
+    "rpc_method",
+    "rpc_status",
     "http_method",
     "http_route",
     "status_code",
