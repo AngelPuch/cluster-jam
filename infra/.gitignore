@@ -1,0 +1,7 @@
+**/.env
+**/release.env*
+**/.secrets/
+**/.pki/
+**/.certificates/
+**/__pycache__/
+**/*.age

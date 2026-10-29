@@ -24,6 +24,9 @@ function configureOfflineEnvironment(): void {
     OUTBOX_DATABASE_SSL: 'false',
     RABBITMQ_URL: 'amqp://openapi:placeholder@127.0.0.1:5672/unused',
   });
+  for (const name of ['SUPABASE_PUBLISHABLE_KEY', 'OUTBOX_DATABASE_URL', 'RABBITMQ_URL']) {
+    delete process.env[`${name}_FILE`];
+  }
   delete process.env.OUTBOX_DATABASE_CA_PATH;
 }
 
