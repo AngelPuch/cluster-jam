@@ -1,448 +1,127 @@
 # Personalization Service
 
-Backend de Cluster JAM con REST FastAPI, gRPC con TLS, PostgreSQL aislado
-y observabilidad JSON. Administra archivos privados, estampados, plantillas,
-borradores y previews mediante contratos versionados.
+Personalization microservice for Cluster JAM.
 
-## Ejecutar en Docker para desarrollo
+Manages private images, print versions, template drafts, design drafts,
+and generated previews. Product compatibility, customer designs, and
+checkout integration remain pending until Catalog and Orders are available.
 
-Desde la raíz del repositorio, con Docker en modo Linux:
+## Technology Stack
 
-```powershell
-py -3.14 infra/personalization/provision_local.py
-if (-not (Test-Path infra/personalization/.env)) {
-    Copy-Item infra/personalization/.env.example infra/personalization/.env
-}
-# Editar las dos URLs públicas en infra/personalization/.env
+- Python 3.14, FastAPI, Pydantic, and grpcio
+- Pillow
+- SQLAlchemy, Alembic, and PostgreSQL 17
+- Supabase Storage
+- Docker Compose and Nginx
+
+## Requirements
+
+- Python 3.14 for local development
+- Docker with Linux containers and Compose
+- Git
+- A Supabase project with asymmetric JWT signing keys and a private bucket
+
+## Project Setup
+
+From `services/personalizationService`:
+
+```bash
+python -m pip install uv==0.13.5
+python -m uv sync --locked
+```
+
+Use `py -3.14` instead of `python` on Windows. Dependencies are pinned in
+`uv.lock`; use `--locked` when running project commands.
+
+## Environment Configuration
+
+Use `infra/personalization/.env.example` to prepare the local configuration.
+Set `SUPABASE_ISSUER` and `SUPABASE_JWKS_URL` for the same Supabase project.
+Prepare database and Storage secrets using the infrastructure tools.
+
+Never commit `.env`, server keys, JWTs, certificates with private keys, or
+backup data. JWT signatures and roles are verified locally using cached JWKS.
+
+## Run the Service
+
+From the repository root, after configuring the environment:
+
+```bash
+python infra/personalization/provision_local.py
 docker compose -f infra/personalization/compose.yaml --profile tools build personalization-migrate
 docker compose -f infra/personalization/compose.yaml up -d --wait db-personalizacion
 docker compose -f infra/personalization/compose.yaml run --rm personalization-migrate
-docker compose -f infra/personalization/compose.yaml -f infra/personalization/compose.dev.yaml up -d --build --wait personalization
+docker compose -f infra/personalization/compose.yaml -f infra/personalization/compose.dev.yaml up -d --wait personalization
 ```
 
-El archivo base mantiene PostgreSQL y la API sin puertos publicados. El
-archivo de desarrollo publica REST en `127.0.0.1:8082`, conectado al puerto
-8080 del contenedor. El perfil rpc publica TLS en `127.0.0.1:50051`.
-`PERSONALIZATION_HTTP_PORT` y `PERSONALIZATION_GRPC_PORT` permiten cambiar
-los puertos locales antes de ejecutar Compose.
+The development API is available at `http://localhost:8082`.
+Image uploads require the Storage overlay and a configured private bucket.
+See the [infrastructure guide](../../infra/personalization/README.md) for
+HTTPS, Storage, image workers, gRPC certificates, and deployment commands.
 
-| Operación | URL local | Resultado |
-| --- | --- | --- |
-| Liveness | `http://127.0.0.1:8082/health/live` | 200 y `status=ok` |
-| Readiness | `http://127.0.0.1:8082/health/ready` | 200 o 503 con Problem Details |
-| Documentación | `http://127.0.0.1:8082/docs` | Swagger UI |
-| Contrato | `http://127.0.0.1:8082/openapi.json` | OpenAPI |
+## Database Migrations
 
-Liveness no consulta dependencias. Readiness invoca un caso de uso mediante
-un puerto e inspecciona acceso y revisión Alembic de su propia base, con
-límites de conexión y consulta. Si PostgreSQL cae, la API sigue viva y readiness devuelve 503.
-Recuperar la base permite volver a responder 200 sin reiniciar la API.
+The service owns `personalizacion_db`, using the `app_personalizacion` role
+and `app` schema. SQL identifiers are Spanish; Python attributes are English.
 
-La validación JWT y las políticas de acceso están implementadas y probadas.
-Los endpoints técnicos son públicos; las operaciones de negocio requieren
-sus políticas explícitas de JWT, rol y propiedad. El perfil rpc habilita
-la consulta administrativa protegida de borradores en 50051 con TLS.
-HTTPS se publica mediante el Nginx compartido; el despliegue Ubuntu tiene
-un overlay separado de la configuración local.
+Schema changes use versioned Alembic migrations. Run migrations explicitly
+before starting a release. The API and workers never create tables at startup.
 
-## Dependencias y configuración local
+## Health Checks
 
-Desde `services/personalizationService`:
-
-```powershell
-py -3.14 -m pip install --user uv==0.13.5
-py -3.14 -m uv sync --locked
-```
-
-Se requiere Python 3.14 de 64 bits. En Ubuntu usar `python3.14 -m uv` en
-lugar de `py -3.14 -m uv`. `uv.lock` fija las dependencias transitivas; cada
-comando usa `--locked` para evitar cambios implícitos en la resolución.
-
-| Variable | Regla |
+| Endpoint | Purpose |
 | --- | --- |
-| `SUPABASE_ISSUER` | URL HTTPS del proyecto, terminada en `/auth/v1` |
-| `SUPABASE_JWKS_URL` | Mismo origen, `/auth/v1/.well-known/jwks.json` |
-| `APP_ENV` | Obligatoria: `development`, `test` o `production` |
-| `HTTP_HOST` | `127.0.0.1` local o `0.0.0.0` dentro del contenedor |
-| `HTTP_PORT` | Entero 1–65535; predeterminado 8080 |
-| `GRPC_PORT` | Entero 1–65535; predeterminado 50051 |
-| `LOG_LEVEL` | `DEBUG`, `INFO`, `WARN` o `ERROR` |
-| `DB_HOST` | Predeterminado `db-personalizacion` |
-| `DB_PORT` | Entero 1–65535; predeterminado 5432 |
-| `DB_NAME` | `personalizacion_db` |
-| `DB_USER` | `app_personalizacion` |
-| `DB_SCHEMA` | `app` |
-| `DB_CONNECT_TIMEOUT_SECONDS` | Entre 1 y 30; predeterminado 5 |
-| `DB_PASSWORD_FILE` | Archivo obligatorio, legible y no vacío |
+| `GET /health/live` | Process liveness |
+| `GET /health/ready` | Database access and migration readiness |
+| `GET /docs` | Development Swagger UI |
+| `GET /openapi.json` | REST contract |
 
-Compose monta el secreto de aplicación y entrega las variables necesarias.
-`.env.example` documenta rutas dentro de Docker; ese archivo de secreto no
-existe en Windows fuera del contenedor. La API acepta un archivo local de
-configuración, con prioridad para las variables del proceso, pero ningún
-secreto se incorpora a Git ni a la imagen.
+Readiness returns 503 while the database is unavailable. The HTTPS gateway
+uses `/health/personalization/live`, `/health/personalization/ready`, and
+`/openapi/personalization.json`. The image worker has a progress heartbeat.
 
-El punto de entrada es `python -m personalization.main`. Fuera de Docker
-requiere un archivo de contraseña y una dirección de PostgreSQL accesibles
-desde ese proceso. Dentro de Docker se usa el nombre `db-personalizacion`;
-la base permanece sin publicar un puerto al host.
+## Architecture
 
-## Contratos y errores
+| Directory | Responsibility |
+| --- | --- |
+| `src/personalization/application/` | Use cases, rules, errors, and ports |
+| `src/personalization/infrastructure/` | Configuration, persistence, security, and adapters |
+| `src/personalization/interfaces/http/` | FastAPI routes, DTOs, and Problem Details |
+| `src/personalization/interfaces/grpc/` | Internal TLS gRPC server |
+| `src/personalization/interfaces/workers/` | Thumbnail and preview processing |
+| `test/` | Unit, contract, HTTP, gRPC, and database tests |
 
-Las respuestas JSON de DTO utilizan camelCase. Todo error HTTP se devuelve
-con `application/problem+json` y los campos `type`, `title`, `status`,
-`detail`, `instance`, `code` y `traceId`. `code` es estable y utiliza
-SCREAMING_SNAKE_CASE. `instance` incluye la ruta sin su query string.
+REST uses `/api/v1`, camelCase DTOs, and RFC 9457 errors. Administrative
+operations enforce role and ownership policies. Logs are structured JSON.
 
-JSON mal formado produce 400; datos que incumplen el contrato producen 422.
-Las rutas inexistentes, métodos no permitidos, dependencias no disponibles
-y excepciones inesperadas también usan Problem Details. Se conservan
-cabeceras de protocolo, como `Allow` y `WWW-Authenticate`, cuando procedan.
-No se devuelven cuerpos rechazados, SQL, secretos ni stack traces.
+## Tests
 
-OpenAPI se versiona en `contracts/openapi/personalization/v1/openapi.json`.
-La exportación funciona sin configurar secretos ni conectarse a PostgreSQL.
-Desde la carpeta del servicio:
+From the service directory:
 
-```powershell
-py -3.14 -m uv run --locked python -m personalization.interfaces.http.export_openapi --output ../../contracts/openapi/personalization/v1/openapi.json
-py -3.14 -m uv run --locked python -m personalization.interfaces.http.export_openapi --check --output ../../contracts/openapi/personalization/v1/openapi.json
+```bash
+python -m uv run --locked ruff check . ../../infra/personalization
+python -m uv run --locked ruff format --check . ../../infra/personalization
+python -m uv run --locked mypy
+python -m uv run --locked pytest --cov --cov-fail-under=70
 ```
 
-La CI compara el contrato versionado con la definición de las rutas. La
-exportación no habilita endpoints auxiliares ni requiere datos ficticios.
+Postman collections are in `contracts/postman/personalization`.
+Database integration and recovery checks use disposable Docker resources;
+their commands are documented in the infrastructure guide.
 
-## Logs y correlación
+## Deployment and Operations
 
-OpenTelemetry SDK crea un span por petición y valida el contexto W3C
-entrante. La respuesta devuelve `traceparent` con un span nuevo y
-`X-Request-ID` generado por el servidor. Un contexto ausente o inválido
-produce una traza nueva. `traceId` del error coincide con el de los logs.
+Deployment uses Docker Compose on Ubuntu with private database networks,
+HTTPS through Nginx, and internal TLS gRPC. API and image workers run in
+separate containers. Images are tagged with the service version and Git SHA.
 
-Los logs usan JSON de una línea en stdout, con identidad del servicio,
-entorno, fecha UTC, evento, mensaje y correlación `trace_id`/`span_id`.
-Se registra un resultado por petición y se omiten sondeos de salud exitosos.
-Los eventos de arranque y cierre pueden tener correlación nula.
+Backup, restore rehearsal, and health inspection tools are described in the
+[infrastructure guide](../../infra/personalization/README.md). Backups include
+database metadata and the private image objects referenced by that snapshot.
+Backup schedules, retention, and an off-host destination are pending team policy.
 
-No se registran Authorization, JWT, cookies, cuerpos, query strings,
-contraseñas, correos o URLs firmadas. La ruta del log usa la plantilla de
-la operación; las rutas desconocidas usan `unmatched`. Los fallos inesperados
-registran el tipo de excepción, sin su mensaje potencialmente sensible.
+## Git Workflow
 
-Este incremento crea contexto con OpenTelemetry, sin configurar un
-exportador de trazas. La recolección de logs y el backend de observabilidad
-se integrarán durante el despliegue.
-
-## Verificaciones
-
-Desde la carpeta del servicio:
-
-```powershell
-py -3.14 -m uv run --locked ruff check . ../../infra/personalization
-py -3.14 -m uv run --locked ruff format --check . ../../infra/personalization
-py -3.14 -m uv run --locked mypy
-py -3.14 -m uv run --locked mypy ../../infra/personalization
-py -3.14 -m uv run --locked pytest
-py -3.14 -m uv build --no-sources
-```
-
-Desde la raíz para la prueba con contenedores reales:
-
-```powershell
-py -3.14 infra/personalization/provision_local.py
-py -3.14 infra/personalization/verify_stack.py
-```
-
-La prueba usa un proyecto y volumen temporales. Comprueba HTTP, errores,
-correlación, OpenAPI, caída y recuperación de PostgreSQL, permisos, red y
-persistencia. Retira únicamente sus recursos temporales al terminar.
-
-## Capas y evolución
-
-`application/` contiene el caso de uso y puerto de readiness;
-`infrastructure/` implementa configuración, conexiones y observabilidad;
-`interfaces/http/` contiene rutas, DTO, errores y el límite ASGI.
-`bootstrap.py` compone las dependencias y dispone conexiones al cerrar.
-Los controladores no acceden al ORM ni a bases de otros servicios.
-
-Las nueve tablas están mapeadas con SQLAlchemy y se crean con la migración
-Alembic versionada. El arranque HTTP no crea tablas ni ejecuta migraciones. La matriz requisito–operación–
-prueba se completará con las funcionalidades, sin equiparar cobertura de
-líneas con RNF09.
-
-
-
-## Autenticación local y autorización
-
-Se sigue `ClusterJAM_Guia_Autorizacion_Microservicios.md`, adaptada a las
-capas del servicio y al contrato RFC 9457 completo. `application/` define
-la identidad mínima, el puerto del verificador y la regla de propiedad;
-`infrastructure/security/` verifica firmas y claims con PyJWT; las
-dependencias de `interfaces/http/security.py` aplican las políticas HTTP.
-
-Configurar únicamente las dos URLs públicas en el archivo ignorado
-`infra/personalization/.env`. No se necesitan claves privadas, una clave
-publicable de Supabase ni credenciales de la base de Auth. La configuración
-rechaza URLs con credenciales, query o fragmento, HTTP, rutas distintas o
-un origen diferente entre issuer y JWKS. Compose carga ese archivo desde
-su directorio de proyecto; las variables del proceso tienen prioridad.
-Al actualizar una instalación existente, conservar su `.env` y agregar las
-dos variables; copiar el ejemplo solamente si el archivo todavía no existe.
-
-Se crea un verificador por proceso durante el arranque, sin descargar
-claves todavía. La primera petición protegida obtiene las claves públicas
-por JWKS, con timeout de 5 segundos. `PyJWKClient` conserva el conjunto de
-claves en memoria durante 600 segundos. La caché individual ilimitada por
-tiempo está desactivada para respetar la retirada de claves. Las búsquedas
-de un `kid` nuevo permiten refrescar tras un intervalo de 30 segundos,
-evitando descargas repetidas por identificadores desconocidos. Una clave
-recién publicada podría rechazarse durante ese intervalo. Las dependencias
-sincrónicas se ejecutan en el pool de hilos de FastAPI.
-
-Solo se permiten ES256 y RS256, con `kid` y firma válidos. Se exigen `sub`
-UUID, `exp` numérico vigente, `iss` configurado y `aud` que contenga
-`authenticated`. También se valida `role=authenticated`, se rechazan
-usuarios anónimos y se respetan `nbf` e `iat` cuando están presentes.
-El único rol de negocio aceptado procede de `app_metadata.app_role`:
-`cliente` o `administrador`. `user_metadata`, cabeceras y cuerpos no
-otorgan permisos. No se consulta Auth Service ni `/auth/v1/user` por petición.
-
-Para cada futura ruta de negocio se usará `Depends(require_roles(...))`
-con roles explícitos, además de `SECURITY_PROBLEM_RESPONSES` en su contrato.
-Una lista vacía de roles deniega acceso. La regla `require_resource_owner`
-recibe el propietario leído por el servidor; la excepción de administrador
-requiere `allow_administrator=True` en el caso de uso que la autorice.
-Esta regla no sustituye la consulta del recurso ni decide por sí sola qué
-operaciones admiten esa excepción. No hay rutas de demostración en producción.
-
-| Situación | HTTP | `code` |
-| --- | --- | --- |
-| Token ausente, inválido o expirado | 401 | `INVALID_ACCESS_TOKEN` |
-| Rol protegido ausente o inválido | 403 | `INVALID_APP_ROLE` |
-| Rol o propiedad insuficientes | 403 | `FORBIDDEN` |
-| Claves necesarias no disponibles | 503 | `SERVICE_UNAVAILABLE` |
-
-Los 401 incluyen `WWW-Authenticate: Bearer`. Todos conservan `detail` y
-`traceId` y no exponen mensajes internos, tokens ni datos del proveedor.
-Si JWKS falla, las claves conocidas siguen funcionando mientras su caché
-sea válida; sin claves utilizables la petición protegida devuelve 503.
-Los endpoints técnicos permanecen disponibles sin consultar JWKS.
-
-La validación local no proporciona revocación inmediata de sesiones ni
-actualiza roles de JWT ya emitidos: se aplican al renovar el token o al
-expirar. La retirada de una clave puede tardar hasta el TTL de la caché.
-No se promete una latencia fija para todas las peticiones.
-
-Las pruebas usan firmas ES256/RS256 reales con claves efímeras y sustituyen
-solo el transporte JWKS. Cubren claims, firmas alteradas, roles, propiedad,
-caché concurrente, rotación, retirada de claves, fallos del proveedor,
-contratos HTTP/OpenAPI y privacidad de logs. No necesitan usuarios ni
-conectividad con Supabase. El verificador del stack Docker usa URLs de
-prueba para comprobar el arranque sin depender del proveedor externo.
-
-El contrato OpenAPI se regenera sin red y describe las rutas técnicas y
-de negocio implementadas. Las rutas de prueba viven solo en `test/`.
-La persistencia se instala mediante Alembic antes de iniciar réplicas;
-no se crean tablas al arrancar la API.
-
-
-## Esquema y migraciones
-
-Se implementó la revisión `0001_personalization`, con las ocho tablas de
-negocio de la sección 7 y `auditoria_local` de la sección 11. Los nombres
-SQL están en español y los atributos ORM en inglés. Las medidas usan
-`Decimal`/`NUMERIC` exactos y los recargos `bigint` en centavos de MXN.
-
-El servicio de herramientas `personalization-migrate` aplica la revisión
-explícitamente. Readiness comprueba que esté instalada. La suite Docker
-también verifica migración, reversión y restricciones contra PostgreSQL
-real en un proyecto desechable; nunca resetea la base de desarrollo.
-
-Los comandos de migración y verificación están en el
-[README de infraestructura](../../infra/personalization/README.md).
-
-
-## Validación de imágenes
-
-`ValidateImageService` comprueba originales PNG/JPEG de hasta 10 000 000
-bytes mediante firma real, MIME, estructura y decodificación con Pillow.
-Aplica límites antes de cargar píxeles, rechaza múltiples frames y devuelve
-SHA-256, UUID y clave canónica sin modificar los bytes del original.
-
-Los límites iniciales son 8192 píxeles por lado y 16 000 000 píxeles totales.
-`IMAGE_MAX_WIDTH_PX`, `IMAGE_MAX_HEIGHT_PX` e `IMAGE_MAX_PIXELS` permiten
-restringirlos. Son decisiones de recursos documentadas, no cifras fijadas
-por los requisitos. Para cambiar variables de Compose, recrear la API.
-
-La subida persistente ya usa este validador en `POST /api/v1/files`.
-Requiere preparar el bucket privado y montar su clave de servidor.
-La configuración base mantiene Storage desactivado hasta ese momento.
-
-
-## Archivos privados y Supabase Storage
-
-Se exponen `POST /api/v1/files`, `GET /api/v1/files/{fileId}` y
-`POST /api/v1/files/{fileId}/download-urls`, con JWT local, rol y propiedad.
-La carga genera metadata duradera antes de guardar y habilita la descarga
-tras confirmar el objeto. No se sobrescriben ni borran originales ante
-respuestas ambiguas. Las intenciones pendientes se pueden reconciliar
-comparando los bytes remotos con su SHA-256.
-
-El archivo de secreto se prepara con `infra/personalization/set_storage_key.py`.
-El overlay `infra/personalization/compose.storage.yaml` monta esa clave y
-habilita Storage. La configuración base conserva la API operativa sin
-credenciales, con errores 503 para cargas que necesiten almacenamiento.
-
-El entorno y colección de Postman están en `contracts/postman/personalization`.
-Los valores reales de JWT y enlaces temporales se mantienen fuera de Git.
-
-
-## Versionado administrativo de estampados
-
-`/api/v1/admin/prints` permite crear y consultar estampados, añadir nuevas
-versiones y consultar su historial. Solo admite administradores con JWT
-verificado localmente. Cada escritura confirma el cambio y su auditoría
-en la misma transacción. `expectedVersion` detecta cambios concurrentes;
-los archivos y precios de versiones anteriores se conservan.
-
-Se usan las tablas existentes de la migración `0001_personalization`.
-No se requiere migración adicional. Las miniaturas y el catálogo para
-clientes se describen en sus secciones correspondientes más adelante.
-
-La colección de Postman es `prints.postman_collection.json`; usa
-`adminAccessToken` y no requiere adjuntar archivos en sus peticiones.
-
-
-## Edición y estado de estampados
-
-PATCH `/api/v1/admin/prints/{printId}` permite editar nombre, descripción
-y estado activo. Solo admite administradores y requiere If-Match, obtenido
-del ETag de la consulta. La revisión se comprueba bajo bloqueo de fila y
-el cambio se confirma con su auditoría. Retirar o reactivar conserva todas
-las versiones y archivos; los cambios de imagen/precio siguen creando
-una versión nueva por su endpoint específico.
-
-La colección `print-lifecycle.postman_collection.json` reutiliza el entorno
-local y guarda automáticamente las etiquetas para sus pruebas.
-
-
-## Worker y miniaturas de estampados
-
-Un worker separado genera miniaturas privadas PNG de hasta 320 × 320 px
-para los originales usados por versiones de estampados. Revalida bytes,
-conserva originales, recupera intenciones pendientes y evita sobrescrituras.
-Hay consulta y enlace de descarga administrativos por versión. El catálogo
-para clientes reutiliza estos derivados con permisos de lectura propios.
-
-La colección de prueba es `print-thumbnails.postman_collection.json`.
-La ejecución del worker está en el README de infraestructura.
-
-
-## Catálogo de estampados
-
-`GET /api/v1/prints` y el detalle por ID permiten consultar estampados
-activos con versión vigente, miniatura disponible y recargo en MXN. Cliente
-y administrador pueden leer; los originales conservan sus permisos. El
-listado es paginado y no llama a Storage por elemento. El enlace temporal
-de miniatura se solicita mediante el recurso indicado en la respuesta.
-
-La colección de prueba es `print-catalog.postman_collection.json`;
-los contratos vigentes están en OpenAPI.
-
-
-## Plantillas versionadas en borrador
-
-La API administrativa `/api/v1/admin/template-versions` crea y consulta
-versiones inmutables con zonas y tamaños, medidas exactas en mm/cm y
-recargos MXN. La creación y auditoría son atómicas y serializan cada serie
-producto/talla. Todas las versiones se crean inactivas: Catalog Service
-todavía no existe y falta validar referencias y compatibilidad antes de
-habilitar publicación y diseños reales.
-
-La colección de prueba es `template-versions.postman_collection.json`.
-Las restricciones de geometría y permisos se prueban en `test/`.
-
-
-## Reglas de diseño y diagnóstico administrativo
-
-`POST /api/v1/admin/template-versions/{templateId}/design-analyses` calcula
-ajuste proporcional centrado, DPI efectivo y recargos por unidad con datos
-guardados. Usa geometría exacta y centavos enteros; no crea diseños ni
-cotizaciones. Solo administrador puede analizar borradores o versiones
-históricas. Catalog sigue pendiente y `MIN_PRINT_DPI` queda sin valor por
-defecto hasta que lo defina el equipo; un umbral ausente se informa como
-evaluación pendiente y nunca como calidad suficiente.
-
-La colección de prueba es `design-rules.postman_collection.json`.
-Los cálculos y sus límites se verifican en `test/designs/`.
-
-
-## Borradores administrativos persistidos
-
-La API `/api/v1/admin/design-drafts` permite crear, consultar, reemplazar y
-copiar borradores propios con JWT administrador. Guarda `diseno` y
-`aplicacion` con auditoría atómica, ETag/If-Match y copias independientes.
-Las referencias de Catalog siguen sin verificar y checkoutReady permanece
-false. No activa plantillas ni habilita diseños comerciales de clientes.
-La colección de prueba es `design-drafts.postman_collection.json`.
-
-
-## Previews privadas de diseños
-
-El worker images procesa miniaturas y previews de ambas caras, fuera de
-HTTP. Las previews esquemáticas usan la geometría física de plantilla y
-fuentes originales, con recuperación de cargas y asociación a la revisión
-vigente. Se consultan y descargan mediante enlaces privados temporales.
-Catalog y checkout siguen pendientes; no se representa una prenda real.
-La colección de prueba es `design-previews.postman_collection.json`.
-Con Send, repetir 04, 14 y 19 hasta READY antes de continuar; un 200 con
-PENDING no significa que el render haya terminado.
-
-
-## gRPC administrativo con TLS
-
-El perfil rpc ejecuta PersonalizationDrafts/GetDesignDraft en 50051 con
-TLS obligatorio, JWT local y propiedad del borrador. Comparte el caso de
-uso y ETag de REST; no escribe datos ni habilita checkout sin Catalog.
-El contrato está en `contracts/proto/personalization/v1/personalization.proto`.
-Para Postman, ejecutar primero las dos lecturas de
-`grpc-preparation.postman_collection.json`. En gRPC usar TLS verificado,
-Connection Timeout de 8000 ms y una sola metadata authorization con el JWT.
-El mensaje usa el nombre del campo del proto:
-
-```json
-{"design_id":"{{rpcDesignId}}"}
-```
-
-El éxito es 0 OK. La preparación de certificados, arranque y códigos de
-prueba están en el [README de infraestructura](../../infra/personalization/README.md#grpc-con-tls).
-
-
-## Despliegue HTTPS con Nginx
-
-`infra/personalization/compose.https.dev.yaml` permite comprobar HTTPS local
-en `https://localhost:8443`, con el mismo Nginx compartido. Las rutas REST
-conservan `/api/v1/...`; salud se publica como `/health/personalization/live`
-y `/health/personalization/ready`, y el contrato como
-`/openapi/personalization.json`. `/docs` y `/openapi.json` del proxy siguen
-perteneciendo a Auth. El código del servicio no cambia esos contratos.
-
-El límite del proxy para `/api/v1/files` es 10 131 072 bytes, incluidos los
-131 072 bytes de margen multipart. El original sigue limitado por Python
-a 10 000 000 bytes. Las demás rutas admiten cuerpos de hasta 256 KiB.
-El proxy limita tráfico por IP: 20 peticiones/s y ráfaga 40 para REST,
-1 petición/s y ráfaga 2 en `/api/v1/files`. Devuelve Problem Details para
-sus errores; los errores, ETag, If-Match, Authorization y traceparent del
-servicio se conservan. Los logs del proxy omiten query, cuerpos y tokens
-y correlacionan el trace_id devuelto por el servicio.
-
-La colección `https-deployment.postman_collection.json` usa `httpsBaseUrl`
-y JWT vigentes. Sus nueve peticiones no requieren adjuntar archivos. La
-guía de preparación local y Ubuntu está en el
-[README de infraestructura](../../infra/personalization/README.md#https-local-y-despliegue-ubuntu).
-
-En Ubuntu, `compose.deploy.yaml` usa el backend compartido y configuración
-production, imágenes por revisión y certificados de la PKI de staging.
-REST, PostgreSQL y gRPC no publican puertos al host. El script de despliegue
-aplica Alembic explícitamente antes de iniciar la versión, verifica Storage,
-readiness y TLS de RPC, y recrea únicamente el proxy compartido.
-No se habilitan Catalog, Orders ni funcionalidades comerciales pendientes.
+Use GitHub Flow with branches named `<type>/personalization/<description>`
+and commits named `<type>(personalization): <imperative description>`.
+Submit changes through a Pull Request and merge using squash merge.

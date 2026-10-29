@@ -55,6 +55,7 @@ from personalization.infrastructure.observability.logging_config import (
 from personalization.infrastructure.storage.supabase_storage import (
     SupabaseStorage,
 )
+from personalization.interfaces.workers.heartbeat import WorkerHeartbeat
 
 
 def main() -> int:
@@ -79,6 +80,11 @@ def main() -> int:
     provider = TracerProvider()
     tracer = provider.get_tracer("personalization.thumbnails")
     stop = Event()
+    heartbeat = WorkerHeartbeat(settings.worker_heartbeat_file)
+
+    def stop_requested() -> bool:
+        heartbeat.pulse()
+        return stop.is_set()
 
     def request_stop(signum: int, frame: FrameType | None) -> None:
         stop.set()
@@ -94,6 +100,7 @@ def main() -> int:
             settings.storage_project_url,
             settings.storage_bucket,
             settings.storage_key,
+            on_progress=heartbeat.pulse,
         )
         worker = ThumbnailWorker(
             SqlAlchemyThumbnailRepository(engine, settings.storage_bucket),
@@ -123,13 +130,15 @@ def main() -> int:
         preview_after: UUID | None = None
         failed = False
         logger.info("Worker started", extra={"event": "worker.started"})
+        heartbeat.pulse(force=True)
         while not stop.is_set():
+            heartbeat.pulse()
             with tracer.start_as_current_span("thumbnail.batch"):
                 try:
                     if not readiness.is_ready():
                         raise FileError(FileFailure.FILE_DATABASE_UNAVAILABLE)
                     result = worker.batch(
-                        after, settings.worker_batch_size, stop.is_set
+                        after, settings.worker_batch_size, stop_requested
                     )
                     after = result.after
                     failed = bool(result.failures)
@@ -164,7 +173,9 @@ def main() -> int:
                     if not readiness.is_ready():
                         raise FileError(FileFailure.FILE_DATABASE_UNAVAILABLE)
                     preview_result = previews.batch(
-                        preview_after, settings.worker_batch_size, stop.is_set
+                        preview_after,
+                        settings.worker_batch_size,
+                        stop_requested,
                     )
                     preview_after = preview_result.after
                     failed = failed or bool(preview_result.failures)
@@ -198,6 +209,7 @@ def main() -> int:
                     )
             if arguments.once:
                 return 1 if failed else 0
+            heartbeat.pulse()
             stop.wait(settings.worker_poll_seconds)
     except FileError as error:
         logger.error(
@@ -205,7 +217,23 @@ def main() -> int:
             extra={"event": "worker.failed", "code": error.failure.value},
         )
         return 1
+    except OSError:
+        logger.error(
+            "Worker heartbeat is unavailable",
+            extra={
+                "event": "worker.failed",
+                "code": "WORKER_HEARTBEAT_UNAVAILABLE",
+            },
+        )
+        return 1
     finally:
+        try:
+            heartbeat.close()
+        except OSError:
+            logger.warning(
+                "Worker heartbeat cleanup failed",
+                extra={"event": "worker.heartbeat.cleanup.failed"},
+            )
         for signum, handler in previous.items():
             signal.signal(signum, handler)
         if storage is not None:

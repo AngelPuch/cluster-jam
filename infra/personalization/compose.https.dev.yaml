@@ -25,6 +25,8 @@ services:
               target: /etc/nginx/cluster-proxy.conf
             - source: personalization_https_certificate
               target: /run/config/https.crt
+            - source: personalization_https_ca
+              target: /run/config/cluster-ca.crt
         networks: [backend]
         healthcheck:
             test: ["CMD", "curl", "-fsS", "--max-time", "2", "http://127.0.0.1:8080/health/live"]
@@ -55,3 +57,5 @@ configs:
         file: ../shared/nginx-proxy.conf
     personalization_https_certificate:
         file: ./.secrets/grpc_server_cert.pem
+    personalization_https_ca:
+        file: ./.secrets/grpc_ca.crt

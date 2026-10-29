@@ -98,6 +98,14 @@ services:
         <<: *personalization-service
         profiles: ["images"]
         command: ["python", "-m", "personalization.interfaces.workers.images"]
+        tmpfs:
+            - /tmp:rw,noexec,nosuid,size=32m,mode=1777
+        healthcheck:
+            test: ["CMD", "python", "-m", "personalization.interfaces.workers.health"]
+            interval: 10s
+            timeout: 3s
+            start_period: 15s
+            retries: 3
         init: true
         restart: unless-stopped
         stop_grace_period: 120s
@@ -106,6 +114,8 @@ services:
             <<: *personalization-environment
             WORKER_BATCH_SIZE: ${WORKER_BATCH_SIZE:-10}
             WORKER_POLL_SECONDS: ${WORKER_POLL_SECONDS:-10}
+            WORKER_HEARTBEAT_FILE: /tmp/personalization-images-health.json
+            WORKER_HEARTBEAT_MAX_AGE_SECONDS: ${WORKER_HEARTBEAT_MAX_AGE_SECONDS:-180}
 
     personalization-grpc:
         <<: *personalization-service

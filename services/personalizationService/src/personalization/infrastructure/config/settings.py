@@ -1,5 +1,6 @@
 """Validate process configuration and load its database secret."""
 
+import os
 import re
 from pathlib import Path
 from typing import Literal, Self
@@ -123,6 +124,19 @@ class Settings(BaseSettings):
     )
     worker_poll_seconds: int = Field(
         default=10, ge=1, le=300, validation_alias="WORKER_POLL_SECONDS"
+    )
+    worker_heartbeat_file: Path = Field(
+        default_factory=lambda: (
+            Path(os.environ.get("TMPDIR") or os.environ.get("TEMP") or "/tmp")
+            / "personalization-images-health.json"
+        ),
+        validation_alias="WORKER_HEARTBEAT_FILE",
+    )
+    worker_heartbeat_max_age_seconds: int = Field(
+        default=180,
+        ge=30,
+        le=3600,
+        validation_alias="WORKER_HEARTBEAT_MAX_AGE_SECONDS",
     )
     min_print_dpi: int | None = Field(
         default=None, ge=1, le=2400, validation_alias="MIN_PRINT_DPI"

@@ -69,6 +69,8 @@ jobs:
               run: python -m uv run --locked mypy ../../infra/personalization
             - name: Run tests
               run: python -m uv run --locked pytest --cov --cov-fail-under=70
+            - name: Test recovery tooling
+              run: python -m uv run --locked pytest ../../infra/personalization/operation_tools --import-mode=prepend
             - name: Verify versioned OpenAPI contract
               run: >-
                   python -m uv run --locked python -m
@@ -101,9 +103,13 @@ jobs:
                   persist-credentials: false
             - name: Prepare temporary local secrets
               run: python3 infra/personalization/provision_local.py
+            - name: Verify host Python compatibility
+              run: python3 -m compileall -q infra/personalization
             - name: Verify Docker packaging and persistence
               run: python3 infra/personalization/verify_stack.py
             - name: Verify HTTPS routing and gateway failures
               run: python3 infra/personalization/verify_https.py
             - name: Verify deployment failure guards
               run: python3 infra/personalization/verify_deploy_commands.py
+            - name: Verify database and private-object recovery
+              run: python3 infra/personalization/verify_operations.py

@@ -1,3 +1,6 @@
 .secrets/
 .env
 deployment.env
+
+.pytest_cache/
+.ruff_cache/
