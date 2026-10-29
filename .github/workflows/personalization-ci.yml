@@ -5,6 +5,8 @@ on:
         paths:
             - "services/personalizationService/**"
             - "infra/personalization/**"
+            - "infra/shared/**"
+            - "infra/deploy/**"
             - "contracts/proto/personalization/**"
             - "contracts/openapi/personalization/**"
             - "contracts/postman/personalization/**"
@@ -16,6 +18,8 @@ on:
         paths:
             - "services/personalizationService/**"
             - "infra/personalization/**"
+            - "infra/shared/**"
+            - "infra/deploy/**"
             - "contracts/proto/personalization/**"
             - "contracts/openapi/personalization/**"
             - "contracts/postman/personalization/**"
@@ -99,3 +103,7 @@ jobs:
               run: python3 infra/personalization/provision_local.py
             - name: Verify Docker packaging and persistence
               run: python3 infra/personalization/verify_stack.py
+            - name: Verify HTTPS routing and gateway failures
+              run: python3 infra/personalization/verify_https.py
+            - name: Verify deployment failure guards
+              run: python3 infra/personalization/verify_deploy_commands.py

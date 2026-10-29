@@ -28,6 +28,8 @@ services:
               target: /etc/nginx/cluster-proxy.conf
             - source: https_certificate
               target: /run/config/https.crt
+            - source: cluster_ca
+              target: /run/config/cluster-ca.crt
         networks: [backend]
         healthcheck:
             test: ["CMD", "curl", "-fsS", "--max-time", "2", "http://127.0.0.1:8080/health/live"]

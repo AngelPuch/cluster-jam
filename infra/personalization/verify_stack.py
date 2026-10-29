@@ -158,7 +158,7 @@ def verify_rpc_configuration(compose: list[str]) -> None:
         "personalization_db_password",
         "grpc_server_certificate",
         "grpc_server_key",
-        "grpc_development_ca",
+        "grpc_trusted_ca",
     }:
         raise RuntimeError("RPC must mount only its own required secrets")
     print("RPC networks, unpublished base port, and scoped secrets verified")

@@ -1,0 +1,60 @@
+# Ubuntu staging: combine base + storage + this overlay, never compose.dev.
+x-deployment: &deployment
+    image: cluster-jam/personalization:${PERSONALIZATION_IMAGE_TAG:?Build a release first}
+    pull_policy: never
+    logging:
+        driver: json-file
+        options:
+            max-size: "10m"
+            max-file: "3"
+
+services:
+    db-personalizacion:
+        logging:
+            driver: json-file
+            options:
+                max-size: "10m"
+                max-file: "3"
+    personalization:
+        <<: *deployment
+        environment:
+            APP_ENV: production
+        networks:
+            backend:
+                aliases: [clusterjam-personalization]
+    personalization-worker:
+        <<: *deployment
+        environment:
+            APP_ENV: production
+    personalization-grpc:
+        <<: *deployment
+        environment:
+            APP_ENV: production
+        networks:
+            backend:
+                aliases: [clusterjam-personalization-grpc]
+    personalization-migrate:
+        <<: *deployment
+        environment:
+            APP_ENV: production
+    personalization-check:
+        <<: *deployment
+        environment:
+            APP_ENV: production
+    personalization-storage:
+        <<: *deployment
+        environment:
+            APP_ENV: production
+
+networks:
+    backend:
+        external: true
+        name: cluster-jam-backend
+
+secrets:
+    grpc_server_certificate:
+        file: ../shared/.pki/personalization-grpc.crt
+    grpc_server_key:
+        file: ../shared/.pki/personalization-grpc.key
+    grpc_trusted_ca:
+        file: ../shared/.pki/ca.crt

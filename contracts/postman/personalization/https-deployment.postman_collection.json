@@ -1,0 +1,306 @@
+{
+  "info": {
+    "name": "Personalization - HTTPS deployment",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Use the local environment, httpsBaseUrl=https://localhost:8443 and valid client/admin tokens. Keep SSL verification enabled and import the development CA from infra/personalization/.secrets/grpc_ca.crt. No request requires a file. Ubuntu staging uses the shared staging CA and its own hostname/port. See the existing infrastructure README."
+  },
+  "item": [
+    {
+      "name": "01 - Liveness HTTPS",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "noauth"
+        },
+        "url": "{{httpsBaseUrl}}/health/personalization/live"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Expected HTTP 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"Health body\", () => pm.expect(pm.response.json().status).to.eql(\"ok\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - Readiness HTTPS",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "noauth"
+        },
+        "url": "{{httpsBaseUrl}}/health/personalization/ready"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Expected HTTP 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"Health body\", () => pm.expect(pm.response.json().status).to.eql(\"ok\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 - OpenAPI Personalization",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "noauth"
+        },
+        "url": "{{httpsBaseUrl}}/openapi/personalization.json"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Expected HTTP 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"Personalization contract\", () => {",
+              "    pm.expect(pm.response.json().info.title).to.eql(\"Cluster JAM Personalization Service\");",
+              "    pm.expect(pm.response.json().paths).to.have.property(\"/api/v1/admin/design-drafts\");",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 - Print catalog as client",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{httpsBaseUrl}}/api/v1/prints"
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const token = pm.environment.get(\"accessToken\");",
+              "if (!token || token.includes(\"{{\")) { throw new Error(\"Set a current accessToken in the selected environment.\"); }"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Expected HTTP 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"ETag or page contract is preserved\", () => { pm.expect(pm.response.json().items).to.be.an(\"array\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 - Print administration",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{adminAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{httpsBaseUrl}}/api/v1/admin/prints"
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const token = pm.environment.get(\"adminAccessToken\");",
+              "if (!token || token.includes(\"{{\")) { throw new Error(\"Set a current adminAccessToken in the selected environment.\"); }"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Expected HTTP 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"ETag or page contract is preserved\", () => { pm.expect(pm.response.json().items).to.be.an(\"array\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 - No JWT",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "traceparent",
+            "value": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+            "type": "text"
+          }
+        ],
+        "auth": {
+          "type": "noauth"
+        },
+        "url": "{{httpsBaseUrl}}/api/v1/prints"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Expected HTTP 401\", () => pm.response.to.have.status(401));",
+              "pm.test(\"Problem Details\", () => {",
+              "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "    pm.expect(pm.response.json().code).to.eql(\"INVALID_ACCESS_TOKEN\");",
+              "    pm.expect(Object.keys(pm.response.json()).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "});",
+              "pm.test(\"Trace preserved through HTTPS\", () => pm.expect(pm.response.json().traceId).to.eql(\"4bf92f3577b34da6a3ce929d0e0e4736\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 - Client without admin permission",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{httpsBaseUrl}}/api/v1/admin/prints"
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const token = pm.environment.get(\"accessToken\");",
+              "if (!token || token.includes(\"{{\")) { throw new Error(\"Set a current accessToken in the selected environment.\"); }"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Expected HTTP 403\", () => pm.response.to.have.status(403));",
+              "pm.test(\"Problem Details\", () => {",
+              "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "    pm.expect(pm.response.json().code).to.eql(\"FORBIDDEN\");",
+              "    pm.expect(Object.keys(pm.response.json()).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 - Missing route",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "noauth"
+        },
+        "url": "{{httpsBaseUrl}}/personalization-route-that-does-not-exist"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Expected HTTP 404\", () => pm.response.to.have.status(404));",
+              "pm.test(\"Problem Details\", () => {",
+              "    pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"application/problem+json\");",
+              "    pm.expect(pm.response.json().code).to.eql(\"ROUTE_NOT_FOUND\");",
+              "    pm.expect(Object.keys(pm.response.json()).sort()).to.eql([\"type\", \"title\", \"status\", \"detail\", \"instance\", \"code\", \"traceId\"].sort());",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 - Draft administration",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{adminAccessToken}}",
+              "type": "string"
+            }
+          ]
+        },
+        "url": "{{httpsBaseUrl}}/api/v1/admin/design-drafts"
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const token = pm.environment.get(\"adminAccessToken\");",
+              "if (!token || token.includes(\"{{\")) { throw new Error(\"Set a current adminAccessToken in the selected environment.\"); }"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Expected HTTP 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"ETag or page contract is preserved\", () => { pm.expect(pm.response.json().items).to.be.an(\"array\"); });"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

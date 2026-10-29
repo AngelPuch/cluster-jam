@@ -154,7 +154,7 @@ docker compose -f infra/personalization/compose.yaml -f infra/personalization/co
 La API estará en `http://127.0.0.1:8082`, con salud en `/health/live` y
 `/health/ready`, Swagger UI en `/docs` y contrato en `/openapi.json`.
 `compose.dev.yaml` publica únicamente el puerto REST en loopback; el archivo
-base no publica puertos. gRPC se implementará en un incremento posterior.
+base no publica puertos. El perfil rpc ejecuta el servidor TLS en 50051.
 
 La prueba automatizada también detiene PostgreSQL, comprueba liveness 200
 y readiness 503, vuelve a iniciarlo y exige recuperación a readiness 200.
@@ -327,3 +327,155 @@ Para detener los procesos Docker conservando el volumen y los archivos:
 ```powershell
 docker compose -f infra/personalization/compose.yaml -f infra/personalization/compose.storage.yaml --profile rpc --profile images stop personalization-worker personalization-grpc personalization db-personalizacion
 ```
+
+
+## HTTPS local y despliegue Ubuntu
+
+El gateway usa `infra/shared/nginx.conf` y conserva las rutas de Auth. Los
+datos siguen en el volumen `cluster-jam-personalization_personalization-data`.
+No se necesita una migración nueva: la revisión es `0001_personalization`.
+
+### Preparación local en Windows
+
+Conservar `.env`, contraseñas, clave de Storage y certificados ya preparados.
+Para una instalación nueva, provision_local.py y set_storage_key.py preparan
+los archivos; el bucket privado debe existir. Desde la raíz del repositorio:
+
+```powershell
+py -3.14 -m uv run --locked --project services/personalizationService python infra/personalization/provision_grpc_tls.py
+docker compose -f infra/personalization/compose.yaml -f infra/personalization/compose.storage.yaml -f infra/personalization/compose.https.dev.yaml --profile images build personalization
+docker compose -f infra/personalization/compose.yaml up -d --wait db-personalizacion
+docker compose -f infra/personalization/compose.yaml run --rm --no-deps personalization-migrate
+docker compose -f infra/personalization/compose.yaml -f infra/personalization/compose.storage.yaml -f infra/personalization/compose.https.dev.yaml --profile images up -d --wait personalization personalization-worker nginx
+```
+
+Este overlay publica solo `127.0.0.1:8443`; no combinarlo con compose.dev.yaml
+si se quiere probar únicamente a través de HTTPS. Se reutiliza exclusivamente
+en desarrollo el certificado local válido para localhost/127.0.0.1. No se
+reemplaza ni cambia su CA: `.secrets/grpc_ca.crt` sigue siendo la CA pública
+que se importa en Postman. Nunca importar o compartir grpc_server_key.pem.
+El overlay de Ubuntu usa una PKI distinta, no estos certificados locales.
+
+En Postman, mantener SSL certificate verification activada. En Settings →
+Certificates → CA Certificates, importar `infra/personalization/.secrets/grpc_ca.crt`
+si aún no está registrada. Importar la nueva colección y actualizar en el
+entorno local `httpsBaseUrl=https://localhost:8443`, `accessToken` y
+`adminAccessToken` con JWT vigentes. Conservar baseUrl/authBaseUrl para las colecciones anteriores. La nueva
+colección usa únicamente httpsBaseUrl; Auth local sigue en su puerto habitual.
+
+| Petición | HTTP esperado |
+| --- | --- |
+| 01 Liveness HTTPS | 200 |
+| 02 Readiness HTTPS | 200 |
+| 03 OpenAPI Personalization | 200 |
+| 04 Print catalog as client | 200 |
+| 05 Print administration | 200 |
+| 06 No JWT | 401, INVALID_ACCESS_TOKEN |
+| 07 Client without admin permission | 403, FORBIDDEN |
+| 08 Missing route | 404, ROUTE_NOT_FOUND |
+| 09 Draft administration | 200 |
+
+Las nueve peticiones son lecturas y no necesitan archivos. Para comprobar
+también la subida por HTTPS, duplicar la solicitud POST de archivos ya usada,
+cambiar solo su URL a `{{httpsBaseUrl}}/api/v1/files`, usar el JWT cliente y
+adjuntar de nuevo un PNG/JPEG válido en `file` (multipart/form-data). Se espera
+201; no escribir Content-Type manualmente, Postman añade el boundary.
+Una imagen de más de 64 KiB comprueba que ya no aplica el límite de Auth.
+
+Detener después de las pruebas, conservando datos y secretos:
+
+```powershell
+docker compose -f infra/personalization/compose.yaml -f infra/personalization/compose.storage.yaml -f infra/personalization/compose.https.dev.yaml --profile images --profile rpc stop nginx personalization-worker personalization-grpc personalization db-personalizacion
+```
+
+### Integración Ubuntu de staging
+
+El equipo debe haber preparado el despliegue compartido con `prepare.py`,
+incluyendo `.pki/ca.crt`, `.pki/https.crt` y `.pki/personalization-grpc.crt/key`.
+Volver a ejecutar la preparación compartida después de actualizar el código
+crea únicamente el certificado RPC ausente y conserva los existentes. No usar
+`--renew-certificates` salvo que se quiera renovar la PKI deliberadamente.
+El certificado RPC incluye los SAN internos personalization-grpc y
+clusterjam-personalization-grpc. El propio servidor y su healthcheck usan TLS.
+
+Desde la copia del repositorio en Ubuntu:
+
+```bash
+if [ ! -f infra/personalization/deployment.env ]; then
+    cp infra/personalization/deployment.env.example infra/personalization/deployment.env
+fi
+# Editar solo las URLs públicas y opciones del proyecto en deployment.env.
+python3 infra/personalization/provision_local.py
+# Solo si falta la clave de servidor, introducirla en el prompt oculto:
+if [ ! -f infra/personalization/.secrets/supabase_storage_key ]; then
+    python3 infra/personalization/set_storage_key.py
+fi
+# Conservar el bucket privado existente, sin recrear ni borrar objetos.
+bash infra/deploy/deploy.sh personalization
+```
+
+Copiar el ejemplo únicamente si deployment.env todavía no existe. No copiar
+contraseñas de Auth ni credenciales de su base; Personalization usa su propia
+BD. La clave backend de Storage queda solo en `.secrets`. El helper
+set_storage_key.py usa la biblioteca estándar y un prompt oculto; funciona
+con python3 en Ubuntu y no requiere instalar el servicio en el host.
+
+El target personalization es explícito; `deploy.sh all` conserva el alcance
+previo de Auth/shared. Requiere Git limpio y crea una imagen con versión y SHA
+de commit. No publicar ni ejecutar un despliegue real antes del PR revisado.
+La secuencia es: construir, preparar contraseña si falta, iniciar BD, aplicar
+Alembic, verificar bucket, iniciar REST/worker/RPC, comprobar readiness/TLS y
+recrear Nginx y verificar readiness a través de HTTPS con su CA. Si migración
+o Storage falla, no inicia la nueva versión.
+En una actualización los contenedores de la versión anterior pueden seguir
+atendiendo; este script no proporciona reversión automática de migraciones.
+
+`compose.sh personalization` usa deployment.env y release.env de forma explícita,
+neutraliza overrides del entorno de desarrollo y nunca añade compose.dev.yaml.
+APP_ENV=production es el modo validado de Personalization dentro de staging;
+Auth conserva su APP_ENV=staging. No hay puertos de BD, REST ni RPC publicados.
+La única entrada HTTP externa es el HTTPS 443 de Nginx. En Vagrant, el puerto
+reenviado ya definido permite `https://localhost:8443`, con la CA de staging.
+
+Para revisar estado o logs sin mostrar secretos:
+
+```bash
+bash infra/deploy/compose.sh personalization --profile images --profile rpc ps
+bash infra/deploy/compose.sh personalization logs --tail 50 personalization
+```
+
+Las rutas públicas son `/api/v1/files`, `/api/v1/prints`, las rutas administrativas
+de Personalization, `/health/personalization/live`, `/health/personalization/ready`
+y `/openapi/personalization.json`. `/docs`, `/openapi.json` y las rutas de Auth
+mantienen su destino previo. No se publica el RPC administrativo en Nginx;
+permanece interno, con TLS y su JWT obligatorio.
+
+### Verificación automatizada
+
+```powershell
+py -3.14 infra/personalization/verify_https.py
+py -3.14 infra/personalization/verify_deploy_commands.py
+```
+
+Requiere Docker Linux, OpenSSL y la imagen runtime construida. Usa un proyecto
+UUID, contraseñas nuevas, certificados efímeros y volumen temporal. No monta los
+secretos reales de Storage ni modifica la PKI del equipo. Comprueba TLS con CA
+verificada, rechazo sin confianza, rutas, JWT, cuerpo mayor de 64 KiB, límites,
+correlación, errores RFC 9457, la ruta Auth mediante un upstream de prueba y
+caída/recuperación de BD/API. No valida un despliegue en una VM Ubuntu real.
+Al terminar retira únicamente sus contenedores, red y volumen temporales.
+verify_deploy_commands.py ejecuta los scripts Bash reales con procesos externos
+simulados en contenedores Linux sin red. Verifica orden de arranque, rechazo de
+Git sucio, aislamiento de variables y parada ante fallos de migración o Storage.
+
+Referencias de configuración: [límites Nginx](https://nginx.org/en/docs/http/ngx_http_core_module.html#client_max_body_size),
+[proxy Nginx](https://nginx.org/en/docs/http/ngx_http_proxy_module.html#proxy_pass)
+y [combinación de archivos Compose](https://docs.docker.com/reference/compose-file/merge/).
+
+La configuración HTTPS local no inicia Auth. Para renovar tokens se usa el
+Auth local habitual; en Ubuntu las rutas Auth requieren su contenedor desplegado
+en la red compartida con el alias clusterjam-auth.
+
+Si se renuevan los certificados de staging con prepare.py --renew-certificates,
+ejecutar primero deploy.sh all y despues deploy.sh personalization. El segundo
+recrea RPC para cargar su certificado nuevo; all conserva su alcance Auth/shared.
