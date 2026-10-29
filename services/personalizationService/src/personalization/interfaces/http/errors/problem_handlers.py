@@ -12,6 +12,10 @@ from personalization.application.errors.design_analysis_error import (
     AnalysisFailure,
     DesignAnalysisError,
 )
+from personalization.application.errors.design_error import (
+    DesignError,
+    DesignFailure,
+)
 from personalization.application.errors.file_error import (
     FileError,
     FileFailure,
@@ -470,8 +474,60 @@ async def design_analysis_exception_handler(
     )
 
 
+async def design_exception_handler(
+    request: Request, exception: Exception
+) -> JSONResponse:
+    if not isinstance(exception, DesignError):
+        return unexpected_problem(request)
+    status, detail = {
+        DesignFailure.DESIGN_NOT_FOUND: (
+            404,
+            "The saved draft was not found.",
+        ),
+        DesignFailure.DESIGN_NOT_EDITABLE: (
+            409,
+            "A frozen design cannot change; create a copy before editing.",
+        ),
+        DesignFailure.DESIGN_VERSION_LIMIT: (
+            409,
+            "This draft cannot accept another revision.",
+        ),
+        DesignFailure.INVALID_DESIGN_DATA: (
+            422,
+            "Draft references do not meet the required constraints.",
+        ),
+        DesignFailure.DESIGN_DATABASE_UNAVAILABLE: (
+            503,
+            "Draft persistence is temporarily unavailable.",
+        ),
+        DesignFailure.DESIGN_PRECONDITION_REQUIRED: (
+            428,
+            "Read the draft and send its ETag in If-Match.",
+        ),
+        DesignFailure.INVALID_DESIGN_PRECONDITION: (
+            400,
+            "If-Match must contain a valid bounded entity-tag list.",
+        ),
+        DesignFailure.DESIGN_PRECONDITION_FAILED: (
+            412,
+            "The draft changed; read it again before editing.",
+        ),
+        DesignFailure.INVALID_CURSOR: (
+            400,
+            "The cursor is invalid for this owner's draft collection.",
+        ),
+    }[exception.failure]
+    return problem_response(
+        request,
+        status_code=status,
+        code=exception.failure.value,
+        detail=detail,
+    )
+
+
 def configure_exception_handlers(app: FastAPI) -> None:
     """Override framework defaults at the HTTP boundary."""
+    app.add_exception_handler(DesignError, design_exception_handler)
     app.add_exception_handler(
         DesignAnalysisError, design_analysis_exception_handler
     )

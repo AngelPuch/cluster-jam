@@ -384,3 +384,13 @@ evaluación pendiente y nunca como calidad suficiente.
 
 Consultar [reglas y pruebas](docs/design-rules.md), incluida la colección
 Postman de 21 solicitudes y las limitaciones de este diagnóstico.
+
+
+## Borradores administrativos persistidos
+
+La API `/api/v1/admin/design-drafts` permite crear, consultar, reemplazar y
+copiar borradores propios con JWT administrador. Guarda `diseno` y
+`aplicacion` con auditoría atómica, ETag/If-Match y copias independientes.
+Las referencias de Catalog siguen sin verificar y checkoutReady permanece
+false. No activa plantillas ni habilita diseños comerciales de clientes.
+Consultar [contrato y pruebas en Postman](docs/design-drafts.md).
