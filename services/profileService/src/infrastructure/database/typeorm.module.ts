@@ -6,6 +6,8 @@ import { PROFILE_PROVISIONING_PORT } from '../../application/ports/profile-provi
 import { TypeormProfileProvisioningAdapter } from './repositories/typeorm-profile-provisioning.adapter';
 import { PROFILE_REPOSITORY_PORT } from '../../application/ports/profile-repository.port';
 import { TypeormProfileRepository } from './repositories/typeorm-profile.repository';
+import { ADDRESS_BOOK_REPOSITORY_PORT } from '../../application/ports/address-book-repository.port';
+import { TypeormAddressBookRepository } from './repositories/typeorm-address-book.repository';
 
 @Module({
     imports: [
@@ -18,12 +20,13 @@ import { TypeormProfileRepository } from './repositories/typeorm-profile.reposit
         }),
     ],
     providers: [
+        { provide: ADDRESS_BOOK_REPOSITORY_PORT, useClass: TypeormAddressBookRepository },
         { provide: PROFILE_REPOSITORY_PORT, useClass: TypeormProfileRepository },
         {
             provide: PROFILE_PROVISIONING_PORT,
             useClass: TypeormProfileProvisioningAdapter,
         },
     ],
-    exports: [PROFILE_PROVISIONING_PORT, PROFILE_REPOSITORY_PORT],
+    exports: [PROFILE_PROVISIONING_PORT, PROFILE_REPOSITORY_PORT, ADDRESS_BOOK_REPOSITORY_PORT],
 })
 export class DatabaseModule {}

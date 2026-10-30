@@ -1,15 +1,4 @@
-import {
-    BadRequestException,
-    Body,
-    Controller,
-    Get,
-    Headers,
-    HttpException,
-    Patch,
-    Res,
-    UnsupportedMediaTypeException,
-    UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Get, Headers, Patch, Res, UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
 import { ApiBearerAuth, ApiConsumes, ApiHeader, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { GetMyProfileService } from '../../../application/profile/get-my-profile.service';
@@ -21,6 +10,8 @@ import { JwtAuthGuard } from './jwt-auth.guard';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ProfileResponseDto } from './dto/profile-response.dto';
 import { profileProblemResponses } from '../openapi/problem-responses';
+import { requireStrongIfMatch } from '../common/conditional-request';
+import { JsonContentGuard } from '../common/json-content.guard';
 
 @ApiTags('Profiles')
 @ApiBearerAuth('supabase-jwt')
@@ -72,6 +63,7 @@ export class ProfilesController {
     }
 
     @Patch('me')
+    @UseGuards(JsonContentGuard)
     @ApiConsumes('application/json')
     @ApiOperation({
         summary: 'Partially update the owner profile and complete onboarding',
@@ -105,15 +97,12 @@ export class ProfilesController {
         @CurrentIdentity() identity: VerifiedIdentity,
         @Body() input: UpdateProfileDto,
         @Headers('if-match') etag: string | undefined,
-        @Headers('content-type') contentType: string | undefined,
         @Res({ passthrough: true }) response: Response,
     ): Promise<ProfileResponseDto> {
-        if (contentType?.split(';')[0].trim().toLowerCase() !== 'application/json')
-            throw new UnsupportedMediaTypeException();
-        if (!etag) throw new HttpException({ code: 'PRECONDITION_REQUIRED' }, 428);
-        const revision = /^"([a-f0-9]{64})"$/.exec(etag)?.[1];
-        if (!revision) throw new BadRequestException();
-        return this.respond(response, await this.updateProfile.execute(identity.userId, input, revision));
+        return this.respond(
+            response,
+            await this.updateProfile.execute(identity.userId, input, requireStrongIfMatch(etag)),
+        );
     }
 
     private respond(response: Response, profile: CustomerProfile): ProfileResponseDto {

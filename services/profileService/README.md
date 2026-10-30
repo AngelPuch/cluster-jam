@@ -13,21 +13,25 @@ bounded retries, DLQ delivery, reconnection and graceful consumer shutdown.
 
 Local Supabase JWT verification and owner profile read/update are implemented,
 with transactional onboarding, strong conditional updates, sanitized Problem
-Details, HTTP trace correlation and Swagger/OpenAPI. Address HTTP routes, Orders
-contact, the Profile Docker deployment and CI remain subsequent PRs.
+Details, HTTP trace correlation and Swagger/OpenAPI. Owned address CRUD and
+transactional default selection are implemented. Orders contact, the Profile
+Docker deployment and CI remain subsequent PRs.
 No public endpoint invokes provisioning. The runnable API exposes:
 
 - `GET /health/live`: process liveness, independent of PostgreSQL.
 - `GET /health/ready`: database query and consumer connection; 503 when unavailable.
 - `GET /api/v1/profiles/me`: authenticated owner's profile and current ETag.
 - `PATCH /api/v1/profiles/me`: conditional partial update and derived onboarding state.
+- `GET/POST /api/v1/profiles/me/addresses`: list/create owned addresses.
+- `GET/PATCH/DELETE /api/v1/profiles/me/addresses/{addressId}`: read/edit/delete an owned address.
 - `GET /docs/` and `GET /openapi.json`: public interactive and machine-readable API documentation.
 
 See [the diagnosis and implementation plan](../../docs/profile/implementation-plan.md)
 and verification results for [persistence](../../docs/profile/verification-01.md)
 and [messaging](../../docs/profile/verification-02.md), plus
 [JWT verification](../../docs/profile/verification-03.md) and
-[owner HTTP/onboarding](../../docs/profile/verification-04.md).
+[owner HTTP/onboarding](../../docs/profile/verification-04.md) and
+[owned addresses](../../docs/profile/verification-05.md).
 
 ## Architecture and technologies
 
@@ -41,14 +45,16 @@ src/
         ports/profile-provisioning.port.ts
         ports/access-token-verifier.port.ts
         ports/profile-repository.port.ts
+        ports/address-book-repository.port.ts
         profile/            # minimum provisioning, read mine, update/onboarding rules
+        addresses/          # owner reads, create/update/delete, validation and safe failures
         security/           # verified identity, protected roles and safe failures
     infrastructure/
         config/environment.validation.ts
         database/
             entities/       # profile, address and inbox
             migrations/     # schema changes, no synchronize
-            repositories/   # provisioning adapter and transactional owner repository
+            repositories/   # provisioning, owner profile and transactional address book
             typeorm.options.ts
             typeorm.config.ts
             typeorm.module.ts
@@ -57,6 +63,7 @@ src/
         security/           # jose/JWKS adapter and Nest module
     interfaces/http/health/
     interfaces/http/profiles/ # owner controller, DTOs, JWT guard and identity decorator
+    interfaces/http/addresses/ # owned address controller and input/response DTOs
     interfaces/http/common/errors/ # centralized sanitized Problem Details
     interfaces/http/openapi/ # Swagger schema and examples
     interfaces/messaging/   # validated registration DTO and manual ACK consumer
@@ -335,7 +342,7 @@ The service supplies source/compiled migration commands and a working broker
 consumer. Dockerfile, Compose database provisioning, migration job, mounted
 service secrets and CI arrive in their planned branches. Shared broker
 topology and permissions are included here because the consumer requires them.
-Swagger and owner profile routes are available. The test broker Compose
+Swagger, owner profile and address routes are available. The test broker Compose
 does not constitute a complete production Profile deployment.
 
 ## Local JWT authentication contract
@@ -444,7 +451,7 @@ headers or query strings. Responses include `X-Trace-Id`; problems include trace
 
 Start the service normally, then open `http://localhost:8080/docs/` or download
 `http://localhost:8080/openapi.json`. Authorize with an asymmetric Supabase user
-JWT. The UI does not persist authorization. Both owner operations document the
+JWT. The UI does not persist authorization. Owner profile/address operations document the
 bearer boundary, DTOs, ETag/If-Match, responses and Problem Details examples.
 Health routes remain outside `/api/v1` and require no authentication.
 
@@ -462,4 +469,78 @@ alone with the local PostgreSQL environment documented above:
 
 ```powershell
 npm run test:integration -- profile-http
+```
+
+## Owned address contract
+
+RF-04 and the database model define 0..N owned addresses and at most one
+default. These addresses are independent of pickup onboarding. A provisioned
+PENDING owner, including a legacy owner with null contactEmail, can manage
+addresses. No address operation creates a profile or changes contact/onboarding.
+
+| Method and path (under `/api/v1`) | Result and conditional revision |
+| --- | --- |
+| GET `/profiles/me/addresses` | 200 `{ "items": [...] }`, sorted by UUID; collection ETag; empty collection is valid |
+| GET `/profiles/me/addresses/{addressId}` | 200 address DTO and item ETag; follows POST Location and supplies revision for edit/delete |
+| POST `/profiles/me/addresses` | Requires collection If-Match; 201 address DTO, item ETag and canonical Location |
+| PATCH `/profiles/me/addresses/{addressId}` | Requires item If-Match; 200 updated DTO and current item ETag |
+| DELETE `/profiles/me/addresses/{addressId}` | Requires item If-Match; 204 with no body; refresh the list afterward |
+
+Both reads support authenticated `If-None-Match`/304 and all responses use
+`Cache-Control: no-store`. The individual GET refines the original CRUD plan
+so clients can follow Location and retrieve the correct item validator.
+Collection and item tags are distinct and cannot be substituted. Every tag
+covers the current owned address book; changing any address invalidates older
+item tags too. Read the list before creating, or read the target address before
+editing/deleting. Missing If-Match is 428, unsupported syntax is 400 and stale
+state is 412. Re-read and reconcile before retrying; POST retries with a stale
+collection tag do not create another address.
+
+Create requires label, recipient, street, exteriorNumber, neighborhood,
+municipality, state, postalCode and country. Input lengths follow the existing
+columns: label 40, recipient/neighborhood/municipality/state 120, street 160,
+exteriorNumber/interiorNumber 20, postalCode 5 and country 2. Text is trimmed;
+blank/control-containing or oversized values and unknown fields are rejected
+with 422. Postal code remains text, preserving leading zeroes. The adopted
+country-validation policy is ISO 3166-1 alpha-2, normalized to uppercase; the
+source documents specify the two-character column, not a country-code registry.
+Postal formatting uses the documented column length rather than a new regional rule.
+
+Only interiorNumber accepts null. Omit it on create for null, or send null on
+PATCH to clear it. All other null values are invalid. PATCH preserves omitted
+fields and requires at least one allowed field. isDefault must be a JSON boolean
+and defaults to false on create; no first address is automatically selected.
+
+Setting isDefault=true demotes the previous default and writes the target in
+one transaction. false or deletion can leave no default; no replacement is
+chosen automatically. This implements the documented **at most one** rule.
+Reads take a shared parent-profile lock; writes take its exclusive lock,
+recheck revisions inside that transaction and return only after commit. The
+existing partial unique index remains the database backstop. A failure after
+demotion rolls back the entire change. No new migration or dependency is needed.
+
+Owner scope comes only from JWT sub, including for administrators. userId/id/
+roles/revisions supplied in JSON cannot reassign ownership. Every query/mutation
+is scoped to the owner; foreign and missing address UUIDs both return
+`404 ADDRESS_NOT_FOUND`. UUID paths are case-insensitive. Missing owner profiles
+return `404 PROFILE_NOT_READY`. Persistence failures are sanitized 503 problems.
+POST/PATCH require JSON after authentication and before DTO validation, returning
+415 for unsupported types. Logs retain status/duration/trace fields only.
+
+Example, continuing with the privately supplied bearer header above:
+
+```powershell
+$addressHeaders = @{ Authorization = "Bearer $env:PROFILE_ACCESS_TOKEN" }
+$list = Invoke-WebRequest http://localhost:8080/api/v1/profiles/me/addresses -Headers $addressHeaders
+$addressHeaders['If-Match'] = [string]$list.Headers.ETag
+$addressJson = @{
+    label = 'Casa'; recipient = 'María López'; street = 'Avenida Reforma'; exteriorNumber = '123'
+    neighborhood = 'Centro'; municipality = 'Cuauhtémoc'; state = 'Ciudad de México'
+    postalCode = '06000'; country = 'MX'; isDefault = $true
+} | ConvertTo-Json
+$created = Invoke-WebRequest http://localhost:8080/api/v1/profiles/me/addresses -Method Post -Headers $addressHeaders -ContentType 'application/json' -Body $addressJson
+$addressHeaders['If-Match'] = [string]$created.Headers.ETag
+$itemUrl = 'http://localhost:8080' + [string]$created.Headers.Location
+Invoke-WebRequest $itemUrl -Method Patch -Headers $addressHeaders -ContentType 'application/json' -Body '{"interiorNumber":"4B"}'
+# Refresh this item's ETag before the next edit/delete.
 ```
