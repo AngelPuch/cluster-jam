@@ -18,7 +18,11 @@ export class HealthController {
             throw new ServiceUnavailableException();
         }
 
-        await this.dataSource.query('SELECT 1');
+        try {
+            await this.dataSource.query('SELECT 1');
+        } catch {
+            throw new ServiceUnavailableException();
+        }
 
         return {
             status: 'ok',

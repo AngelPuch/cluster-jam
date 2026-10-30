@@ -4,6 +4,7 @@ export class CreateAccounts1789608835902 implements MigrationInterface {
     name = 'CreateAccounts1789608835902';
 
     public async up(queryRunner: QueryRunner): Promise<void> {
+        await queryRunner.query(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`);
         await queryRunner.query(`CREATE SCHEMA IF NOT EXISTS "app"`);
         await queryRunner.query(
             `CREATE TABLE "app"."profile" ("user_id" uuid NOT NULL, "name" character varying(120) NOT NULL, "phone" character varying(30), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), CONSTRAINT "PK_d752442f45f258a8bdefeebb2f2" PRIMARY KEY ("user_id"))`,
@@ -20,9 +21,7 @@ export class CreateAccounts1789608835902 implements MigrationInterface {
     }
 
     public async down(queryRunner: QueryRunner): Promise<void> {
-        await queryRunner.query(
-            `ALTER TABLE "app"."address" DROP CONSTRAINT "FK_35cd6c3fafec0bb5d072e24ea20"`,
-        );
+        await queryRunner.query(`ALTER TABLE "app"."address" DROP CONSTRAINT "FK_35cd6c3fafec0bb5d072e24ea20"`);
         await queryRunner.query(`DROP INDEX "app"."UQ_address_default_user"`);
         await queryRunner.query(`DROP TABLE "app"."address"`);
         await queryRunner.query(`DROP TABLE "app"."profile"`);

@@ -2,8 +2,9 @@
   "moduleFileExtensions": ["js", "json", "ts"],
   "rootDir": ".",
   "testEnvironment": "node",
+  "extensionsToTreatAsEsm": [".ts"],
   "testRegex": ".e2e-spec.ts$",
   "transform": {
-    "^.+\\.(t|j)s$": "ts-jest"
+    "^.+\\.ts$": ["ts-jest", {"useESM": true, "tsconfig": "<rootDir>/tsconfig.spec.json"}]
   }
 }

@@ -1,10 +1,9 @@
-import {
-    Column,
-    CreateDateColumn,
-    Entity,
-    PrimaryColumn,
-    UpdateDateColumn,
-} from 'typeorm';
+import { Column, CreateDateColumn, Entity, PrimaryColumn, UpdateDateColumn } from 'typeorm';
+
+export enum OnboardingStatus {
+    PENDING = 'PENDING',
+    COMPLETED = 'COMPLETED',
+}
 
 @Entity({
     name: 'profile',
@@ -35,15 +34,17 @@ export class ProfileEntity {
         name: 'contact_email',
         type: 'varchar',
         length: 254,
+        nullable: true,
     })
-    contactEmail!: string;
+    contactEmail!: string | null;
 
     @Column({
         name: 'onboarding_status',
-        type: 'text',
-        default: 'PENDING',
+        type: 'varchar',
+        length: 20,
+        default: OnboardingStatus.PENDING,
     })
-    onboardingStatus!: 'PENDING' | 'COMPLETED';
+    onboardingStatus!: OnboardingStatus;
 
     @CreateDateColumn({
         name: 'created_at',
