@@ -1,280 +1,199 @@
-# Profile Service
+# Cluster JAM Profile Service
 
-Profile microservice for Cluster JAM.
+Profile owns customer names, phone numbers, contact emails, onboarding and
+addresses. Supabase Auth owns identity and credentials. Auth's registration
+event is the source of the minimum profile; neither Auth nor Supabase writes
+to the Profile database.
 
-This service is responsible for managing customer profiles, contact information, onboarding status, and addresses.
+## Current implementation
 
-## Technology Stack
+This first incremental PR supplies PostgreSQL migrations, a transactional inbox
+and a provisioner wired through a Nest application port. Provisioning is tested
+against real PostgreSQL, including concurrent deliveries and transaction failures.
 
-- Node.js
-- TypeScript
-- NestJS
-- TypeORM
-- PostgreSQL
+RabbitMQ consumption, JWT guards, profile/address HTTP routes, Orders contact,
+Swagger/OpenAPI, Docker deployment and CI are subsequent PRs. No public
+endpoint currently invokes provisioning. The runnable API exposes only:
 
-## Requirements
+- `GET /health/live`: process liveness, independent of PostgreSQL.
+- `GET /health/ready`: database query, 503 when unavailable.
 
-Install the following tools before running the service locally:
+See [the diagnosis and implementation plan](../../docs/profile/implementation-plan.md)
+and [verification results](../../docs/profile/verification-01.md).
 
-- Node.js LTS
-- npm
-- PostgreSQL
-- Git
+## Architecture and technologies
 
-NestJS does not need to be installed globally.
+NestJS 12, TypeScript in strict mode, TypeORM 1.1.1 and PostgreSQL. Dependency
+versions are fixed by `package-lock.json`; use `npm ci`. Node 22.20 was used
+for local checks; the existing Auth production image uses Node 24 LTS.
 
-## Project Setup
-
-From the `services/profileService` directory, install the project dependencies:
-
-```bash
-npm ci
+```text
+src/
+    application/
+        ports/profile-provisioning.port.ts
+        profile/create-minimum-profile.service.ts
+    infrastructure/
+        config/environment.validation.ts
+        database/
+            entities/       # profile, address and inbox
+            migrations/     # schema changes, no synchronize
+            repositories/   # TypeORM provisioning adapter
+            typeorm.options.ts
+            typeorm.config.ts
+            typeorm.module.ts
+    interfaces/http/health/
+    profile.module.ts
 ```
 
-If `package-lock.json` has not been generated yet, use:
+The application port has no ORM or broker types. `CreateMinimumProfileService`
+delegates to the port, and the TypeORM adapter owns its local transaction.
 
-```bash
-npm install
-```
+## Configuration and local execution
 
-## Environment Configuration
+Run commands from `services/profileService`. Start an independently provisioned
+PostgreSQL instance and create its database and application/migration role
+through your local PostgreSQL administration tooling. Creating a PostgreSQL
+database is infrastructure provisioning; the versioned migrations below create
+all application tables, schema and the required `uuid-ossp` extension.
 
-Create a `.env` file inside `services/profileService`.
-
-You can use `.env.example` as a reference.
-
-Example:
-
-```env
-APP_ENV=development
-HTTP_PORT=8080
-
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=cluster_jam_accounts
-DB_USER=accounts
-DB_PASSWORD=your_local_password
-```
-
-The database name and credentials must match your local PostgreSQL configuration.
-
-Never commit the `.env` file or real credentials to Git.
-
-## PostgreSQL Setup
-
-For local development, PostgreSQL runs directly on the developer's machine.
-
-Create the application user:
-
-```sql
-CREATE USER accounts WITH PASSWORD 'your_local_password';
-```
-
-Create the database:
-
-```sql
-CREATE DATABASE cluster_jam_accounts
-    OWNER accounts;
-```
-
-The application uses the `app` PostgreSQL schema.
-
-## Run the Service
-
-Development mode:
-
-```bash
+```powershell
+npm ci --ignore-scripts --no-audit --no-fund
+Copy-Item .env.example .env
+# Set DB_HOST, DB_NAME, DB_USER and DB_PASSWORD in the private .env.
+npm run migration:run
 npm run start:dev
 ```
 
-The REST API runs by default at:
+| Variable | Purpose / local default |
+| --- | --- |
+| `APP_ENV` | development, test, staging or production; development |
+| `HTTP_PORT` | HTTP listener port; 8080 |
+| `DB_HOST` | Required database hostname; localhost in example |
+| `DB_PORT` | PostgreSQL port; 5432 |
+| `DB_NAME` | Required isolated Profile database name |
+| `DB_USER` | Required PostgreSQL role |
+| `DB_PASSWORD` | Required role password; example value must be replaced |
+| `DB_SSL` | true/false; false locally, required true in staging/production |
+| `DB_CA_PATH` | Optional PEM CA for verified database TLS |
 
-```text
-http://localhost:8080
+Configuration fails before database use when required values or ports are
+invalid. TLS always verifies the server certificate when enabled. Connection
+timeout is 3 seconds, statement timeout 8 seconds and idle transaction timeout
+10 seconds. The pool limit is 10. Migration and runtime use the same options.
+No credentials are committed in this service.
+
+```powershell
+Invoke-RestMethod http://localhost:8080/health/live
+Invoke-RestMethod http://localhost:8080/health/ready
 ```
 
-## Build
+## Migrations and compatibility
 
-Compile the project:
-
-```bash
+```powershell
+npm run migration:run             # apply pending migrations
+npm run migration:run             # no-op if already applied
 npm run build
+npm run migration:run:prod        # compiled migration CLI, run once before API replicas
+npm run migration:generate -- src/infrastructure/database/migrations/change-name
+# Review generated SQL and register the migration in typeorm.options.ts.
+npm run migration:revert          # revert the latest migration, after backup/review
 ```
 
-Run the compiled application:
+`synchronize`, automatic migration execution and automatic extension
+installation are disabled. All migrations run in one transaction. A migration
+role needs DDL/extension permissions on this service's own database; runtime
+must use a least-privilege role. The application never creates a database.
 
-```bash
-npm run start:prod
+Migration history:
+
+1. `1789608835902`: schema `app`, profile, addresses, local FK and the partial
+   unique default-address index. It now explicitly creates `uuid-ossp`; this
+   prerequisite was previously installed implicitly by TypeORM initialization.
+2. `1789964255801`: contact email, onboarding state and optional name. The
+   historical email addition is corrected to permit existing rows without
+   inventing a contact email. An already applied migration is not replayed.
+3. `1793232000000`: varchar(20) onboarding state with two-value constraint,
+   default PENDING, compatibility backfill, required-contact CHECK for all new
+   and updated rows, and `app.inbox_messages` with event_id primary key.
+
+**Legacy data:** existing COMPLETED values are preserved. Complete PENDING
+legacy rows become COMPLETED only when name and phone are nonblank and email
+has a nonblank local/domain form with dotted domain. Legacy records lacking a
+contact email remain readable with null contactEmail and PENDING; do not copy
+credentials or manufacture an address. The application model represents this
+legacy nullability. A NOT VALID CHECK permits those historical rows but rejects
+new rows or updates without a nonempty email. Existing installations that
+already have NOT NULL retain that stronger column restriction. Before validating
+the CHECK for every old row, collect a legitimate contact email from its owner.
+
+**Rollback:** stop consumers and back up the service database first.
+`migration:revert` for the latest migration drops inbox deduplication records
+and its constraints, and restores onboarding to text. It deliberately retains
+profile data and COMPLETED values. Reapply with `migration:run`; existing
+user_id uniqueness prevents overwriting profiles on event replay. Do not revert
+the older name-NOT-NULL migration while minimum profiles have null names.
+No production rollback or destructive database operation is run automatically.
+
+## Transactional provisioning contract
+
+`CreateMinimumProfileService.execute({ eventId, userId, initialContactEmail })`
+returns either `{ status: 'processed', profileCreated: boolean }` or
+`{ status: 'duplicate' }`.
+
+In one `DataSource.transaction`:
+
+1. Insert event_id and event_type into the inbox with ON CONFLICT DO NOTHING
+   RETURNING. A duplicate returns successfully without touching the profile.
+2. Insert the minimum profile with null name/phone and PENDING, using
+   ON CONFLICT(user_id) DO NOTHING. Distinct events for an existing user never
+   overwrite contact information, timestamps or onboarding.
+3. Resolve only after COMMIT; a failure rolls back both inserts. The future
+   consumer must await this result before ACKing RabbitMQ.
+
+The inbox stores no event payload, passwords or tokens. The event contract is
+[`identity.user.registered.v1`](../../contracts/events/identity.user.registered.v1.schema.json).
+Input contract validation belongs to the future messaging interface. This
+branch adds no dependency on Auth's or Personalization's code or database.
+
+## Tests and quality checks
+
+```powershell
+npm run build
+npm run typecheck
+npm run format:check
+npm run lint
+npm test -- --runInBand
+npm run test:e2e -- --runInBand
 ```
 
-## Database Migrations
+The HTTP suite verifies technical health routes using a controlled database
+test double; it does not claim JWT/onboarding coverage. The integration suite
+uses a real local PostgreSQL server and creates uniquely named disposable
+databases. It requires a local role with CREATEDB and extension permissions.
+It drops only the databases created by that test run, never a supplied database.
 
-Database schema changes must be managed through TypeORM migrations.
+For an isolated native PostgreSQL test instance on Windows (PostgreSQL tools
+must be on PATH):
 
-Automatic schema synchronization is disabled with `synchronize: false`.
-
-### Generate a migration
-
-After modifying an entity, generate a migration:
-
-```bash
-npm run migration:generate -- src/infrastructure/database/migrations/update-profile -d src/infrastructure/database/typeorm.config.ts
+```powershell
+$testData = Join-Path $env:TEMP ('cluster-jam-profile-' + [guid]::NewGuid().ToString('N'))
+initdb -D $testData -U profile_test --auth=trust --encoding=UTF8 --no-locale
+pg_ctl -D $testData -l (Join-Path $testData 'server.log') -o '-h 127.0.0.1 -p 55439' -w start
+$env:PROFILE_INTEGRATION_LOCAL = 'true'
+$env:PROFILE_TEST_DATABASE_URL = 'postgresql://profile_test@127.0.0.1:55439/postgres'
+npm run test:integration
+pg_ctl -D $testData -m fast -w stop
 ```
 
-Use a descriptive migration name for each schema change.
+Use the trust-authenticated server only for disposable, loopback-bound local
+tests. No real data or service credentials belong there. The integration
+command fails without explicit local test configuration; it never silently
+skips real database verification.
 
-Review the generated SQL before running the migration, especially when existing records need new required values.
+## Deployment status
 
-### Run pending migrations
-
-```bash
-npm run migration:run -- -d src/infrastructure/database/typeorm.config.ts
-```
-
-Previously applied migrations must retain their original names and contents.
-
-## Health Checks
-
-The service exposes two health endpoints.
-
-### Liveness
-
-```http
-GET /health/live
-```
-
-Checks whether the Profile Service process is running.
-
-Expected response:
-
-```json
-{
-    "status": "ok"
-}
-```
-
-### Readiness
-
-```http
-GET /health/ready
-```
-
-Checks database connectivity to determine whether the service is ready to receive requests.
-
-Expected response:
-
-```json
-{
-    "status": "ok"
-}
-```
-
-## Database Model
-
-Profile Service owns its own PostgreSQL database.
-
-Tables:
-
-- `app.profile`
-- `app.address`
-
-### Profile
-
-The `app.profile` table stores:
-
-| Column              | Description                                                |
-| ------------------- | ---------------------------------------------------------- |
-| `user_id`           | Unique identifier of the user associated with the profile  |
-| `name`              | Customer name; nullable while onboarding is pending        |
-| `phone`             | Contact phone number; nullable while onboarding is pending |
-| `contact_email`     | Email address used for customer contact                    |
-| `onboarding_status` | Profile completion status: `PENDING` or `COMPLETED`        |
-| `created_at`        | Profile creation timestamp                                 |
-| `updated_at`        | Last profile update timestamp                              |
-
-New profiles default to `PENDING`.
-
-Completing onboarding requires a name, phone number, and contact email. The application logic responsible for this transition must validate these values before setting the status to `COMPLETED`.
-
-### Addresses
-
-The `app.address` table stores customer addresses.
-
-A profile can have zero or more addresses.
-
-Each address belongs to a profile through a foreign key within the same database.
-
-At most one address per user can be marked as the default address.
-
-## Architecture
-
-The service follows the Cluster JAM layered architecture.
-
-| Directory                                 | Responsibility                                       |
-| ----------------------------------------- | ---------------------------------------------------- |
-| `src/interfaces/`                         | HTTP controllers and external entry points           |
-| `src/application/`                        | Application use cases                                |
-| `src/domain/`                             | Business rules and domain abstractions               |
-| `src/infrastructure/`                     | Persistence and implementations of external adapters |
-| `src/infrastructure/database/entities/`   | TypeORM entities                                     |
-| `src/infrastructure/database/migrations/` | Versioned database migrations                        |
-| `src/interfaces/http/health/`             | Health check endpoints                               |
-
-Database configuration is defined in:
-
-- `src/infrastructure/database/typeorm.config.ts`
-- `src/infrastructure/database/typeorm.module.ts`
-
-The application entry point is `src/main.ts`, and its root module is `src/app.module.ts`.
-
-Controllers must not access TypeORM repositories directly. Business operations must pass through application use cases.
-
-## Tests
-
-Run unit tests:
-
-```bash
-npm test
-```
-
-Run tests in watch mode:
-
-```bash
-npm run test:watch
-```
-
-Run test coverage:
-
-```bash
-npm run test:cov
-```
-
-## Git Workflow
-
-This service follows the repository GitHub Flow.
-
-Create a branch from an updated `main`:
-
-```bash
-git switch main
-git pull --ff-only origin main
-git switch -c feat/profile/manage-profiles
-```
-
-Branch naming pattern:
-
-```text
-<type>/profile/<description>
-```
-
-Examples:
-
-```text
-feat/profile/manage-profiles
-feat/profile/complete-onboarding
-feat/profile/manage-addresses
-fix/profile/default-address
-docs/profile/document-service-setup
-```
-
-Changes must be submitted through a Pull Request and merged using squash merge.
+The first PR provides source and compiled migration commands, not a deployed
+Profile stack. Dockerfile, Compose database provisioning, migration job,
+service secrets, broker TLS/permissions and CI arrive in their planned branches.
+Swagger and business routes are not yet available. Do not deploy this branch
+as though it were the completed Profile Service.
