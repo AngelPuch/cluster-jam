@@ -1,4 +1,5 @@
 import topology from '../messaging/profile-topology.json';
+import { validateSecurityEnvironment } from './security-environment.validation';
 
 export function validateDatabaseEnvironment(environment: Record<string, unknown>): Record<string, unknown> {
     const result: Record<string, unknown> = {
@@ -98,5 +99,5 @@ export function validateEnvironment(environment: Record<string, unknown>): Recor
             throw new Error(`Invalid configuration: ${key}`);
         }
     }
-    return result;
+    return validateSecurityEnvironment(result);
 }

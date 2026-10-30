@@ -98,6 +98,8 @@ describe('Real RabbitMQ registration delivery and PostgreSQL inbox', () => {
             throw new Error('Use explicitly authorized local disposable integration infrastructure');
         }
         process.env.APP_ENV = 'test';
+        process.env.SUPABASE_URL = 'https://supabase.example.test';
+        process.env.SUPABASE_JWKS_URL = 'https://supabase.example.test/auth/v1/.well-known/jwks.json';
         process.env.LOG_LEVEL = 'ERROR';
         process.env.DB_HOST = db.hostname;
         process.env.DB_PORT = db.port || '5432';

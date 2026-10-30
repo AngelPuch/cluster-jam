@@ -8,11 +8,12 @@ implements only transactional provisioning and its database foundation. Later
 steps require their preceding PR to be reviewed and squash merged into `main`.
 No merge is authorized automatically by this plan.
 
-Progress: PR #47 was squash merged after explicit user authorization. The
-next branch, `feat/profile/add-rabbitmq-consumer`, starts from updated main at
-`d3c788d0091bff24dc8ee6d7adbda0f76ed3adc7`. Messaging implementation and its
-verification are recorded in `verification-02.md`; JWT and business HTTP remain
-subsequent steps.
+Progress: PRs #47 and #48 were squash merged after explicit user authorization.
+PR #48's Python and Docker CI checks both passed before merge. The current
+branch, `feat/profile/add-jwt-authentication`, starts from updated main at
+`0a07e76c0aa5a6d2b0c5f3f26a4c9a4924d55a50`. Messaging and JWT verification
+are recorded in `verification-02.md` and `verification-03.md`. Business HTTP
+remains the next step.
 
 ## Sources and precedence
 
