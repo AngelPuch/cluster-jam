@@ -4,6 +4,7 @@ import { HealthModule } from './interfaces/http/health/health.module';
 import { ObservabilityModule } from './infrastructure/observability/observability.module';
 import { validateEnvironment } from './infrastructure/config/environment.validation';
 import { SecurityModule } from './infrastructure/security/security.module';
+import { ProfilesHttpModule } from './interfaces/http/profiles/profiles.module';
 
 @Module({
     imports: [
@@ -13,6 +14,7 @@ import { SecurityModule } from './infrastructure/security/security.module';
         }),
         ObservabilityModule,
         SecurityModule,
+        ProfilesHttpModule,
         HealthModule,
     ],
 })

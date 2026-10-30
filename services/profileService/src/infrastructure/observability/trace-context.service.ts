@@ -22,6 +22,31 @@ export class TraceContextService {
         }
     }
 
+    get traceId(): string {
+        return trace.getSpanContext(context.active())!.traceId;
+    }
+
+    runHttp(traceparent: unknown, next: () => void): void {
+        const parent = propagation.extract(ROOT_CONTEXT, {
+            traceparent: typeof traceparent === 'string' && traceparent.length <= 512 ? traceparent : undefined,
+        });
+        const span = trace
+            .getTracer('profile-service')
+            .startSpan('profile HTTP request', { kind: SpanKind.SERVER }, parent);
+        context.with(trace.setSpan(parent, span), next);
+    }
+
+    endHttp(status: number): void {
+        const span = trace.getSpan(context.active());
+        span?.setAttribute('http.response.status_code', status);
+        if (status >= 500) span?.setStatus({ code: SpanStatusCode.ERROR });
+        span?.end();
+    }
+
+    bindHttp(work: () => void): () => void {
+        return context.bind(context.active(), work);
+    }
+
     async runConsumer<T>(traceparent: unknown, work: () => Promise<T>): Promise<T> {
         const parent = propagation.extract(ROOT_CONTEXT, {
             traceparent: typeof traceparent === 'string' && traceparent.length <= 512 ? traceparent : undefined,
