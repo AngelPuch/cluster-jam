@@ -31,6 +31,11 @@ async function run(): Promise<void> {
         DB_PASSWORD: 'unused-in-preview',
         DB_NAME: 'unused',
         DB_SSL: 'false',
+        DB_PASSWORD_FILE: '',
+        RABBITMQ_URI_FILE: '',
+        RABBITMQ_URL_FILE: '',
+        RABBITMQ_URI: '',
+        RABBITMQ_URL: '',
         SUPABASE_URL: 'https://openapi.invalid',
         SUPABASE_JWKS_URL: 'https://openapi.invalid/auth/v1/.well-known/jwks.json',
         SUPABASE_ISSUER: 'https://openapi.invalid/auth/v1',
@@ -38,8 +43,6 @@ async function run(): Promise<void> {
         RABBITMQ_CONSUMER_ENABLED: 'false',
         LOG_LEVEL: 'ERROR',
     });
-    delete process.env.RABBITMQ_URI;
-    delete process.env.RABBITMQ_URL;
     const { AppModule } = await import('../app.module.js');
     const app = await NestFactory.create(AppModule, { logger: false, abortOnError: false, preview: true });
     try {

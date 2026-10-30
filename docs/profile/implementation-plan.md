@@ -8,13 +8,14 @@ implements only transactional provisioning and its database foundation. Later
 steps require their preceding PR to be reviewed and squash merged into `main`.
 No merge is authorized automatically by this plan.
 
-Progress: PRs #47–50 were squash merged after explicit user authorization.
+Progress: PRs #47–51 were squash merged after explicit user authorization.
 PR #48's Python and Docker CI checks both passed before merge. The current
-branch, `feat/profile/add-owned-addresses`, starts from updated main at
-`42f464c3c317fc915f9b01fc4d7e0b6f4aa0f7b2`. Milestone reports 01–05 record
-persistence, messaging, JWT, owner HTTP and address verification. Orders
-contact/service identity is the next step after the current branch is reviewed
-and squash merged and that security decision is established.
+branch, `build/profile/add-deployment-support`, starts from updated main at
+`4053a1cae91b819efe48e9d5aadb42901f5d60d6`. On 29 October the user explicitly
+deferred Orders because that microservice is not implemented. The unchanged
+tentative Orders branch was renamed; no internal endpoint or mTLS code was added.
+The current scope continues with deployment, dedicated CI and complete Supabase
+signup/outbox acceptance. Milestone reports 01–05 retain the earlier evidence.
 
 ## Sources and precedence
 
@@ -272,8 +273,8 @@ this requirement. Every PR carries its own tests, documentation and config.
 | 3 | `feat/profile/add-jwt-authentication` | Local JWKS verifier, trusted claims, owner guard, signed-token tests; depends on 1 |
 | 4 | `feat/profile/add-onboarding-endpoints` | GET/PATCH, domain rules, Problem Details, Swagger export/check and authorization tests; depends on 2–3 |
 | 5 | `feat/profile/add-owned-addresses` | Owned CRUD and transactional default selection, constraints and API tests; depends on 4 |
-| 6 | `feat/profile/add-order-contact-endpoint` | Agreed service identity and pickup/address contract, complete-only response and access tests; depends on 4–5 and security decision |
-| 7 | `build/profile/add-deployment-support` | Docker image, isolated DB/volume, migration job, network/TLS/secrets, graceful shutdown and actual stack verification; depends on 2–6 |
+| 6 | `feat/profile/add-order-contact-endpoint` | Deferred by the user; Orders does not exist yet; excluded from current completion scope |
+| 7 | `build/profile/add-deployment-support` | Docker image, isolated DB/volume, migration job, network/TLS/secrets, graceful shutdown and actual stack verification; depends on 2–5 |
 | 8 | `ci/profile/add-automated-checks` | Per-service checks, real DB/broker and Auth publication integration, Docker/OpenAPI drift checks; depends on 7 |
 
 Docs and tests are included with features rather than deferred to a final giant
@@ -283,25 +284,27 @@ idempotency and failure scenarios and at least 70% of exposed functionality
 
 ## Verification and remaining work
 
-Milestones 1–4 are squash merged as PRs #47–50 after user approval.
+Milestones 1–5 are squash merged as PRs #47–51 after user approval.
 Milestone 4 now implements owner GET/PATCH, conditional transactional updates,
 derived onboarding, HTTP telemetry, sanitized errors and versioned Swagger.
 Its executed checks and scope are recorded in `verification-04.md`. Milestone 5
 now adds owned CRUD/default selection, row-locked aggregate preconditions,
 input/response DTOs, Swagger and permission/concurrency/rollback tests, recorded
-in `verification-05.md`. Orders service authentication/contact, deployment and
-CI remain.
+in `verification-05.md`. Deployment adds an isolated TLS stack and disposable
+real-container verification. Orders is deferred; dedicated CI and complete
+Supabase signup/outbox acceptance remain for the agreed scope.
 The phone validation recommendation and ETag/If-Match contract are explicit in
 the service README. No address requirement was added to pickup onboarding.
 
 Initial checks and commands are in the service README and milestone reports.
 Docker's Linux engine became available for the RabbitMQ test fixture in
 milestone 2. The test broker Compose and temporary native PostgreSQL instance
-support real integration checks without existing data; they are not a complete
-Profile image/deployment verification.
+support source regression without existing data. Deployment additionally verifies
+the actual image against disposable PostgreSQL/RabbitMQ/JWKS/HTTPS containers.
 
-The full service is not complete at milestone 5. Orders authorization/contact,
-deployment and CI remain planned. No critical-path stub substitutes for them.
+The agreed scope is not complete until deployment is reviewed, dedicated CI and
+complete signup acceptance are integrated. Orders is excluded and has no
+placeholder endpoint or critical-path substitute.
 
 The pre-existing modification to `services/authService/package-lock.json` is
 unrelated, preserved and excluded from Profile commits.

@@ -1,0 +1,119 @@
+name: cluster-jam-profile
+
+x-logging: &logging
+    driver: json-file
+    options: { max-size: "10m", max-file: "3" }
+
+x-profile: &profile
+    image: ${PROFILE_IMAGE:?Build and set PROFILE_IMAGE}
+    pull_policy: never
+    read_only: true
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=16m,mode=1777"]
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 128
+    logging: *logging
+
+x-database: &database
+    APP_ENV: staging
+    DB_HOST: db-profile
+    DB_PORT: "5432"
+    DB_NAME: profile_db
+    DB_SSL: "true"
+    DB_CA_PATH: /run/config/profile-db-ca.crt
+    DB_PASSWORD_FILE: /run/secrets/profile_db_password
+    LOG_LEVEL: ${LOG_LEVEL:-INFO}
+
+services:
+    db-profile:
+        image: postgres:17.11-bookworm@sha256:858bb5e98eed02eb8cafbcdc007f9a65d1b613972028944a8ec2133ccaf80d27
+        environment:
+            POSTGRES_DB: profile_db
+            POSTGRES_USER: postgres
+            POSTGRES_PASSWORD_FILE: /run/secrets/profile_db_admin_password
+            POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+        entrypoint: ["/bin/sh", "/run/config/profile-postgres-entrypoint.sh"]
+        command: ["postgres", "-c", "ssl=on", "-c", "ssl_min_protocol_version=TLSv1.2", "-c", "ssl_cert_file=/run/config/profile-db.crt", "-c", "ssl_key_file=/run/postgresql/profile-tls/server.key", "-c", "hba_file=/run/config/profile-pg_hba.conf"]
+        secrets: [profile_db_admin_password, profile_db_password, profile_db_migration_password, profile_db_tls_key]
+        configs:
+            - { source: postgres_entrypoint, target: /run/config/profile-postgres-entrypoint.sh }
+            - { source: postgres_hba, target: /run/config/profile-pg_hba.conf }
+            - { source: profile_db_certificate, target: /run/config/profile-db.crt }
+        volumes:
+            - profile-data:/var/lib/postgresql/data
+            - ./postgres/001-bootstrap.sql:/docker-entrypoint-initdb.d/001-bootstrap.sql:ro
+        networks: [profile-db]
+        healthcheck:
+            test: ["CMD", "pg_isready", "-U", "postgres", "-d", "profile_db"]
+            interval: 5s
+            timeout: 3s
+            start_period: 10s
+            retries: 12
+        restart: unless-stopped
+        stop_grace_period: 30s
+        mem_limit: 512m
+        cpus: 1.0
+        pids_limit: 128
+        logging: *logging
+
+    profile-migrate:
+        <<: *profile
+        healthcheck: { disable: true }
+        command: ["node", "dist/commands/profile-migrate.command.js"]
+        environment:
+            <<: *database
+            DB_USER: migrator_profile
+            DB_PASSWORD_FILE: /run/secrets/profile_db_migration_password
+            DB_RUNTIME_ROLE: app_profile
+        secrets: [profile_db_migration_password]
+        configs: [{ source: profile_db_ca, target: /run/config/profile-db-ca.crt }]
+        networks: [profile-db]
+        depends_on: { db-profile: { condition: service_healthy } }
+        restart: "no"
+
+    profile:
+        <<: *profile
+        environment:
+            <<: *database
+            NODE_ENV: production
+            HTTP_PORT: "8080"
+            DB_USER: app_profile
+            SUPABASE_URL: ${SUPABASE_URL:?Set public SUPABASE_URL}
+            SUPABASE_JWKS_URL: ${SUPABASE_JWKS_URL:?Set matching SUPABASE_JWKS_URL}
+            RABBITMQ_CONSUMER_ENABLED: "true"
+            RABBITMQ_URI_FILE: /run/secrets/profile_rabbitmq_uri
+            RABBITMQ_CA_PATH: /run/config/cluster-ca.crt
+            NODE_EXTRA_CA_CERTS: /run/config/cluster-ca.crt
+        secrets: [profile_db_password, profile_rabbitmq_uri]
+        configs:
+            - { source: profile_db_ca, target: /run/config/profile-db-ca.crt }
+            - { source: cluster_ca, target: /run/config/cluster-ca.crt }
+        networks:
+            profile-db:
+            backend: { aliases: [clusterjam-profile] }
+        depends_on:
+            db-profile: { condition: service_healthy }
+            profile-migrate: { condition: service_completed_successfully }
+        init: true
+        restart: unless-stopped
+        stop_grace_period: 30s
+
+networks:
+    profile-db: { internal: true }
+    backend: { external: true, name: cluster-jam-backend }
+volumes:
+    profile-data:
+secrets:
+    profile_db_admin_password: { file: ./.secrets/postgres_admin_password }
+    profile_db_password: { file: ./.secrets/profile_db_password }
+    profile_db_migration_password: { file: ./.secrets/profile_db_migration_password }
+    profile_db_tls_key: { file: ./.secrets/profile-db.key }
+    profile_rabbitmq_uri: { file: ./.secrets/profile_rabbitmq_uri }
+configs:
+    postgres_entrypoint: { file: ./postgres/entrypoint.sh }
+    postgres_hba: { file: ./postgres/pg_hba.conf }
+    profile_db_certificate: { file: ./.certificates/profile-db.crt }
+    profile_db_ca: { file: ./.certificates/profile-db-ca.crt }
+    cluster_ca: { file: ../shared/.pki/ca.crt }

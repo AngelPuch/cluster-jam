@@ -2,9 +2,9 @@
 set -euo pipefail
 task_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$task_root"
-target="${1:?Usage: compose.sh shared|auth|personalization <compose arguments>}"
+target="${1:?Usage: compose.sh shared|auth|personalization|profile <compose arguments>}"
 shift
-case "$target" in shared|auth|personalization) ;; *) exit 2 ;; esac
+case "$target" in shared|auth|personalization|profile) ;; *) exit 2 ;; esac
 configuration="infra/$target/.env"
 if [[ "$target" == personalization ]]; then
     configuration=infra/personalization/deployment.env
@@ -16,6 +16,7 @@ fi
 # Compose reads ambient variables before --env-file. Keep deployment values
 # authoritative, even if this shell was used for local development earlier.
 unset AUTH_IMAGE BROKER_REVISION HTTPS_BIND_IP LOG_LEVEL
+unset PROFILE_IMAGE
 unset SUPABASE_URL SUPABASE_JWKS_URL
 if [[ "$target" == personalization ]]; then
     unset PERSONALIZATION_IMAGE_TAG PERSONALIZATION_GIT_SHA SUPABASE_ISSUER

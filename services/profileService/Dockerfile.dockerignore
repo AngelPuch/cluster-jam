@@ -1,0 +1,20 @@
+**
+!services/
+!services/profileService/
+!services/profileService/package.json
+!services/profileService/package-lock.json
+!services/profileService/nest-cli.json
+!services/profileService/tsconfig*.json
+!services/profileService/eslint.config.mjs
+!services/profileService/.prettierrc
+!services/profileService/src/
+!services/profileService/src/**
+!services/profileService/test/
+!services/profileService/test/**
+# Cross-service DB/broker suites run separately with Auth dependencies, not in the isolated image build.
+services/profileService/test/*.integration-spec.ts
+!contracts/
+!contracts/openapi/
+!contracts/openapi/profile/
+!contracts/openapi/profile/v1/
+!contracts/openapi/profile/v1/openapi.json
