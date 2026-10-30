@@ -23,37 +23,49 @@ const codes: Record<number, string[]> = {
     500: ['INTERNAL_ERROR'],
     503: ['SERVICE_UNAVAILABLE'],
 };
-export const profileProblemResponses: Record<number, ApiResponseOptions> = Object.fromEntries(
-    Object.entries(codes).map(([status, failures]) => [
-        status,
-        {
-            status: Number(status),
-            description: failures.join(' or '),
-            headers: {
-                'Cache-Control': { schema: { type: 'string', enum: ['no-store'] } },
-                ...(status === '401' ? { 'WWW-Authenticate': { schema: { type: 'string', enum: ['Bearer'] } } } : {}),
-            },
-            content: {
-                'application/problem+json': {
-                    schema: { $ref: getSchemaPath(ProblemDetailsDto) },
-                    examples: Object.fromEntries(
-                        failures.map((code) => [
-                            code,
-                            {
-                                value: {
-                                    type: 'about:blank',
-                                    title: 'Request failed',
-                                    status: Number(status),
-                                    detail: 'See the operation description for recovery.',
-                                    instance: '/api/v1/profiles/me',
-                                    code,
-                                    traceId: '19ef631176494c4ca0a63c428da97850',
+function buildProblemResponses(
+    failuresByStatus: Record<number, string[]>,
+    instance: string,
+): Record<number, ApiResponseOptions> {
+    return Object.fromEntries(
+        Object.entries(failuresByStatus).map(([status, failures]) => [
+            status,
+            {
+                status: Number(status),
+                description: failures.join(' or '),
+                headers: {
+                    'Cache-Control': { schema: { type: 'string', enum: ['no-store'] } },
+                    ...(status === '401'
+                        ? { 'WWW-Authenticate': { schema: { type: 'string', enum: ['Bearer'] } } }
+                        : {}),
+                },
+                content: {
+                    'application/problem+json': {
+                        schema: { $ref: getSchemaPath(ProblemDetailsDto) },
+                        examples: Object.fromEntries(
+                            failures.map((code) => [
+                                code,
+                                {
+                                    value: {
+                                        type: 'about:blank',
+                                        title: 'Request failed',
+                                        status: Number(status),
+                                        detail: 'See the operation description for recovery.',
+                                        instance,
+                                        code,
+                                        traceId: '19ef631176494c4ca0a63c428da97850',
+                                    },
                                 },
-                            },
-                        ]),
-                    ),
+                            ]),
+                        ),
+                    },
                 },
             },
-        },
-    ]),
+        ]),
+    );
+}
+export const profileProblemResponses = buildProblemResponses(codes, '/api/v1/profiles/me');
+export const addressProblemResponses = buildProblemResponses(
+    { ...codes, 404: ['PROFILE_NOT_READY', 'ADDRESS_NOT_FOUND'], 422: ['VALIDATION_ERROR'] },
+    '/api/v1/profiles/me/addresses/22222222-2222-4222-8222-222222222222',
 );

@@ -8,12 +8,13 @@ implements only transactional provisioning and its database foundation. Later
 steps require their preceding PR to be reviewed and squash merged into `main`.
 No merge is authorized automatically by this plan.
 
-Progress: PRs #47–49 were squash merged after explicit user authorization.
+Progress: PRs #47–50 were squash merged after explicit user authorization.
 PR #48's Python and Docker CI checks both passed before merge. The current
-branch, `feat/profile/add-onboarding-endpoints`, starts from updated main at
-`e65035a97d39345e16d7bb2e441dee19d5510f6f`. Milestone reports 01–04 record
-persistence, messaging, JWT and owner HTTP verification. Owned addresses are
-the next step after the current branch is reviewed and squash merged.
+branch, `feat/profile/add-owned-addresses`, starts from updated main at
+`42f464c3c317fc915f9b01fc4d7e0b6f4aa0f7b2`. Milestone reports 01–05 record
+persistence, messaging, JWT, owner HTTP and address verification. Orders
+contact/service identity is the next step after the current branch is reviewed
+and squash merged and that security decision is established.
 
 ## Sources and precedence
 
@@ -216,6 +217,7 @@ All business HTTP routes use `/api/v1` per the coding standard:
 | GET `/profiles/me` | Owner profile and onboarding state; 404 PROFILE_NOT_READY before provisioning |
 | PATCH `/profiles/me` | Partial allowed fields fullName, phone, contactEmail; atomically recompute onboarding |
 | GET `/profiles/me/addresses` | List own addresses, including default |
+| GET `/profiles/me/addresses/{addressId}` | Own detail/item ETag; followable POST Location, added in milestone 5 |
 | POST `/profiles/me/addresses` | Create own address; 201 and Location |
 | PATCH `/profiles/me/addresses/{addressId}` | Edit own address / choose default transactionally |
 | DELETE `/profiles/me/addresses/{addressId}` | Delete own address, no business history deletion |
@@ -281,11 +283,14 @@ idempotency and failure scenarios and at least 70% of exposed functionality
 
 ## Verification and remaining work
 
-Milestones 1–3 are squash merged as PRs #47, #48 and #49 after user approval.
+Milestones 1–4 are squash merged as PRs #47–50 after user approval.
 Milestone 4 now implements owner GET/PATCH, conditional transactional updates,
 derived onboarding, HTTP telemetry, sanitized errors and versioned Swagger.
-Its executed checks and scope are recorded in `verification-04.md`; owned
-addresses, Orders service authentication/contact, deployment and CI remain.
+Its executed checks and scope are recorded in `verification-04.md`. Milestone 5
+now adds owned CRUD/default selection, row-locked aggregate preconditions,
+input/response DTOs, Swagger and permission/concurrency/rollback tests, recorded
+in `verification-05.md`. Orders service authentication/contact, deployment and
+CI remain.
 The phone validation recommendation and ETag/If-Match contract are explicit in
 the service README. No address requirement was added to pickup onboarding.
 
@@ -295,7 +300,7 @@ milestone 2. The test broker Compose and temporary native PostgreSQL instance
 support real integration checks without existing data; they are not a complete
 Profile image/deployment verification.
 
-The full service is not complete at milestone 4. Addresses, Orders authorization,
+The full service is not complete at milestone 5. Orders authorization/contact,
 deployment and CI remain planned. No critical-path stub substitutes for them.
 
 The pre-existing modification to `services/authService/package-lock.json` is

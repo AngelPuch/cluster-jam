@@ -5,6 +5,7 @@ import { STATUS_CODES } from 'node:http';
 import { AccessTokenError, AccessTokenFailure } from '../../../../application/security/access-token.error';
 import { readLogCorrelation } from '../../../../infrastructure/observability/trace-context.service';
 import { ProfileError, ProfileFailure } from '../../../../application/profile/profile.error';
+import { AddressError, AddressFailure } from '../../../../application/addresses/address.error';
 
 const FAILURES: Record<AccessTokenFailure, { status: number; detail: string }> = {
     [AccessTokenFailure.InvalidAccessToken]: { status: 401, detail: 'A valid user access token is required.' },
@@ -39,6 +40,15 @@ const HTTP_FAILURES: Record<number, { code: string; detail: string }> = {
     428: { code: 'PRECONDITION_REQUIRED', detail: 'Provide the current quoted ETag in If-Match.' },
     503: { code: 'SERVICE_UNAVAILABLE', detail: 'A required dependency is temporarily unavailable.' },
 };
+const ADDRESS_FAILURES: Record<AddressFailure, { status: number; detail: string }> = {
+    [AddressFailure.InvalidInput]: { status: 422, detail: 'Provide valid allowed address fields.' },
+    [AddressFailure.NotFound]: { status: 404, detail: 'The requested address was not found.' },
+    [AddressFailure.RevisionMismatch]: {
+        status: 412,
+        detail: 'The address book changed. Read it again before updating.',
+    },
+    [AddressFailure.PersistenceUnavailable]: { status: 503, detail: 'Address persistence is temporarily unavailable.' },
+};
 
 // A single boundary also sanitizes framework/body-parser errors. Never serialize raw exceptions.
 @Catch()
@@ -52,6 +62,8 @@ export class ProblemDetailsFilter implements ExceptionFilter {
             failure = { ...FAILURES[exception.failure], code: exception.failure };
         else if (exception instanceof ProfileError)
             failure = { ...PROFILE_FAILURES[exception.failure], code: exception.failure };
+        else if (exception instanceof AddressError)
+            failure = { ...ADDRESS_FAILURES[exception.failure], code: exception.failure };
         else if (exception instanceof HttpException) {
             const status = exception.getStatus();
             const known = HTTP_FAILURES[status];
