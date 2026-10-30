@@ -1,6 +1,7 @@
 """Provision the local development broker only; uses fictitious local credentials."""
 import base64
 import json
+from pathlib import Path
 from urllib.request import Request, urlopen
 
 BASE_URL = "http://127.0.0.1:15672/api"
@@ -25,4 +26,21 @@ call("PUT", "/queues/clusterjam/profile.identity.user-registered.v1", {"durable"
 call("POST", "/bindings/clusterjam/e/identity.events/q/profile.identity.user-registered.v1", {"routing_key": "identity.user.registered.v1", "arguments": {}})
 call("PUT", "/users/auth-publisher", {"password": "local-publisher-only", "tags": ""})
 call("PUT", "/permissions/clusterjam/auth-publisher", {"configure": "^identity\\.events$", "write": "^identity\\.events$", "read": "^$"})
+topology = json.loads(
+    (Path(__file__).resolve().parents[2] / "services" / "profileService"
+     / "src" / "infrastructure" / "messaging" / "profile-topology.json")
+    .read_text(encoding="utf-8")
+)
+for exchange in topology["exchanges"]:
+    call("PUT", "/exchanges/clusterjam/" + exchange["name"],
+         {**exchange, "auto_delete": False, "internal": False, "arguments": {}})
+for queue in topology["queues"]:
+    call("PUT", "/queues/clusterjam/" + queue["name"],
+         {**queue, "auto_delete": False})
+for binding in topology["bindings"]:
+    call("POST", "/bindings/clusterjam/e/" + binding["source"]
+         + "/q/" + binding["destination"],
+         {"routing_key": binding["routing_key"], "arguments": {}})
+call("PUT", "/users/profile-consumer", {"password": "local-profile-only", "tags": ""})
+call("PUT", "/permissions/clusterjam/profile-consumer", topology["consumerPermissions"])
 print("Local RabbitMQ topology and publisher permissions are ready.")

@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import type { DataSourceOptions } from 'typeorm';
-import { validateEnvironment } from '../config/environment.validation';
+import { validateDatabaseEnvironment } from '../config/environment.validation';
 import { AddressEntity } from './entities/address.entity';
 import { ProfileEntity } from './entities/profile.entity';
 import { InboxMessageEntity } from './entities/inbox-message.entity';
@@ -9,7 +9,7 @@ import { UpdateProfile1789964255801 } from './migrations/1789964255801-update-pr
 import { AddInboxAndOnboardingStatus1793232000000 } from './migrations/1793232000000-add-inbox-and-onboarding-status';
 
 export function createDatabaseOptions(environment: NodeJS.ProcessEnv = process.env): DataSourceOptions {
-    const config = validateEnvironment(environment);
+    const config = validateDatabaseEnvironment(environment);
     return {
         type: 'postgres',
         host: String(config.DB_HOST),

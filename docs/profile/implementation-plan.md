@@ -8,6 +8,12 @@ implements only transactional provisioning and its database foundation. Later
 steps require their preceding PR to be reviewed and squash merged into `main`.
 No merge is authorized automatically by this plan.
 
+Progress: PR #47 was squash merged after explicit user authorization. The
+next branch, `feat/profile/add-rabbitmq-consumer`, starts from updated main at
+`d3c788d0091bff24dc8ee6d7adbda0f76ed3adc7`. Messaging implementation and its
+verification are recorded in `verification-02.md`; JWT and business HTTP remain
+subsequent steps.
+
 ## Sources and precedence
 
 The supplied documentation lives in

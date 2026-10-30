@@ -118,7 +118,11 @@ def prepare_definitions() -> None:
                 "tags": tags,
             }
         )
-    queue = "profile.identity.user-registered.v1"
+    profile = json.loads(
+        (BASE.parent / "services" / "profileService" / "src"
+         / "infrastructure" / "messaging" / "profile-topology.json")
+        .read_text(encoding="utf-8")
+    )
     definitions = {
         "users": users,
         "vhosts": [{"name": "clusterjam", "default_queue_type": "classic"}],
@@ -140,9 +144,7 @@ def prepare_definitions() -> None:
             {
                 "user": "profile-consumer",
                 "vhost": "clusterjam",
-                "configure": r"^profile\.identity\.user-registered\.v1$",
-                "write": "^$",
-                "read": r"^profile\.identity\.user-registered\.v1$",
+                **profile["consumerPermissions"],
             },
         ],
         "exchanges": [
@@ -154,26 +156,21 @@ def prepare_definitions() -> None:
                 "auto_delete": False,
                 "internal": False,
                 "arguments": {},
-            }
+            },
+            *[
+                {**exchange, "vhost": "clusterjam", "auto_delete": False,
+                 "internal": False, "arguments": {}}
+                for exchange in profile["exchanges"]
+            ],
         ],
         "queues": [
-            {
-                "name": queue,
-                "vhost": "clusterjam",
-                "durable": True,
-                "auto_delete": False,
-                "arguments": {},
-            }
+            {**queue, "vhost": "clusterjam", "auto_delete": False}
+            for queue in profile["queues"]
         ],
         "bindings": [
-            {
-                "source": "identity.events",
-                "vhost": "clusterjam",
-                "destination": queue,
-                "destination_type": "queue",
-                "routing_key": "identity.user.registered.v1",
-                "arguments": {},
-            }
+            {**binding, "vhost": "clusterjam", "destination_type": "queue",
+             "arguments": {}}
+            for binding in profile["bindings"]
         ],
     }
     save(target, (json.dumps(definitions, indent=2) + "\n").encode())

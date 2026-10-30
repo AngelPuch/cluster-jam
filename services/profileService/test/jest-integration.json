@@ -3,6 +3,7 @@
     "rootDir": "..",
     "testEnvironment": "node",
     "extensionsToTreatAsEsm": [".ts"],
+    "moduleNameMapper": { "^(\\.{1,2}/.*)\\.js$": "$1" },
     "testRegex": "test/.*\\.integration-spec\\.ts$",
     "testTimeout": 30000,
     "transform": {

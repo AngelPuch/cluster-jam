@@ -1,7 +1,13 @@
 import { validateEnvironment } from './environment.validation';
 
 describe('Profile database configuration', () => {
-    const valid = { DB_HOST: 'localhost', DB_NAME: 'profiles', DB_USER: 'profiles', DB_PASSWORD: 'test-only' };
+    const valid = {
+        DB_HOST: 'localhost',
+        DB_NAME: 'profiles',
+        DB_USER: 'profiles',
+        DB_PASSWORD: 'test-only',
+        RABBITMQ_CONSUMER_ENABLED: false,
+    };
 
     it('normalizes local defaults and ports', () => {
         expect(validateEnvironment({ ...valid, DB_PORT: '5432' })).toMatchObject({
