@@ -15,7 +15,8 @@ Local Supabase JWT verification and owner profile read/update are implemented,
 with transactional onboarding, strong conditional updates, sanitized Problem
 Details, HTTP trace correlation and Swagger/OpenAPI. Owned address CRUD and
 transactional default selection and Docker/Compose deployment support are
-implemented. Dedicated CI and complete Supabase signup acceptance remain.
+implemented. Dedicated CI checks source quality, contract drift and one real
+Supabase signup/outbox acceptance flow. Extended image/TLS checks are manual.
 Orders integration is deferred at the user's request.
 No public endpoint invokes provisioning. The runnable API exposes:
 
@@ -33,7 +34,9 @@ and [messaging](../../docs/profile/verification-02.md), plus
 [JWT verification](../../docs/profile/verification-03.md) and
 [owner HTTP/onboarding](../../docs/profile/verification-04.md) and
 [owned addresses](../../docs/profile/verification-05.md) and
-[TLS deployment](../../docs/profile/verification-06.md).
+[TLS deployment](../../docs/profile/verification-06.md) and
+[real signup/CI](../../docs/profile/verification-07.md).
+The [delivery report](../../docs/profile/final-report.md) collects the final scope.
 
 ## Architecture and technologies
 
@@ -338,8 +341,33 @@ This removes only the explicitly named disposable test project. Each broker
 test uses a unique vhost and service users, with the production permission
 patterns; those are removed afterward. The contract test executes Auth's real
 event factory and RabbitMQ publisher. It requires Auth's dependencies for that
-test only; Profile runtime imports no other service. Actual Supabase signup
-and trigger publication still need the wider registration acceptance stack.
+test only; Profile runtime imports no other service.
+
+For the single complete registration acceptance scenario, from the repository
+root with both services' locked dependencies installed, Docker/Compose and
+Python 3.12+:
+
+```powershell
+python infra/profile/verify_registration.py
+```
+
+This starts a uniquely named disposable Supabase project with Auth's actual
+migrations/templates and a separate PostgreSQL/RabbitMQ fixture. It builds both
+services once and calls the actual Auth registration endpoint. The real trigger,
+restricted outbox publisher and Profile consumer must persist one minimum profile
+and inbox record. There are no mocked persistence/publisher adapters. Local
+provider keys stay in process environment and captured CLI output. Cleanup removes
+only this run's resources. Ports 54321, 54322, 54324, 55439 and 5679 must be free;
+the helper aborts if an existing service is using them.
+
+At the user's request, normal Profile CI runs only source quality, this single
+registration scenario and OpenAPI drift, rather than repeating the full test
+battery. GitHub's manual **Profile CI** dispatch accepts `extended_checks=true`
+for the existing image build and complete TLS stack verification. The unit,
+HTTP and regression suites above remain available when a change warrants them.
+Email confirmation/login are Auth responsibilities; this registration scenario
+does not replace the independent asymmetric JWT/owner HTTP checks recorded in
+earlier milestones.
 
 ## Docker and deployment
 
@@ -359,8 +387,8 @@ python infra/profile/verify_stack.py --image cluster-jam/profile:local
 
 The verifier uses disposable owned containers and real TLS, PostgreSQL, RabbitMQ,
 ES256/JWKS and HTTPS requests. The earlier test-broker Compose remains a focused
-regression fixture. Dedicated CI and live Supabase signup/outbox acceptance are
-pending. Orders is outside current scope.
+regression fixture. The separate real signup scenario and lean CI are documented
+above. Orders is outside current scope.
 
 ## Local JWT authentication contract
 

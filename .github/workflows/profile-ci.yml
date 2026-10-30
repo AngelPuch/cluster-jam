@@ -1,0 +1,88 @@
+name: Profile CI
+
+on:
+    pull_request:
+        paths:
+            - "services/profileService/**"
+            - "services/authService/**"
+            - "infra/profile/**"
+            - "infra/shared/**"
+            - "infra/deploy/**"
+            - "contracts/openapi/profile/**"
+            - "contracts/events/**"
+            - ".github/workflows/profile-ci.yml"
+            - ".editorconfig"
+            - ".gitattributes"
+    push:
+        branches: [main]
+        paths:
+            - "services/profileService/**"
+            - "services/authService/**"
+            - "infra/profile/**"
+            - "infra/shared/**"
+            - "infra/deploy/**"
+            - "contracts/openapi/profile/**"
+            - "contracts/events/**"
+            - ".github/workflows/profile-ci.yml"
+            - ".editorconfig"
+            - ".gitattributes"
+    workflow_dispatch:
+        inputs:
+            extended_checks:
+                description: "Also build the image and verify the complete TLS stack"
+                type: boolean
+                default: false
+
+permissions:
+    contents: read
+
+concurrency:
+    group: profile-${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    profile:
+        name: Profile quality and registration
+        runs-on: ubuntu-24.04
+        timeout-minutes: 20
+        steps:
+            - name: Check out repository
+              uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+              with:
+                  persist-credentials: false
+            - name: Set up Node
+              uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+              with:
+                  node-version: "24"
+                  cache: npm
+                  cache-dependency-path: |
+                      services/profileService/package-lock.json
+                      services/authService/package-lock.json
+            - name: Set up Python
+              uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+              with:
+                  python-version: "3.14"
+            - name: Install locked dependencies
+              run: |
+                  npm --prefix services/profileService ci --ignore-scripts --no-audit --no-fund
+                  npm --prefix services/authService ci --ignore-scripts --no-audit --no-fund
+                  python -m pip install ruff==0.17.2
+            - name: Check types, lint and formatting
+              working-directory: services/profileService
+              run: |
+                  npm run typecheck
+                  npm run lint
+                  npm run format:check
+                  npx --no-install prettier --config .prettierrc --check ../../infra/profile/check_registration.cjs
+                  python -m ruff check ../../infra/profile
+                  python -m ruff format --check ../../infra/profile
+            - name: Verify one real signup and build both services
+              run: python infra/profile/verify_registration.py
+            - name: Check versioned OpenAPI without rebuilding
+              working-directory: services/profileService
+              run: node dist/commands/profile-openapi.command.js --check
+            - name: Extended image and TLS stack verification (manual)
+              if: github.event_name == 'workflow_dispatch' && inputs.extended_checks
+              run: |
+                  docker build -f services/profileService/Dockerfile -t cluster-jam/profile:ci .
+                  python infra/profile/verify_stack.py --image cluster-jam/profile:ci

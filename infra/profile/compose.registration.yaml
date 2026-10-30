@@ -1,0 +1,28 @@
+# Disposable dependencies for the single real Supabase/Auth -> Profile acceptance flow.
+services:
+    postgres:
+        image: postgres:17.11-bookworm@sha256:858bb5e98eed02eb8cafbcdc007f9a65d1b613972028944a8ec2133ccaf80d27
+        environment:
+            POSTGRES_USER: profile_test
+            POSTGRES_PASSWORD: registration-local-only
+            POSTGRES_DB: postgres
+        ports: ["127.0.0.1:55439:5432"]
+        healthcheck:
+            test: ["CMD", "pg_isready", "-U", "profile_test", "-d", "postgres"]
+            interval: 2s
+            timeout: 3s
+            retries: 30
+        mem_limit: 512m
+    rabbitmq:
+        image: rabbitmq:4.3.6-management@sha256:54cb013d76cd1fd6c0a0708f34062ad61c452bb6f016b434c6c33f1a765d2b58
+        environment:
+            RABBITMQ_DEFAULT_USER: registration-test
+            RABBITMQ_DEFAULT_PASS: registration-local-only
+            RABBITMQ_DEFAULT_VHOST: profile-registration
+        ports: ["127.0.0.1:5679:5672"]
+        healthcheck:
+            test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+            interval: 3s
+            timeout: 5s
+            retries: 30
+        mem_limit: 768m

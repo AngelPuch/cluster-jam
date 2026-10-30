@@ -16,6 +16,7 @@ infra/personalization/** text eol=lf
 services/profileService/** text eol=lf
 infra/profile/** text eol=lf
 .github/workflows/personalization-ci.yml text eol=lf
+.github/workflows/profile-ci.yml text eol=lf
 contracts/openapi/personalization/** text eol=lf
 contracts/postman/personalization/** text eol=lf
 

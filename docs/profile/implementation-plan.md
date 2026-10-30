@@ -8,14 +8,17 @@ implements only transactional provisioning and its database foundation. Later
 steps require their preceding PR to be reviewed and squash merged into `main`.
 No merge is authorized automatically by this plan.
 
-Progress: PRs #47–51 were squash merged after explicit user authorization.
-PR #48's Python and Docker CI checks both passed before merge. The current
-branch, `build/profile/add-deployment-support`, starts from updated main at
-`4053a1cae91b819efe48e9d5aadb42901f5d60d6`. On 29 October the user explicitly
+Progress: PRs #47–52 were squash merged after explicit user authorization.
+PR #52's Python and Docker CI checks both passed before merge. The current
+branch, `ci/profile/add-automated-checks`, starts from updated main at
+`781ed59c989c32cfa8341eb1cc899fa24907a527`. On 29 October the user explicitly
 deferred Orders because that microservice is not implemented. The unchanged
 tentative Orders branch was renamed; no internal endpoint or mTLS code was added.
-The current scope continues with deployment, dedicated CI and complete Supabase
-signup/outbox acceptance. Milestone reports 01–05 retain the earlier evidence.
+The last milestone adds dedicated CI and complete Supabase signup/outbox
+acceptance. On 30 October the user requested fewer routine tests for this school
+project: default CI keeps source quality, one real registration scenario and
+OpenAPI drift; full image/TLS checks are manually dispatched. Milestone reports
+01–06 retain the earlier evidence without claiming those batteries were rerun.
 
 ## Sources and precedence
 
@@ -284,15 +287,16 @@ idempotency and failure scenarios and at least 70% of exposed functionality
 
 ## Verification and remaining work
 
-Milestones 1–5 are squash merged as PRs #47–51 after user approval.
+Milestones 1–5 and deployment are squash merged as PRs #47–52 after user approval.
 Milestone 4 now implements owner GET/PATCH, conditional transactional updates,
 derived onboarding, HTTP telemetry, sanitized errors and versioned Swagger.
 Its executed checks and scope are recorded in `verification-04.md`. Milestone 5
 now adds owned CRUD/default selection, row-locked aggregate preconditions,
 input/response DTOs, Swagger and permission/concurrency/rollback tests, recorded
 in `verification-05.md`. Deployment adds an isolated TLS stack and disposable
-real-container verification. Orders is deferred; dedicated CI and complete
-Supabase signup/outbox acceptance remain for the agreed scope.
+real-container verification. The final CI branch adds source quality, one real
+Supabase signup/outbox acceptance and optional full image/TLS checks, recorded
+in `verification-07.md`. Orders remains deferred.
 The phone validation recommendation and ETag/If-Match contract are explicit in
 the service README. No address requirement was added to pickup onboarding.
 
@@ -302,9 +306,9 @@ milestone 2. The test broker Compose and temporary native PostgreSQL instance
 support source regression without existing data. Deployment additionally verifies
 the actual image against disposable PostgreSQL/RabbitMQ/JWKS/HTTPS containers.
 
-The agreed scope is not complete until deployment is reviewed, dedicated CI and
-complete signup acceptance are integrated. Orders is excluded and has no
-placeholder endpoint or critical-path substitute.
+The remaining integration gate is review/authorized squash merge of the final
+CI branch after its remote checks. Orders is excluded and has no placeholder
+endpoint or critical-path substitute. `final-report.md` collects delivery details.
 
 The pre-existing modification to `services/authService/package-lock.json` is
 unrelated, preserved and excluded from Profile commits.
