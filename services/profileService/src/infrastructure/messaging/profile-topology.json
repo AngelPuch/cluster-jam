@@ -1,0 +1,45 @@
+{
+    "exchange": "identity.events",
+    "routingKey": "identity.user.registered.v1",
+    "queue": "profile.identity.user-registered.v1",
+    "retryExchange": "profile.identity.user-registered.retry",
+    "deadLetterExchange": "profile.identity.user-registered.dead-letter",
+    "deadLetterRoutingKey": "failed",
+    "dlq": "profile.identity.user-registered.dlq",
+    "maxAttempts": 3,
+    "retryMaxBytes": 67108864,
+    "dlqMaxBytes": 268435456,
+    "consumerPermissions": {
+        "configure": "^profile\\.identity\\.user-registered\\.(v1|retry(?:\\.[12])?|dead-letter|dlq)$",
+        "write": "^profile\\.identity\\.user-registered\\.(v1|retry(?:\\.[12])?|dead-letter|dlq)$",
+        "read": "^(identity\\.events|profile\\.identity\\.user-registered\\.(v1|retry(?:\\.[12])?|dead-letter|dlq))$"
+    },
+    "retries": [
+        { "queue": "profile.identity.user-registered.retry.1", "routingKey": "attempt.2", "delayMs": 5000 },
+        { "queue": "profile.identity.user-registered.retry.2", "routingKey": "attempt.3", "delayMs": 30000 }
+    ],
+    "exchanges": [
+        { "name": "profile.identity.user-registered.retry", "type": "direct", "durable": true },
+        { "name": "profile.identity.user-registered.dead-letter", "type": "direct", "durable": true }
+    ],
+    "queues": [
+        { "name": "profile.identity.user-registered.v1", "durable": true, "arguments": {} },
+        { "name": "profile.identity.user-registered.dlq", "durable": true,
+          "arguments": { "x-queue-type": "quorum", "x-overflow": "reject-publish", "x-max-length-bytes": 268435456 } },
+        { "name": "profile.identity.user-registered.retry.1", "durable": true,
+          "arguments": { "x-queue-type": "quorum", "x-overflow": "reject-publish", "x-max-length-bytes": 67108864,
+            "x-message-ttl": 5000, "x-dead-letter-exchange": "profile.identity.user-registered.retry",
+            "x-dead-letter-routing-key": "ready", "x-dead-letter-strategy": "at-least-once" } },
+        { "name": "profile.identity.user-registered.retry.2", "durable": true,
+          "arguments": { "x-queue-type": "quorum", "x-overflow": "reject-publish", "x-max-length-bytes": 67108864,
+            "x-message-ttl": 30000, "x-dead-letter-exchange": "profile.identity.user-registered.retry",
+            "x-dead-letter-routing-key": "ready", "x-dead-letter-strategy": "at-least-once" } }
+    ],
+    "bindings": [
+        { "source": "identity.events", "destination": "profile.identity.user-registered.v1", "routing_key": "identity.user.registered.v1" },
+        { "source": "profile.identity.user-registered.retry", "destination": "profile.identity.user-registered.v1", "routing_key": "ready" },
+        { "source": "profile.identity.user-registered.dead-letter", "destination": "profile.identity.user-registered.dlq", "routing_key": "failed" },
+        { "source": "profile.identity.user-registered.retry", "destination": "profile.identity.user-registered.retry.1", "routing_key": "attempt.2" },
+        { "source": "profile.identity.user-registered.retry", "destination": "profile.identity.user-registered.retry.2", "routing_key": "attempt.3" }
+    ]
+}

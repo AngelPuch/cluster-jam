@@ -1,0 +1,22 @@
+name: cluster-jam-profile-test
+
+services:
+    rabbitmq:
+        image: rabbitmq:4.3.6-management@sha256:54cb013d76cd1fd6c0a0708f34062ad61c452bb6f016b434c6c33f1a765d2b58
+        hostname: profile-test-broker
+        environment:
+            RABBITMQ_DEFAULT_USER: profile-test-admin
+            RABBITMQ_DEFAULT_PASS: local-broker-test-only
+            RABBITMQ_DEFAULT_VHOST: profile-tests
+            # Test-only acceleration of the broker's internal DLX confirm retry.
+            RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS: -rabbit dead_letter_worker_publisher_confirm_timeout 1000
+        ports:
+            - "127.0.0.1:5679:5672"
+            - "127.0.0.1:15679:15672"
+        healthcheck:
+            test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+            interval: 5s
+            timeout: 5s
+            retries: 24
+        mem_limit: 768m
+        cpus: 1.0

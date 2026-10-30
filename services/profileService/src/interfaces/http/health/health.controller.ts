@@ -1,9 +1,13 @@
 import { Controller, Get, ServiceUnavailableException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
+import { RabbitMqListener } from '../../../infrastructure/messaging/rabbitmq-listener';
 
 @Controller('health')
 export class HealthController {
-    constructor(private readonly dataSource: DataSource) {}
+    constructor(
+        private readonly dataSource: DataSource,
+        private readonly broker: RabbitMqListener,
+    ) {}
 
     @Get('live')
     getLiveness() {
@@ -14,7 +18,7 @@ export class HealthController {
 
     @Get('ready')
     async getReadiness() {
-        if (!this.dataSource.isInitialized) {
+        if (!this.dataSource.isInitialized || !this.broker.isReady) {
             throw new ServiceUnavailableException();
         }
 

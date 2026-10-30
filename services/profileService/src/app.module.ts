@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { HealthModule } from './interfaces/http/health/health.module';
-import { ProfileModule } from './profile.module';
+import { ObservabilityModule } from './infrastructure/observability/observability.module';
 import { validateEnvironment } from './infrastructure/config/environment.validation';
 
 @Module({
@@ -10,8 +10,8 @@ import { validateEnvironment } from './infrastructure/config/environment.validat
             isGlobal: true,
             validate: validateEnvironment,
         }),
+        ObservabilityModule,
         HealthModule,
-        ProfileModule,
     ],
 })
 export class AppModule {}
