@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { readLogCorrelation } from './trace-context.service';
 
 const EVENTS: Record<string, string> = {
+    'http.request.completed': 'HTTP request completed.',
     'service.started': 'Profile service started.',
     'service.stopped': 'Profile service stopped.',
     'profile.broker.connected': 'Registration consumer connected.',
@@ -61,6 +62,15 @@ export class JsonLogger implements LoggerService {
         const threshold = Object.hasOwn(LEVELS, configured) ? LEVELS[configured as keyof typeof LEVELS] : LEVELS.INFO;
         if (LEVELS[effectiveLevel] < threshold) return;
         const metadata: Record<string, unknown> = {};
+        if (
+            typeof input.http_status === 'number' &&
+            Number.isInteger(input.http_status) &&
+            input.http_status >= 100 &&
+            input.http_status <= 599
+        )
+            metadata.http_status = input.http_status;
+        if (typeof input.duration_ms === 'number' && Number.isSafeInteger(input.duration_ms) && input.duration_ms >= 0)
+            metadata.duration_ms = input.duration_ms;
         for (const key of ['event_id', 'aggregate_id']) {
             if (typeof input[key] === 'string' && UUID.test(input[key])) metadata[key] = input[key];
         }

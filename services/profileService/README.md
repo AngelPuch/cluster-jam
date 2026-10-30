@@ -11,19 +11,23 @@ The service consumes Auth registration events through RabbitMQ and provisions
 minimum profiles using a transactional PostgreSQL inbox. It handles duplicates,
 bounded retries, DLQ delivery, reconnection and graceful consumer shutdown.
 
-Local Supabase JWT verification, its guard, verified identity context and safe
-authentication errors are implemented. Profile/address HTTP routes, Orders
-contact, Swagger/OpenAPI, the Profile Docker deployment and CI are subsequent
-PRs. No public
-endpoint currently invokes provisioning. The runnable API exposes only:
+Local Supabase JWT verification and owner profile read/update are implemented,
+with transactional onboarding, strong conditional updates, sanitized Problem
+Details, HTTP trace correlation and Swagger/OpenAPI. Address HTTP routes, Orders
+contact, the Profile Docker deployment and CI remain subsequent PRs.
+No public endpoint invokes provisioning. The runnable API exposes:
 
 - `GET /health/live`: process liveness, independent of PostgreSQL.
 - `GET /health/ready`: database query and consumer connection; 503 when unavailable.
+- `GET /api/v1/profiles/me`: authenticated owner's profile and current ETag.
+- `PATCH /api/v1/profiles/me`: conditional partial update and derived onboarding state.
+- `GET /docs/` and `GET /openapi.json`: public interactive and machine-readable API documentation.
 
 See [the diagnosis and implementation plan](../../docs/profile/implementation-plan.md)
 and verification results for [persistence](../../docs/profile/verification-01.md)
 and [messaging](../../docs/profile/verification-02.md), plus
-[JWT verification](../../docs/profile/verification-03.md).
+[JWT verification](../../docs/profile/verification-03.md) and
+[owner HTTP/onboarding](../../docs/profile/verification-04.md).
 
 ## Architecture and technologies
 
@@ -36,25 +40,28 @@ src/
     application/
         ports/profile-provisioning.port.ts
         ports/access-token-verifier.port.ts
-        profile/create-minimum-profile.service.ts
+        ports/profile-repository.port.ts
+        profile/            # minimum provisioning, read mine, update/onboarding rules
         security/           # verified identity, protected roles and safe failures
     infrastructure/
         config/environment.validation.ts
         database/
             entities/       # profile, address and inbox
             migrations/     # schema changes, no synchronize
-            repositories/   # TypeORM provisioning adapter
+            repositories/   # provisioning adapter and transactional owner repository
             typeorm.options.ts
             typeorm.config.ts
             typeorm.module.ts
         messaging/          # canonical topology, confirmed handoff and reconnecting listener
-        observability/      # JSON allowlist logger and OpenTelemetry consumer spans
+        observability/      # JSON allowlist logger and OpenTelemetry HTTP/consumer spans
         security/           # jose/JWKS adapter and Nest module
     interfaces/http/health/
-    interfaces/http/profiles/ # JWT guard and CurrentIdentity decorator
-    interfaces/http/common/errors/ # centralized authentication Problem Details
+    interfaces/http/profiles/ # owner controller, DTOs, JWT guard and identity decorator
+    interfaces/http/common/errors/ # centralized sanitized Problem Details
+    interfaces/http/openapi/ # Swagger schema and examples
     interfaces/messaging/   # validated registration DTO and manual ACK consumer
     profile.module.ts
+    commands/               # metadata-only OpenAPI export/check
 ```
 
 The application port has no ORM or broker types. `CreateMinimumProfileService`
@@ -270,8 +277,10 @@ guard, decorator and error filter; no probe route is built into production.
 The local HTTP test command requires loopback socket access but no Supabase
 account or database. `jose` is pinned to Auth's existing 6.2.12 version.
 
-The HTTP suite verifies technical health routes using a controlled database
-test double; it does not claim JWT/onboarding coverage. The integration suite
+The health-only HTTP suite uses a controlled database test double. The JWT
+HTTP suite uses real signed tokens and a loopback JWKS server. The owner HTTP
+integration suite runs the actual AppModule, controller, guard, use cases and
+TypeORM adapters against PostgreSQL and a loopback JWKS server. The integration suite
 uses a real local PostgreSQL server and creates uniquely named disposable
 databases. It requires a local role with CREATEDB and extension permissions.
 It drops only the databases created by that test run, never a supplied database.
@@ -326,13 +335,13 @@ The service supplies source/compiled migration commands and a working broker
 consumer. Dockerfile, Compose database provisioning, migration job, mounted
 service secrets and CI arrive in their planned branches. Shared broker
 topology and permissions are included here because the consumer requires them.
-Swagger and business routes are not yet available. The test broker Compose
+Swagger and owner profile routes are available. The test broker Compose
 does not constitute a complete production Profile deployment.
 
 ## Local JWT authentication contract
 
 `SecurityModule` exports `JwtAuthGuard` and the application token-verifier port.
-Owner controllers in the next PR import this module, apply the guard and read
+Owner controllers import this module, apply the guard and read
 `CurrentIdentity`. The verified result contains only an immutable `userId`
 and `appRole`. The user ID is taken from the signed UUID `sub`; roles are
 `cliente` or `administrador` from signed `app_metadata.app_role`. Body/query
@@ -377,4 +386,80 @@ Health routes remain public and their probes do not fetch JWKS.
 These errors use `application/problem+json`, `Cache-Control: no-store`, a path
 without its query and a traceId. A 401 includes `WWW-Authenticate: Bearer`.
 Responses contain no presented token, provider diagnostics, SQL or raw error.
-No new business endpoint is exposed by this JWT foundation PR.
+Owner endpoints use this boundary for every read and update.
+
+## Owner profile and onboarding HTTP contract
+
+`GET /api/v1/profiles/me` returns only `userId`, `fullName`, `phone`,
+`contactEmail`, `onboardingStatus`, `createdAt` and `updatedAt`. `fullName`
+maps to the existing SQL `name` column; timestamps are ISO 8601 UTC strings.
+Name and phone start null. Historical profiles can also have null contactEmail.
+If asynchronous provisioning has not arrived, GET and PATCH return
+`404 PROFILE_NOT_READY`; neither creates a profile.
+
+PATCH accepts at least one of `fullName` (120 characters), `phone` (30) and
+`contactEmail` (254, valid email). Surrounding whitespace is trimmed. Missing
+fields are preserved; null, blanks, control characters and unknown properties
+are rejected with 422. Clients cannot supply userId, timestamps, roles,
+credentials or onboardingStatus. A historical profile without a valid contact
+email must explicitly provide one or receives `422 PROFILE_CONTACT_EMAIL_REQUIRED`.
+Contact email evolves independently of the Supabase login email; registration
+redelivery never overwrites it. There is no identity-provider update call.
+
+Additional validation recommendation adopted here: phones contain 7–15 digits,
+with an optional leading `+` and spaces, parentheses, dots or hyphens, within
+the existing 30-character SQL limit. The source documents do not prescribe a
+regional phone format. Names are nonblank within the existing 120-character
+limit. `COMPLETED` is derived only when name, phone and contact email satisfy
+these rules. Other profiles remain `PENDING`. Pickup onboarding requires no address.
+
+GET and successful PATCH return a strong quoted `ETag` and `Cache-Control:
+no-store`. A GET with matching `If-None-Match` returns 304 after authentication.
+Send that ETag in `If-Match` on PATCH: absent headers return
+`428 PRECONDITION_REQUIRED`; unsupported weak/wildcard/list/malformed tags
+return 400; a stale revision returns `412 PRECONDITION_FAILED`. Read again
+and reconcile changes before retrying. The repository takes a PostgreSQL row
+lock, checks the revision and recomputes onboarding in the same transaction.
+Responses are returned only after commit. No new migration is needed: the
+revision hashes the stored profile snapshot and timestamps.
+
+Example from `services/profileService`, using a privately supplied valid token:
+
+```powershell
+$headers = @{ Authorization = "Bearer $env:PROFILE_ACCESS_TOKEN" }
+$profile = Invoke-WebRequest http://localhost:8080/api/v1/profiles/me -Headers $headers
+$headers['If-Match'] = [string]$profile.Headers.ETag
+$body = @{ fullName = 'María López'; phone = '+52 55 1234 5678' } | ConvertTo-Json
+Invoke-WebRequest http://localhost:8080/api/v1/profiles/me -Method Patch -Headers $headers -ContentType 'application/json' -Body $body
+```
+
+All failures use RFC 9457 `application/problem+json` and stable codes. Invalid
+input is 422, syntax is 400, unsupported content type is 415, oversized JSON is
+413, authentication is 401/403 and unavailable persistence/JWKS is 503. Raw
+exceptions, SQL, tokens and submitted values are not exposed. HTTP logs record
+status, duration and W3C trace/span identifiers without bodies, contact fields,
+headers or query strings. Responses include `X-Trace-Id`; problems include traceId.
+
+## Swagger and contract checks
+
+Start the service normally, then open `http://localhost:8080/docs/` or download
+`http://localhost:8080/openapi.json`. Authorize with an asymmetric Supabase user
+JWT. The UI does not persist authorization. Both owner operations document the
+bearer boundary, DTOs, ETag/If-Match, responses and Problem Details examples.
+Health routes remain outside `/api/v1` and require no authentication.
+
+```powershell
+npm run openapi:export  # build and write contracts/openapi/profile/v1/openapi.json
+npm run openapi:check   # build and fail if generated JSON differs
+```
+
+These commands scan the actual AppModule using Nest preview mode. They do not
+instantiate providers, connect PostgreSQL/RabbitMQ/JWKS, initialize or listen.
+This is an offline metadata tool, not a runtime persistence bypass. The
+check compares normalized JSON, so key ordering, formatting and Windows CRLF
+do not create false drift. The versioned contract contains only implemented routes. To run owner HTTP tests
+alone with the local PostgreSQL environment documented above:
+
+```powershell
+npm run test:integration -- profile-http
+```

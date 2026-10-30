@@ -61,4 +61,33 @@ describe('Messaging trace correlation and privacy', () => {
         }
         expect(JSON.parse(records[0]) as unknown).toMatchObject({ code: 'REGISTRATION_EVENT_INVALID' });
     });
+
+    it('keeps HTTP trace correlation for completion callbacks invoked outside request context', () => {
+        const tracing = new TraceContextService();
+        const logger = new JsonLogger();
+        let complete = () => {};
+        tracing.runHttp('00-11111111111111111111111111111111-2222222222222222-01', () => {
+            expect(tracing.traceId).toBe('11111111111111111111111111111111');
+            complete = tracing.bindHttp(() => {
+                logger.log({
+                    event: 'http.request.completed',
+                    http_status: 422,
+                    duration_ms: 25,
+                    url: '/profiles/private@example.com?token=private-token',
+                    phone: 'private-phone',
+                    authorization: 'Bearer private-token',
+                    body: { fullName: 'Private Customer' },
+                });
+                tracing.endHttp(422);
+            });
+        });
+        complete();
+        expect(JSON.parse(records[0]) as unknown).toMatchObject({
+            trace_id: '11111111111111111111111111111111',
+            event: 'http.request.completed',
+            http_status: 422,
+            duration_ms: 25,
+        });
+        expect(records.join('')).not.toMatch(/private@example|private-token|private-phone|Private Customer/);
+    });
 });

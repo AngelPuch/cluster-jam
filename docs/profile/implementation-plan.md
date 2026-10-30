@@ -8,12 +8,12 @@ implements only transactional provisioning and its database foundation. Later
 steps require their preceding PR to be reviewed and squash merged into `main`.
 No merge is authorized automatically by this plan.
 
-Progress: PRs #47 and #48 were squash merged after explicit user authorization.
+Progress: PRs #47–49 were squash merged after explicit user authorization.
 PR #48's Python and Docker CI checks both passed before merge. The current
-branch, `feat/profile/add-jwt-authentication`, starts from updated main at
-`0a07e76c0aa5a6d2b0c5f3f26a4c9a4924d55a50`. Messaging and JWT verification
-are recorded in `verification-02.md` and `verification-03.md`. Business HTTP
-remains the next step.
+branch, `feat/profile/add-onboarding-endpoints`, starts from updated main at
+`e65035a97d39345e16d7bb2e441dee19d5510f6f`. Milestone reports 01–04 record
+persistence, messaging, JWT and owner HTTP verification. Owned addresses are
+the next step after the current branch is reviewed and squash merged.
 
 ## Sources and precedence
 
@@ -265,7 +265,7 @@ this requirement. Every PR carries its own tests, documentation and config.
 
 | Order | Branch | Verifiable scope and dependency |
 | --- | --- | --- |
-| 1 | `feat/profile/add-transactional-provisioning` | Migration compatibility, inbox, provisioning port/use case/adapter, real PostgreSQL tests; current branch |
+| 1 | `feat/profile/add-transactional-provisioning` | Migration compatibility, inbox, provisioning port/use case/adapter, real PostgreSQL tests; merged PR #47 |
 | 2 | `feat/profile/add-rabbitmq-consumer` | Contract DTO, topology, bounded attempts, confirms, reconnection, broker permissions; depends on 1 |
 | 3 | `feat/profile/add-jwt-authentication` | Local JWKS verifier, trusted claims, owner guard, signed-token tests; depends on 1 |
 | 4 | `feat/profile/add-onboarding-endpoints` | GET/PATCH, domain rules, Problem Details, Swagger export/check and authorization tests; depends on 2–3 |
@@ -281,14 +281,22 @@ idempotency and failure scenarios and at least 70% of exposed functionality
 
 ## Verification and remaining work
 
-First-branch checks and commands are in the service README and verification
-report. Docker Desktop is installed but its Linux engine was unavailable during
-analysis; no image or Compose success is claimed. A separate temporary native
-PostgreSQL instance allows real persistence verification without existing data.
+Milestones 1–3 are squash merged as PRs #47, #48 and #49 after user approval.
+Milestone 4 now implements owner GET/PATCH, conditional transactional updates,
+derived onboarding, HTTP telemetry, sanitized errors and versioned Swagger.
+Its executed checks and scope are recorded in `verification-04.md`; owned
+addresses, Orders service authentication/contact, deployment and CI remain.
+The phone validation recommendation and ETag/If-Match contract are explicit in
+the service README. No address requirement was added to pickup onboarding.
 
-The full service is not complete at PR 1. RabbitMQ, JWT, business HTTP,
-addresses, Orders authorization, full Swagger, deployment and CI remain planned.
-There is no critical-path stub standing in for these features.
+Initial checks and commands are in the service README and milestone reports.
+Docker's Linux engine became available for the RabbitMQ test fixture in
+milestone 2. The test broker Compose and temporary native PostgreSQL instance
+support real integration checks without existing data; they are not a complete
+Profile image/deployment verification.
+
+The full service is not complete at milestone 4. Addresses, Orders authorization,
+deployment and CI remain planned. No critical-path stub substitutes for them.
 
 The pre-existing modification to `services/authService/package-lock.json` is
 unrelated, preserved and excluded from Profile commits.

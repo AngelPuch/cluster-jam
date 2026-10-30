@@ -1,0 +1,924 @@
+{
+  "components": {
+    "schemas": {
+      "ProblemDetailsDto": {
+        "properties": {
+          "code": {
+            "example": "VALIDATION_ERROR",
+            "type": "string"
+          },
+          "detail": {
+            "example": "The request contains invalid or unknown fields.",
+            "type": "string"
+          },
+          "instance": {
+            "example": "/api/v1/profiles/me",
+            "type": "string"
+          },
+          "status": {
+            "example": 422,
+            "type": "number"
+          },
+          "title": {
+            "example": "Unprocessable Entity",
+            "type": "string"
+          },
+          "traceId": {
+            "example": "19ef631176494c4ca0a63c428da97850",
+            "pattern": "^[a-f0-9]{32}$",
+            "type": "string"
+          },
+          "type": {
+            "example": "about:blank",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status",
+          "detail",
+          "instance",
+          "code",
+          "traceId"
+        ],
+        "type": "object"
+      },
+      "ProfileResponseDto": {
+        "properties": {
+          "contactEmail": {
+            "description": "Null only for historical profiles predating contact email; new profiles have the registration contact email.",
+            "example": "contact@example.com",
+            "format": "email",
+            "maxLength": 254,
+            "nullable": true,
+            "type": "string"
+          },
+          "createdAt": {
+            "example": "2026-10-29T18:00:00.000Z",
+            "format": "date-time",
+            "type": "string"
+          },
+          "fullName": {
+            "example": "María López",
+            "maxLength": 120,
+            "nullable": true,
+            "type": "string"
+          },
+          "onboardingStatus": {
+            "enum": [
+              "PENDING",
+              "COMPLETED"
+            ],
+            "example": "COMPLETED",
+            "type": "string"
+          },
+          "phone": {
+            "example": "+52 55 1234 5678",
+            "maxLength": 30,
+            "nullable": true,
+            "type": "string"
+          },
+          "updatedAt": {
+            "example": "2026-10-29T18:05:00.000Z",
+            "format": "date-time",
+            "type": "string"
+          },
+          "userId": {
+            "example": "11111111-1111-4111-8111-111111111111",
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "userId",
+          "fullName",
+          "phone",
+          "contactEmail",
+          "onboardingStatus",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "UpdateProfileDto": {
+        "additionalProperties": false,
+        "minProperties": 1,
+        "properties": {
+          "contactEmail": {
+            "description": "Business contact address, independent from the Supabase login email. Null is not accepted.",
+            "example": "contact@example.com",
+            "format": "email",
+            "maxLength": 254,
+            "type": "string"
+          },
+          "fullName": {
+            "description": "Nonblank name; surrounding whitespace is removed. Null is not accepted.",
+            "example": "María López",
+            "maxLength": 120,
+            "type": "string"
+          },
+          "phone": {
+            "description": "7–15 digits with optional leading + and spaces, parentheses, dots or hyphens. Null is not accepted.",
+            "example": "+52 55 1234 5678",
+            "maxLength": 30,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "supabase-jwt": {
+        "bearerFormat": "JWT",
+        "description": "Supabase authenticated user JWT with trusted app_metadata.app_role.",
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "contact": {},
+    "description": "Owner profile and onboarding. Identity is verified locally with Supabase JWKS; contact email is independent from login email. Address and internal Orders operations are not implemented yet.",
+    "title": "Cluster JAM Profile Service",
+    "version": "1.0.0"
+  },
+  "openapi": "3.0.0",
+  "paths": {
+    "/api/v1/profiles/me": {
+      "get": {
+        "description": "Identity comes only from the verified JWT sub. A profile awaiting the registration event returns 404 PROFILE_NOT_READY; GET never creates it.",
+        "operationId": "ProfilesController_getMine",
+        "parameters": [
+          {
+            "description": "Optional HTTP conditional read. Matching revisions return 304 after authentication.",
+            "in": "header",
+            "name": "If-None-Match",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileResponseDto"
+                }
+              }
+            },
+            "description": "Owner profile and onboarding state.",
+            "headers": {
+              "ETag": {
+                "description": "Strong revision required in If-Match when updating.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "Authenticated conditional read; no response body.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "ETag": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "INVALID_ACCESS_TOKEN": {
+                    "value": {
+                      "code": "INVALID_ACCESS_TOKEN",
+                      "detail": "See the operation description for recovery.",
+                      "instance": "/api/v1/profiles/me",
+                      "status": 401,
+                      "title": "Request failed",
+                      "traceId": "19ef631176494c4ca0a63c428da97850",
+                      "type": "about:blank"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "INVALID_ACCESS_TOKEN",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "WWW-Authenticate": {
+                "schema": {
+                  "enum": [
+                    "Bearer"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "INVALID_APP_ROLE": {
+                    "value": {
+                      "code": "INVALID_APP_ROLE",
+                      "detail": "See the operation description for recovery.",
+                      "instance": "/api/v1/profiles/me",
+                      "status": 403,
+                      "title": "Request failed",
+                      "traceId": "19ef631176494c4ca0a63c428da97850",
+                      "type": "about:blank"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "INVALID_APP_ROLE",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "PROFILE_NOT_READY": {
+                    "value": {
+                      "code": "PROFILE_NOT_READY",
+                      "detail": "See the operation description for recovery.",
+                      "instance": "/api/v1/profiles/me",
+                      "status": 404,
+                      "title": "Request failed",
+                      "traceId": "19ef631176494c4ca0a63c428da97850",
+                      "type": "about:blank"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "PROFILE_NOT_READY",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "INTERNAL_ERROR": {
+                    "value": {
+                      "code": "INTERNAL_ERROR",
+                      "detail": "See the operation description for recovery.",
+                      "instance": "/api/v1/profiles/me",
+                      "status": 500,
+                      "title": "Request failed",
+                      "traceId": "19ef631176494c4ca0a63c428da97850",
+                      "type": "about:blank"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "SERVICE_UNAVAILABLE": {
+                    "value": {
+                      "code": "SERVICE_UNAVAILABLE",
+                      "detail": "See the operation description for recovery.",
+                      "instance": "/api/v1/profiles/me",
+                      "status": 503,
+                      "title": "Request failed",
+                      "traceId": "19ef631176494c4ca0a63c428da97850",
+                      "type": "about:blank"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "SERVICE_UNAVAILABLE",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "supabase-jwt": []
+          }
+        ],
+        "summary": "Read the authenticated owner profile",
+        "tags": [
+          "Profiles"
+        ]
+      },
+      "patch": {
+        "description": "At least one allowed field is required. Omitted fields are preserved; null/empty fields and unknown properties are rejected. The service derives COMPLETED only when name, phone and contact email are valid. Address is not required.",
+        "operationId": "ProfilesController_patchMine",
+        "parameters": [
+          {
+            "description": "One strong quoted ETag from GET/PATCH. Wildcards, weak tags and lists are unsupported.",
+            "in": "header",
+            "name": "If-Match",
+            "required": true,
+            "schema": {
+              "pattern": "^\"[a-f0-9]{64}\"$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProfileDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileResponseDto"
+                }
+              }
+            },
+            "description": "Updated profile after its transaction commits.",
+            "headers": {
+              "ETag": {
+                "description": "Current strong revision.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "BAD_REQUEST": {
+                    "value": {
+                      "code": "BAD_REQUEST",
+                      "detail": "See the operation description for recovery.",
+                      "instance": "/api/v1/profiles/me",
+                      "status": 400,
+                      "title": "Request failed",
+                      "traceId": "19ef631176494c4ca0a63c428da97850",
+                      "type": "about:blank"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "BAD_REQUEST",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "INVALID_ACCESS_TOKEN": {
+                    "value": {
+                      "code": "INVALID_ACCESS_TOKEN",
+                      "detail": "See the operation description for recovery.",
+                      "instance": "/api/v1/profiles/me",
+                      "status": 401,
+                      "title": "Request failed",
+                      "traceId": "19ef631176494c4ca0a63c428da97850",
+                      "type": "about:blank"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "INVALID_ACCESS_TOKEN",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              },
+              "WWW-Authenticate": {
+                "schema": {
+                  "enum": [
+                    "Bearer"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "INVALID_APP_ROLE": {
+                    "value": {
+                      "code": "INVALID_APP_ROLE",
+                      "detail": "See the operation description for recovery.",
+                      "instance": "/api/v1/profiles/me",
+                      "status": 403,
+                      "title": "Request failed",
+                      "traceId": "19ef631176494c4ca0a63c428da97850",
+                      "type": "about:blank"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "INVALID_APP_ROLE",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "PROFILE_NOT_READY": {
+                    "value": {
+                      "code": "PROFILE_NOT_READY",
+                      "detail": "See the operation description for recovery.",
+                      "instance": "/api/v1/profiles/me",
+                      "status": 404,
+                      "title": "Request failed",
+                      "traceId": "19ef631176494c4ca0a63c428da97850",
+                      "type": "about:blank"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "PROFILE_NOT_READY",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "412": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "PRECONDITION_FAILED": {
+                    "value": {
+                      "code": "PRECONDITION_FAILED",
+                      "detail": "See the operation description for recovery.",
+                      "instance": "/api/v1/profiles/me",
+                      "status": 412,
+                      "title": "Request failed",
+                      "traceId": "19ef631176494c4ca0a63c428da97850",
+                      "type": "about:blank"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "PRECONDITION_FAILED",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "413": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "PAYLOAD_TOO_LARGE": {
+                    "value": {
+                      "code": "PAYLOAD_TOO_LARGE",
+                      "detail": "See the operation description for recovery.",
+                      "instance": "/api/v1/profiles/me",
+                      "status": 413,
+                      "title": "Request failed",
+                      "traceId": "19ef631176494c4ca0a63c428da97850",
+                      "type": "about:blank"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "PAYLOAD_TOO_LARGE",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "415": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "UNSUPPORTED_MEDIA_TYPE": {
+                    "value": {
+                      "code": "UNSUPPORTED_MEDIA_TYPE",
+                      "detail": "See the operation description for recovery.",
+                      "instance": "/api/v1/profiles/me",
+                      "status": 415,
+                      "title": "Request failed",
+                      "traceId": "19ef631176494c4ca0a63c428da97850",
+                      "type": "about:blank"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "UNSUPPORTED_MEDIA_TYPE",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "PROFILE_CONTACT_EMAIL_REQUIRED": {
+                    "value": {
+                      "code": "PROFILE_CONTACT_EMAIL_REQUIRED",
+                      "detail": "See the operation description for recovery.",
+                      "instance": "/api/v1/profiles/me",
+                      "status": 422,
+                      "title": "Request failed",
+                      "traceId": "19ef631176494c4ca0a63c428da97850",
+                      "type": "about:blank"
+                    }
+                  },
+                  "VALIDATION_ERROR": {
+                    "value": {
+                      "code": "VALIDATION_ERROR",
+                      "detail": "See the operation description for recovery.",
+                      "instance": "/api/v1/profiles/me",
+                      "status": 422,
+                      "title": "Request failed",
+                      "traceId": "19ef631176494c4ca0a63c428da97850",
+                      "type": "about:blank"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "VALIDATION_ERROR or PROFILE_CONTACT_EMAIL_REQUIRED",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "428": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "PRECONDITION_REQUIRED": {
+                    "value": {
+                      "code": "PRECONDITION_REQUIRED",
+                      "detail": "See the operation description for recovery.",
+                      "instance": "/api/v1/profiles/me",
+                      "status": 428,
+                      "title": "Request failed",
+                      "traceId": "19ef631176494c4ca0a63c428da97850",
+                      "type": "about:blank"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "PRECONDITION_REQUIRED",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "INTERNAL_ERROR": {
+                    "value": {
+                      "code": "INTERNAL_ERROR",
+                      "detail": "See the operation description for recovery.",
+                      "instance": "/api/v1/profiles/me",
+                      "status": 500,
+                      "title": "Request failed",
+                      "traceId": "19ef631176494c4ca0a63c428da97850",
+                      "type": "about:blank"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "INTERNAL_ERROR",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "SERVICE_UNAVAILABLE": {
+                    "value": {
+                      "code": "SERVICE_UNAVAILABLE",
+                      "detail": "See the operation description for recovery.",
+                      "instance": "/api/v1/profiles/me",
+                      "status": 503,
+                      "title": "Request failed",
+                      "traceId": "19ef631176494c4ca0a63c428da97850",
+                      "type": "about:blank"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "SERVICE_UNAVAILABLE",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "supabase-jwt": []
+          }
+        ],
+        "summary": "Partially update the owner profile and complete onboarding",
+        "tags": [
+          "Profiles"
+        ]
+      }
+    },
+    "/health/live": {
+      "get": {
+        "operationId": "HealthController_getLiveness",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "status": {
+                      "enum": [
+                        "ok"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "status"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          }
+        },
+        "summary": "Process liveness; no authentication or dependency checks",
+        "tags": [
+          "Health"
+        ]
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "operationId": "HealthController_getReadiness",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "status": {
+                      "enum": [
+                        "ok"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "status"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": ""
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "examples": {
+                  "SERVICE_UNAVAILABLE": {
+                    "value": {
+                      "code": "SERVICE_UNAVAILABLE",
+                      "detail": "See the operation description for recovery.",
+                      "instance": "/api/v1/profiles/me",
+                      "status": 503,
+                      "title": "Request failed",
+                      "traceId": "19ef631176494c4ca0a63c428da97850",
+                      "type": "about:blank"
+                    }
+                  }
+                },
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetailsDto"
+                }
+              }
+            },
+            "description": "SERVICE_UNAVAILABLE",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "enum": [
+                    "no-store"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Readiness of PostgreSQL and the configured registration consumer",
+        "tags": [
+          "Health"
+        ]
+      }
+    }
+  },
+  "servers": [],
+  "tags": []
+}
