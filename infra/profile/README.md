@@ -30,9 +30,28 @@ and graceful shutdown. It publishes no ports and removes only its own
 `profile-verify-<random>` containers/networks/volumes and validated `.verify`
 directory. Existing shared services and volumes are untouched.
 
-The identity/event fixture uses real ES256 signatures and TLS, but is not a live
-Supabase signup. Complete signup/outbox acceptance and dedicated CI remain the
-next milestone.
+The identity/event fixture uses real ES256 signatures and TLS. A separate,
+single real signup scenario verifies Auth and local Supabase without replacing
+them with identity fixtures:
+
+```sh
+npm --prefix services/profileService ci --ignore-scripts --no-audit --no-fund
+npm --prefix services/authService ci --ignore-scripts --no-audit --no-fund
+python3 infra/profile/verify_registration.py
+```
+
+It uses Auth's locked Supabase CLI, configuration, migrations and email templates,
+starts only database/Auth/gateway/mail services, and calls the real compiled Auth
+API. Its actual outbox worker publishes through RabbitMQ into Profile's separate
+database. One minimum profile, inbox record and protected role are asserted.
+Only its uniquely named Supabase/Compose project is removed; the helper refuses
+occupied ports 54321, 54322, 54324, 55439 and 5679. Supabase CLI output/keys are
+captured privately. The fictitious credentials in `compose.registration.yaml`
+belong only to these disposable loopback dependencies.
+
+Normal Profile CI runs this one scenario, source quality and OpenAPI drift. The
+full image/TLS verifier above is available through manual `extended_checks`;
+routine PRs do not repeat the earlier complete battery.
 
 ## Trust boundaries
 
