@@ -16,8 +16,15 @@ assert SPEC is not None and SPEC.loader is not None
 PREPARE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(PREPARE)
 TOPOLOGY = json.loads(
-    (ROOT / "services" / "profileService" / "src" / "infrastructure"
-     / "messaging" / "profile-topology.json").read_text(encoding="utf-8")
+    (
+        ROOT
+        / "services"
+        / "profileService"
+        / "src"
+        / "infrastructure"
+        / "messaging"
+        / "profile-topology.json"
+    ).read_text(encoding="utf-8")
 )
 
 
@@ -29,8 +36,9 @@ class BrokerDefinitionsTest(unittest.TestCase):
             auth = directory / "auth"
             (shared / ".secrets").mkdir(parents=True)
             (auth / ".secrets").mkdir(parents=True)
-            with patch.object(PREPARE, "SHARED", shared), patch.object(
-                PREPARE, "AUTH", auth
+            with (
+                patch.object(PREPARE, "SHARED", shared),
+                patch.object(PREPARE, "AUTH", auth),
             ):
                 PREPARE.prepare_definitions()
                 path = shared / ".secrets" / "rabbitmq_definitions.json"
@@ -38,9 +46,7 @@ class BrokerDefinitionsTest(unittest.TestCase):
                 PREPARE.prepare_definitions()
                 self.assertEqual(path.read_bytes(), first)
                 definitions = json.loads(first)
-            permissions = {
-                entry["user"]: entry for entry in definitions["permissions"]
-            }
+            permissions = {entry["user"]: entry for entry in definitions["permissions"]}
             self.assertEqual(
                 permissions["auth-publisher"]["write"], r"^identity\.events$"
             )

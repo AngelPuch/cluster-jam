@@ -1,5 +1,6 @@
 import topology from '../messaging/profile-topology.json';
 import { validateSecurityEnvironment } from './security-environment.validation';
+import { resolveSecretFiles } from './secret-files';
 
 export function validateDatabaseEnvironment(environment: Record<string, unknown>): Record<string, unknown> {
     const result: Record<string, unknown> = {
@@ -7,7 +8,7 @@ export function validateDatabaseEnvironment(environment: Record<string, unknown>
         HTTP_PORT: 8080,
         DB_PORT: 5432,
         DB_SSL: false,
-        ...environment,
+        ...resolveSecretFiles(environment, ['DB_PASSWORD']),
     };
     for (const key of ['DB_HOST', 'DB_USER', 'DB_PASSWORD', 'DB_NAME'] as const) {
         const value = result[key];
@@ -28,11 +29,17 @@ export function validateDatabaseEnvironment(environment: Record<string, unknown>
     if (['staging', 'production'].includes(String(result.APP_ENV)) && !result.DB_SSL) {
         throw new Error('Invalid configuration: DB_SSL must be enabled outside local development');
     }
+    if (
+        result.DB_RUNTIME_ROLE !== undefined &&
+        (typeof result.DB_RUNTIME_ROLE !== 'string' || !/^[a-z_][a-z0-9_]{0,62}$/.test(result.DB_RUNTIME_ROLE))
+    ) {
+        throw new Error('Invalid configuration: DB_RUNTIME_ROLE');
+    }
     return result;
 }
 
 export function validateEnvironment(environment: Record<string, unknown>): Record<string, unknown> {
-    const result = validateDatabaseEnvironment(environment);
+    const result = resolveSecretFiles(validateDatabaseEnvironment(environment), ['RABBITMQ_URI', 'RABBITMQ_URL']);
     const enabled = result.RABBITMQ_CONSUMER_ENABLED ?? true;
     if (![true, false, 'true', 'false'].some((value) => value === enabled)) {
         throw new Error('Invalid configuration: RABBITMQ_CONSUMER_ENABLED');

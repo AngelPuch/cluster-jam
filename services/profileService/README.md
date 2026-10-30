@@ -14,8 +14,9 @@ bounded retries, DLQ delivery, reconnection and graceful consumer shutdown.
 Local Supabase JWT verification and owner profile read/update are implemented,
 with transactional onboarding, strong conditional updates, sanitized Problem
 Details, HTTP trace correlation and Swagger/OpenAPI. Owned address CRUD and
-transactional default selection are implemented. Orders contact, the Profile
-Docker deployment and CI remain subsequent PRs.
+transactional default selection and Docker/Compose deployment support are
+implemented. Dedicated CI and complete Supabase signup acceptance remain.
+Orders integration is deferred at the user's request.
 No public endpoint invokes provisioning. The runnable API exposes:
 
 - `GET /health/live`: process liveness, independent of PostgreSQL.
@@ -31,7 +32,8 @@ and verification results for [persistence](../../docs/profile/verification-01.md
 and [messaging](../../docs/profile/verification-02.md), plus
 [JWT verification](../../docs/profile/verification-03.md) and
 [owner HTTP/onboarding](../../docs/profile/verification-04.md) and
-[owned addresses](../../docs/profile/verification-05.md).
+[owned addresses](../../docs/profile/verification-05.md) and
+[TLS deployment](../../docs/profile/verification-06.md).
 
 ## Architecture and technologies
 
@@ -109,6 +111,8 @@ npm run start:dev
 | `DB_NAME` | Required isolated Profile database name |
 | `DB_USER` | Required PostgreSQL role |
 | `DB_PASSWORD` | Required role password; example value must be replaced |
+| `DB_PASSWORD_FILE` | Mounted alternative; cannot accompany a direct value |
+| `DB_RUNTIME_ROLE` | Optional safe role identifier for compiled migration grants |
 | `DB_SSL` | true/false; false locally, required true in staging/production |
 | `DB_CA_PATH` | Optional PEM CA for verified database TLS |
 | `SUPABASE_URL` | Required public Supabase project origin, HTTPS outside local development |
@@ -119,6 +123,7 @@ npm run start:dev
 | `RABBITMQ_CONSUMER_ENABLED` | true by default; explicit false for database-only tooling |
 | `RABBITMQ_URI` | Required when consuming; amqps in staging/production |
 | `RABBITMQ_URL` | Compatibility alias; conflicting values are rejected |
+| `RABBITMQ_URI_FILE` / `RABBITMQ_URL_FILE` | Mounted secret alternatives, without a direct value |
 | `RABBITMQ_CA_PATH` | Optional PEM CA for broker TLS; server identity always verified |
 | `RABBITMQ_EXCHANGE` / `RABBITMQ_QUEUE` | identity.events / profile.identity.user-registered.v1 |
 | `RABBITMQ_RETRY_EXCHANGE` | profile.identity.user-registered.retry |
@@ -336,14 +341,26 @@ event factory and RabbitMQ publisher. It requires Auth's dependencies for that
 test only; Profile runtime imports no other service. Actual Supabase signup
 and trigger publication still need the wider registration acceptance stack.
 
-## Deployment status
+## Docker and deployment
 
-The service supplies source/compiled migration commands and a working broker
-consumer. Dockerfile, Compose database provisioning, migration job, mounted
-service secrets and CI arrive in their planned branches. Shared broker
-topology and permissions are included here because the consumer requires them.
-Swagger, owner profile and address routes are available. The test broker Compose
-does not constitute a complete production Profile deployment.
+Profile supplies a non-root read-only image, isolated PostgreSQL database/network/
+volume, separate migration/runtime credentials, compiled one-shot migration job,
+verified database/broker TLS, mounted secrets and HTTPS gateway routes. The
+compiled migration command logs sanitized results and optionally applies explicit
+runtime grants; it never starts HTTP or the consumer. No new domain migration is
+required. See [deployment commands and trust boundaries](../../infra/profile/README.md).
+
+From the repository root:
+
+```powershell
+docker build -f services/profileService/Dockerfile -t cluster-jam/profile:local .
+python infra/profile/verify_stack.py --image cluster-jam/profile:local
+```
+
+The verifier uses disposable owned containers and real TLS, PostgreSQL, RabbitMQ,
+ES256/JWKS and HTTPS requests. The earlier test-broker Compose remains a focused
+regression fixture. Dedicated CI and live Supabase signup/outbox acceptance are
+pending. Orders is outside current scope.
 
 ## Local JWT authentication contract
 

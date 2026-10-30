@@ -41,8 +41,13 @@ export function createProfileOpenApiDocument(app: INestApplication) {
 }
 
 export function setupOpenApi(app: INestApplication): void {
-    SwaggerModule.setup('docs', app, createProfileOpenApiDocument(app), {
+    const document = createProfileOpenApiDocument(app);
+    SwaggerModule.setup('docs', app, document, {
         jsonDocumentUrl: '/openapi.json',
+        swaggerOptions: { persistAuthorization: false },
+    });
+    SwaggerModule.setup('docs/profile', app, document, {
+        jsonDocumentUrl: '/openapi/profile.json',
         swaggerOptions: { persistAuthorization: false },
     });
 }

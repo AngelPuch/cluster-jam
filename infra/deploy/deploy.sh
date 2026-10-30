@@ -3,7 +3,10 @@ set -euo pipefail
 task_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$task_root"
 target="${1:-all}"
-case "$target" in auth|shared|all|build|personalization) ;; *) exit 2 ;; esac
+case "$target" in auth|shared|all|build|personalization|profile) ;; *) exit 2 ;; esac
+if [[ "$target" == profile ]]; then
+    exec bash infra/deploy/deploy-profile.sh
+fi
 if [[ "$target" == personalization ]]; then
     exec bash infra/deploy/deploy-personalization.sh
 fi

@@ -3,6 +3,9 @@ import { randomUUID } from 'node:crypto';
 import { readLogCorrelation } from './trace-context.service';
 
 const EVENTS: Record<string, string> = {
+    'profile.migrations.applied': 'Profile migrations and runtime grants applied.',
+    'profile.migrations.failed': 'Profile migration job failed.',
+    'service.failed': 'Profile service could not start.',
     'http.request.completed': 'HTTP request completed.',
     'service.started': 'Profile service started.',
     'service.stopped': 'Profile service stopped.',
@@ -23,10 +26,11 @@ const CODES = new Set([
 ]);
 const LEVELS = { DEBUG: 10, INFO: 20, WARN: 30, ERROR: 40 };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const PROCESS_INSTANCE_ID = randomUUID();
 
 @Injectable()
 export class JsonLogger implements LoggerService {
-    private readonly instanceId = process.env.INSTANCE_ID ?? randomUUID();
+    private readonly instanceId = process.env.INSTANCE_ID ?? PROCESS_INSTANCE_ID;
 
     log(message: unknown): void {
         this.write('INFO', message);

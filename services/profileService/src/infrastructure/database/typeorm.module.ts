@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { createDatabaseOptions } from './typeorm.options';
 import { PROFILE_PROVISIONING_PORT } from '../../application/ports/profile-provisioning.port';
@@ -13,9 +13,31 @@ import { TypeormAddressBookRepository } from './repositories/typeorm-address-boo
     imports: [
         TypeOrmModule.forRootAsync({
             imports: [ConfigModule],
-            useFactory: () => ({
-                ...createDatabaseOptions(),
+            inject: [ConfigService],
+            useFactory: (config: ConfigService) => ({
+                // ConfigModule has already resolved mounted secrets. Read its validated
+                // values rather than treating Nest's derived process.env as fresh input.
+                ...createDatabaseOptions(
+                    Object.fromEntries(
+                        [
+                            'APP_ENV',
+                            'HTTP_PORT',
+                            'DB_HOST',
+                            'DB_PORT',
+                            'DB_USER',
+                            'DB_PASSWORD',
+                            'DB_NAME',
+                            'DB_SSL',
+                            'DB_CA_PATH',
+                        ].flatMap((key) => {
+                            const value = config.get<string | number | boolean>(key);
+                            return value === undefined ? [] : [[key, String(value)] as const];
+                        }),
+                    ),
+                ),
                 autoLoadEntities: true,
+                retryAttempts: 3,
+                retryDelay: 1000,
             }),
         }),
     ],
