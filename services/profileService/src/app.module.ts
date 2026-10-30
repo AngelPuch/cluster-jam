@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { HealthModule } from './interfaces/http/health/health.module';
 import { ObservabilityModule } from './infrastructure/observability/observability.module';
 import { validateEnvironment } from './infrastructure/config/environment.validation';
+import { SecurityModule } from './infrastructure/security/security.module';
 
 @Module({
     imports: [
@@ -11,6 +12,7 @@ import { validateEnvironment } from './infrastructure/config/environment.validat
             validate: validateEnvironment,
         }),
         ObservabilityModule,
+        SecurityModule,
         HealthModule,
     ],
 })

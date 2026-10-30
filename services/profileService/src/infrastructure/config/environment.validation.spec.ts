@@ -7,6 +7,8 @@ describe('Profile database configuration', () => {
         DB_USER: 'profiles',
         DB_PASSWORD: 'test-only',
         RABBITMQ_CONSUMER_ENABLED: false,
+        SUPABASE_URL: 'https://supabase.example.test',
+        SUPABASE_JWKS_URL: 'https://supabase.example.test/auth/v1/.well-known/jwks.json',
     };
 
     it('normalizes local defaults and ports', () => {

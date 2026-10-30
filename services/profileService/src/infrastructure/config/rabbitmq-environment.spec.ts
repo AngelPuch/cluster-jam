@@ -7,6 +7,8 @@ describe('RabbitMQ environment contract', () => {
         DB_USER: 'profiles',
         DB_PASSWORD: 'test-only',
         RABBITMQ_URI: 'amqp://profile:test-only@localhost:5679/profile-tests',
+        SUPABASE_URL: 'https://supabase.example.test',
+        SUPABASE_JWKS_URL: 'https://supabase.example.test/auth/v1/.well-known/jwks.json',
     };
 
     it('requires an explicit broker URI by default', () => {

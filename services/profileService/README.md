@@ -11,8 +11,10 @@ The service consumes Auth registration events through RabbitMQ and provisions
 minimum profiles using a transactional PostgreSQL inbox. It handles duplicates,
 bounded retries, DLQ delivery, reconnection and graceful consumer shutdown.
 
-JWT guards, profile/address HTTP routes, Orders contact, Swagger/OpenAPI,
-the Profile Docker deployment and CI are subsequent PRs. No public
+Local Supabase JWT verification, its guard, verified identity context and safe
+authentication errors are implemented. Profile/address HTTP routes, Orders
+contact, Swagger/OpenAPI, the Profile Docker deployment and CI are subsequent
+PRs. No public
 endpoint currently invokes provisioning. The runnable API exposes only:
 
 - `GET /health/live`: process liveness, independent of PostgreSQL.
@@ -20,7 +22,8 @@ endpoint currently invokes provisioning. The runnable API exposes only:
 
 See [the diagnosis and implementation plan](../../docs/profile/implementation-plan.md)
 and verification results for [persistence](../../docs/profile/verification-01.md)
-and [messaging](../../docs/profile/verification-02.md).
+and [messaging](../../docs/profile/verification-02.md), plus
+[JWT verification](../../docs/profile/verification-03.md).
 
 ## Architecture and technologies
 
@@ -32,7 +35,9 @@ for local checks; the existing Auth production image uses Node 24 LTS.
 src/
     application/
         ports/profile-provisioning.port.ts
+        ports/access-token-verifier.port.ts
         profile/create-minimum-profile.service.ts
+        security/           # verified identity, protected roles and safe failures
     infrastructure/
         config/environment.validation.ts
         database/
@@ -44,7 +49,10 @@ src/
             typeorm.module.ts
         messaging/          # canonical topology, confirmed handoff and reconnecting listener
         observability/      # JSON allowlist logger and OpenTelemetry consumer spans
+        security/           # jose/JWKS adapter and Nest module
     interfaces/http/health/
+    interfaces/http/profiles/ # JWT guard and CurrentIdentity decorator
+    interfaces/http/common/errors/ # centralized authentication Problem Details
     interfaces/messaging/   # validated registration DTO and manual ACK consumer
     profile.module.ts
 ```
@@ -73,6 +81,7 @@ cd services/profileService
 npm ci --ignore-scripts --no-audit --no-fund
 Copy-Item .env.example .env
 # Set DB_HOST, DB_NAME, DB_USER and DB_PASSWORD in the private .env.
+# Set the public SUPABASE_URL and matching SUPABASE_JWKS_URL before starting.
 npm run migration:run
 npm run start:dev
 ```
@@ -88,6 +97,10 @@ npm run start:dev
 | `DB_PASSWORD` | Required role password; example value must be replaced |
 | `DB_SSL` | true/false; false locally, required true in staging/production |
 | `DB_CA_PATH` | Optional PEM CA for verified database TLS |
+| `SUPABASE_URL` | Required public Supabase project origin, HTTPS outside local development |
+| `SUPABASE_JWKS_URL` | Required matching /auth/v1/.well-known/jwks.json URL |
+| `SUPABASE_ISSUER` | Optional; must equal SUPABASE_URL + /auth/v1, otherwise derived |
+| `SUPABASE_AUDIENCE` | Optional; fixed authenticated user audience |
 | `LOG_LEVEL` | DEBUG, INFO, WARN or ERROR; INFO |
 | `RABBITMQ_CONSUMER_ENABLED` | true by default; explicit false for database-only tooling |
 | `RABBITMQ_URI` | Required when consuming; amqps in staging/production |
@@ -106,6 +119,12 @@ invalid. TLS always verifies the server certificate when enabled. Connection
 timeout is 3 seconds, statement timeout 8 seconds and idle transaction timeout
 10 seconds. The pool limit is 10. Migration and runtime use the same options.
 No credentials are committed in this service.
+
+Adding JWT support changes the application startup configuration: existing
+private `.env` or deployment settings must supply both public Supabase URLs.
+No publishable key, service-role key, shared signing secret, password or token
+is required by the JWT verifier. Migration commands validate only database
+settings and remain independent of broker/identity configuration.
 
 ```powershell
 Invoke-RestMethod http://localhost:8080/health/live
@@ -244,6 +263,13 @@ npm test -- --runInBand
 npm run test:e2e -- --runInBand
 ```
 
+JWT unit tests use real cryptographic signatures and a controlled JWKS
+transport. HTTP tests start a real loopback JWKS server and Nest routes defined
+only inside the test suite. They exercise the actual exported SecurityModule,
+guard, decorator and error filter; no probe route is built into production.
+The local HTTP test command requires loopback socket access but no Supabase
+account or database. `jose` is pinned to Auth's existing 6.2.12 version.
+
 The HTTP suite verifies technical health routes using a controlled database
 test double; it does not claim JWT/onboarding coverage. The integration suite
 uses a real local PostgreSQL server and creates uniquely named disposable
@@ -302,3 +328,53 @@ service secrets and CI arrive in their planned branches. Shared broker
 topology and permissions are included here because the consumer requires them.
 Swagger and business routes are not yet available. The test broker Compose
 does not constitute a complete production Profile deployment.
+
+## Local JWT authentication contract
+
+`SecurityModule` exports `JwtAuthGuard` and the application token-verifier port.
+Owner controllers in the next PR import this module, apply the guard and read
+`CurrentIdentity`. The verified result contains only an immutable `userId`
+and `appRole`. The user ID is taken from the signed UUID `sub`; roles are
+`cliente` or `administrador` from signed `app_metadata.app_role`. Body/query
+user IDs, `x-user-id`, cookies, URL tokens and `user_metadata` do not supply
+identity or elevate permissions. Administrator identity alone grants no access
+to another customer's profile or to the future Orders-only internal route.
+
+The adapter verifies ES256/RS256 signatures, exact issuer, audience
+`authenticated`, required sub/exp/iss/aud, expiration and not-before. It requires
+the Supabase claim `role=authenticated` and rejects anonymous/service-role
+credentials, unsupported algorithms, unsigned tokens, unknown keys and forged
+signatures. JWT input is bounded to 16 KiB. Duplicate Authorization fields or
+an invalid Bearer header are rejected before key retrieval.
+
+Configure an asymmetric Supabase signing key published through the project's
+JWKS before using this service. Profile follows Personalization's local
+asymmetric verification. Auth retains its own legacy HS256/live-session
+behavior; Profile makes no user/session lookup and stores no credentials.
+Local JWT validation observes signed claims until token expiry; session/role
+changes are reflected in newly issued tokens. Auth's local configuration sets
+access-token expiry to 900 seconds.
+
+One reusable JWKS resolver caches public keys for 10 minutes, coalesces
+concurrent downloads and limits unknown-key refresh to a 30-second cooldown.
+Each fetch has a 5-second timeout and does not follow redirects. Keys come
+only from the configured project URL; token-provided key URLs are ignored.
+Fresh cached keys can validate during an outage. Once the cache expires,
+unavailable/malformed/empty/ambiguous JWKS fails closed. No identity-provider
+request occurs at startup or on a normal verification using cached keys.
+
+The project origin and JWKS must match, with no credentials, custom paths,
+query strings or fragments. Staging/production require HTTPS. HTTP is allowed
+only for loopback origins in development/test, enabling the isolated tests.
+Health routes remain public and their probes do not fetch JWKS.
+
+| Status | Stable code | Meaning |
+| --- | --- | --- |
+| 401 | INVALID_ACCESS_TOKEN | Missing, malformed, expired or unverifiable user credential |
+| 403 | INVALID_APP_ROLE | Signed identity lacks an allowed protected application role |
+| 503 | SERVICE_UNAVAILABLE | Required signing keys cannot currently be obtained or used |
+
+These errors use `application/problem+json`, `Cache-Control: no-store`, a path
+without its query and a traceId. A 401 includes `WWW-Authenticate: Bearer`.
+Responses contain no presented token, provider diagnostics, SQL or raw error.
+No new business endpoint is exposed by this JWT foundation PR.
