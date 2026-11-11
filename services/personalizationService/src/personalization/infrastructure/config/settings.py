@@ -44,6 +44,9 @@ class Settings(BaseSettings):
     http_port: int = Field(
         default=8080, gt=0, le=65535, validation_alias="HTTP_PORT"
     )
+    http_workers: int = Field(
+        default=1, ge=1, le=4, validation_alias="HTTP_WORKERS"
+    )
     grpc_port: int = Field(
         default=50051, gt=0, le=65535, validation_alias="GRPC_PORT"
     )
@@ -155,16 +158,12 @@ class Settings(BaseSettings):
 
     @property
     def storage_project_url(self) -> str:
-        """Derive the Storage origin from the trusted
-        configured issuer.
-        """
+        """Derive the Storage origin from the trusted issuer."""
         return str(self.supabase_issuer).removesuffix("/auth/v1")
 
     @property
     def storage_key(self) -> SecretStr:
-        """Read only a configured backend key, never a user access
-        token.
-        """
+        """Return the configured backend key for private Storage."""
         if self._storage_key is None:
             raise ValueError("Storage is not configured")
         return self._storage_key

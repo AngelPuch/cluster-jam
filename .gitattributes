@@ -22,3 +22,7 @@ contracts/postman/personalization/** text eol=lf
 
 /Vagrantfile text eol=lf
 /script-provision.sh text eol=lf
+
+# Shared repository metadata follows the project LF convention
+/.gitignore text eol=lf
+/.gitattributes text eol=lf

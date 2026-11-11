@@ -17,6 +17,7 @@ from personalization.application.errors.image_validation_error import (
 )
 from personalization.application.errors.template_error import TemplateError
 from personalization.application.files.file_record import FileRecord, FileState
+from personalization.application.images.processing_batch import ImageBatch
 from personalization.application.ports.design_analysis_ports import (
     AnalysisSourcePort,
 )
@@ -35,9 +36,6 @@ from personalization.application.previews.preview import (
     preview_id,
 )
 from personalization.application.templates.template_record import Side
-from personalization.application.thumbnails.thumbnail_worker import (
-    ThumbnailBatch,
-)
 
 
 class PreviewWorker:
@@ -112,7 +110,7 @@ class PreviewWorker:
         after: UUID | None,
         limit: int,
         stop_requested: Callable[[], bool] = lambda: False,
-    ) -> ThumbnailBatch:
+    ) -> ImageBatch:
         completed = busy = 0
         failures: list[str] = []
         last = None
@@ -132,4 +130,4 @@ class PreviewWorker:
                 TemplateError,
             ) as error:
                 failures.append(error.failure.value)
-        return ThumbnailBatch(completed, busy, tuple(failures), last)
+        return ImageBatch(completed, busy, tuple(failures), last)

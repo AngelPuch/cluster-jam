@@ -21,10 +21,10 @@ from personalization.application.ports.private_storage_port import (
 from personalization.application.ports.thumbnail_ports import (
     ThumbnailRepositoryPort,
 )
-from personalization.application.prints.print_service import (
+from personalization.application.security.identity import VerifiedIdentity
+from personalization.application.security.permissions import (
     require_administrator,
 )
-from personalization.application.security.identity import VerifiedIdentity
 from personalization.application.thumbnails.thumbnail import (
     THUMBNAIL_SIDE_PX,
     THUMBNAIL_USAGE_PREFIX,

@@ -51,6 +51,31 @@ def revision() -> str:
     raise OperationError("SCHEMA_REVISION_UNAVAILABLE")
 
 
+def backup_revisions() -> tuple[str, ...]:
+    """Permit only explicitly compatible historical snapshots."""
+    source = ROOT / (
+        "services/personalizationService/src/personalization/"
+        "infrastructure/database/migration_config.py"
+    )
+    for node in ast.parse(source.read_text(encoding="utf-8")).body:
+        if isinstance(node, ast.Assign) and any(
+            isinstance(target, ast.Name)
+            and target.id == "COMPATIBLE_BACKUP_REVISIONS"
+            for target in node.targets
+        ):
+            if not isinstance(node.value, ast.Tuple):
+                break
+            values = tuple(
+                revision()
+                if isinstance(item, ast.Name) and item.id == "CURRENT_REVISION"
+                else ast.literal_eval(item)
+                for item in node.value.elts
+            )
+            if values and all(isinstance(value, str) for value in values):
+                return values
+    raise OperationError("BACKUP_REVISIONS_UNAVAILABLE")
+
+
 def run(
     arguments: list[str],
     *,

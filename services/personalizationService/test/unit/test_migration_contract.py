@@ -46,3 +46,25 @@ def test_english_attributes_map_to_spanish_sql_columns() -> None:
     column = FileModel.owner_id.property.columns[0]
     assert column.name == "propietario_ref"
     assert FileModel.__table__.c.bytes.type.__class__.__name__ == "BigInteger"
+
+
+def test_lookup_index_is_versioned_without_recreating_domain_tables() -> None:
+    output = StringIO()
+    command.upgrade(
+        migration_config(output),
+        "0001_personalization:" + CURRENT_REVISION,
+        sql=True,
+    )
+    sql = output.getvalue()
+    assert "CREATE INDEX ix_archivo_bucket_uso_estado" in sql
+    assert "app.archivo (bucket, uso, estado)" in sql
+    assert "CREATE TABLE" not in sql
+    assert "DROP TABLE" not in sql
+    rollback = StringIO()
+    command.downgrade(
+        migration_config(rollback),
+        CURRENT_REVISION + ":0001_personalization",
+        sql=True,
+    )
+    assert "DROP INDEX app.ix_archivo_bucket_uso_estado" in rollback.getvalue()
+    assert "DROP TABLE" not in rollback.getvalue()

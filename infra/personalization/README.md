@@ -639,3 +639,107 @@ Referencias: [pg_dump](https://www.postgresql.org/docs/17/app-pgdump.html),
 Los límites iniciales de las herramientas son 10 000 registros archivo y 10 GB
 por respaldo. No son una política de retención. No se admiten respaldos anidados
 ni workspaces de recuperación dentro de un respaldo ya publicado.
+
+
+## Verificación final del alcance implementado
+
+La matriz versionada del servicio es
+`services/personalizationService/test/acceptance/requirements.json`.
+Relaciona RF08, RF10–RF15, RF30 y RNF01–RNF11 con el alcance real y las
+pruebas de las 28 operaciones REST y una operación gRPC. Una prueba compara
+esa lista con los contratos reales y comprueba que sus referencias existen.
+Los resultados de cada prueba se obtienen de pytest/CI; el número de referencias
+de la matriz no sustituye una ejecución ni la cobertura de líneas.
+
+Los flujos de cliente, compatibilidad y publicación con Catalog y la cotización,
+congelado de carrito y checkout con Orders siguen pendientes. También quedan
+pendientes las interfaces nativas, el umbral DPI del equipo, la política de
+respaldos externos, la comprobación en Ubuntu real y la plataforma compartida
+Alloy/Loki/Grafana. Los logs JSON y su rotación local sí están implementados.
+
+### Migración del índice de archivos
+
+La revisión `0002_file_lookup` agrega únicamente el índice no único
+`ix_archivo_bucket_uso_estado` a `app.archivo(bucket, uso, estado)`.
+Evita comparar todas las miniaturas con todos los originales en el catálogo.
+La búsqueda de la última versión usa el índice de versiones de cada estampado.
+Se mantienen los filtros de disponibilidad antes de paginar, el historial y
+las validaciones de identidad de las miniaturas. El índice consume espacio
+adicional y agrega mantenimiento a las escrituras; no modifica columnas ni
+elimina registros. La revisión anterior permanece intacta.
+
+Ejecutar explícitamente la migración con la imagen nueva antes de iniciar API,
+worker o gRPC; el arranque no ejecuta DDL. Hasta entonces readiness devuelve 503.
+Las herramientas de recuperación aceptan las revisiones explícitamente
+compatibles `0001_personalization` y `0002_file_lookup`: un respaldo anterior se
+restaura con su revisión original. Si se prepara un candidato antiguo para uso
+con la imagen nueva, debe migrarse explícitamente antes de habilitar tráfico.
+
+### Medición reproducible de RNF05
+
+Desde la raíz, con Docker iniciado y las imágenes del servicio construidas:
+
+```powershell
+py -3.14 infra/personalization/verify_read_performance.py --users 30 --seconds 300
+```
+
+El comando crea una BD nueva, aplica Alembic y carga 1000 estampados activos,
+3000 versiones y 2000 registros sintéticos de archivos. No requiere objetos
+reales en Storage. Usa 30 usuarios con JWT ES256 distintos, sin tiempo de espera
+entre lecturas, contra el listado de 20 elementos y el detalle del catálogo.
+Se verifican estado HTTP y contenido; cualquier error impide aprobar.
+
+El generador corre en otro contenedor. La API usa 2 CPUs, 512 MiB y dos
+procesos REST; la BD, 1 CPU y 512 MiB. El generador toma los límites reales
+del Compose. JWKS se obtiene de un servidor HTTPS temporal y se verifica
+que se descargue como máximo una vez por proceso REST. Se excluyen 40
+lecturas de calentamiento.
+Se mide HTTP interno del backend: HTTPS del gateway, límites por IP, cargas,
+descargas firmadas y proveedores externos quedan fuera de esta medición.
+Los controles TLS y límites del gateway se prueban por separado.
+
+El evento JSON registra hardware de Docker, conjunto de datos, duración,
+usuarios, errores, lecturas por segundo y p50/p95/máximo por operación.
+El p95 usa rango más cercano y debe ser estrictamente menor que 500 ms en
+ambas operaciones. Incluye imagen/digest, revisión Git y SHA-256 del código.
+Solo 30 o más usuarios durante 300 o más segundos constituyen la ventana
+completa de RNF05; una ejecución breve sirve para diagnosticar el escenario.
+
+Se retiran únicamente contenedores, red y volumen temporales propios; no hay
+puertos publicados ni acceso a tu BD o secretos reales de Supabase. El informe
+no garantiza rendimiento en otros equipos o con otro volumen de datos.
+En GitHub Actions esta medición es opcional desde `workflow_dispatch`, porque
+el hardware del runner afecta los resultados; no bloquea cada PR por ruido de
+rendimiento del proveedor. Los tests funcionales y de migración sí son obligatorios.
+
+
+El perfil inicial de 1 CPU y un proceso REST alcanzaba su límite de CPU bajo
+esta carga. `HTTP_WORKERS=2` aprovecha dos procesos con 2 CPUs y 512 MiB;
+cada proceso mantiene su propio pool y caché JWKS. Es capacidad configurada,
+no un cambio del objetivo de 30 usuarios/p95. Se valida entre 1 y 4 procesos;
+el valor fuera de Compose sigue siendo 1. Si se aumenta el número, revisar
+memoria y conexiones: cada proceso permite hasta 10 conexiones PostgreSQL.
+Solo cambia el presupuesto REST; worker de imágenes y gRPC siguen separados.
+El cierre HTTP concede 15 segundos dentro de los 20 de Docker.
+
+
+La evidencia medida se conserva en
+`services/personalizationService/test/acceptance/qa_baseline.json`.
+En el equipo descrito por ese archivo, la ventana completa terminó con
+43 678 lecturas, cero errores y p95 de 317.398 ms en listado y 352.349 ms en
+detalle. El p95 agregado fue 340.107 ms. Es evidencia de ese escenario;
+no representa una garantía para otro hardware ni para todas las operaciones.
+
+La consulta base se construye una vez por repositorio y es inmutable; cada
+cursor, identificador y límite genera una copia independiente. Las pruebas
+concurrentes comprueban que un filtro no se conserve en otra solicitud.
+La lectura de la última versión y de su miniatura usa subconsultas LATERAL.
+En la miniatura, OFFSET 0 conserva todas las coincidencias y evita aplanar
+la búsqueda correlacionada en el plan genérico medido de PostgreSQL 17.
+No es paginación por desplazamiento: la página sigue usando el cursor por ID.
+Los filtros de disponibilidad, propiedad e identidad se mantienen.
+
+Las exclusiones locales de Personalization están centralizadas y limitadas a
+sus rutas en el `.gitignore` de la raíz; no hay un `.gitignore` adicional en
+el servicio ni en `infra/personalization`. La consolidación conservó el
+comportamiento de 20 comprobaciones, incluidos secretos y archivos temporales.

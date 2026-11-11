@@ -25,11 +25,12 @@ from personalization.application.prints.cursor import (
     decode_cursor,
     encode_cursor,
 )
-from personalization.application.prints.print_service import (
+from personalization.application.security.identity import VerifiedIdentity
+from personalization.application.security.permissions import (
     require_administrator,
 )
-from personalization.application.security.identity import VerifiedIdentity
 from personalization.application.templates.template_record import (
+    MAX_TEMPLATE_ZONES,
     TemplateDefinition,
 )
 from personalization.application.templates.template_rules import (
@@ -50,7 +51,7 @@ class DraftService:
         if (
             not isinstance(content.variant_id, UUID)
             or not isinstance(content.template_id, UUID)
-            or len(content.applications) > 20
+            or len(content.applications) > MAX_TEMPLATE_ZONES
         ):
             raise DesignError(DesignFailure.INVALID_DESIGN_DATA)
         template = self._templates.get(content.template_id)

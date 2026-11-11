@@ -11,6 +11,7 @@ on:
             - "contracts/openapi/personalization/**"
             - "contracts/postman/personalization/**"
             - ".github/workflows/personalization-ci.yml"
+            - ".gitignore"
             - ".editorconfig"
             - ".gitattributes"
     push:
@@ -24,9 +25,16 @@ on:
             - "contracts/openapi/personalization/**"
             - "contracts/postman/personalization/**"
             - ".github/workflows/personalization-ci.yml"
+            - ".gitignore"
             - ".editorconfig"
             - ".gitattributes"
     workflow_dispatch:
+        inputs:
+            run_read_performance:
+                description: Run the 30-user, 5-minute RNF05 catalog probe
+                type: boolean
+                required: false
+                default: false
 
 permissions:
     contents: read
@@ -113,3 +121,6 @@ jobs:
               run: python3 infra/personalization/verify_deploy_commands.py
             - name: Verify database and private-object recovery
               run: python3 infra/personalization/verify_operations.py
+            - name: Measure catalog read performance
+              if: github.event_name == 'workflow_dispatch' && inputs.run_read_performance
+              run: python3 infra/personalization/verify_read_performance.py --users 30 --seconds 300

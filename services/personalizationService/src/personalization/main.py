@@ -37,6 +37,8 @@ def main() -> None:
         factory=True,
         host=settings.http_host,
         port=settings.http_port,
+        workers=settings.http_workers,
+        timeout_graceful_shutdown=15,
         log_config=None,
         access_log=False,
         server_header=False,

@@ -1,7 +1,0 @@
-.pytest_cache/
-.ruff_cache/
-.mypy_cache/
-.coverage
-.coverage.*
-htmlcov/
-*.egg-info/

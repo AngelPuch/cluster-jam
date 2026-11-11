@@ -275,4 +275,5 @@ def test_unexpected_error_does_not_log_tokens_or_private_details(
     assert (
         event["rpc_status"] == "INTERNAL" and event["code"] == "INTERNAL_ERROR"
     )
+    assert event["level"] == "ERROR"
     assert event["trace_id"] and event["span_id"]

@@ -35,6 +35,7 @@ class FileModel(Base):
         ),
         sa.PrimaryKeyConstraint("id", name="pk_archivo"),
         sa.Index("ix_archivo_propietario", "propietario_ref", "id"),
+        sa.Index("ix_archivo_bucket_uso_estado", "bucket", "uso", "estado"),
     )
 
     id: Mapped[UUID] = mapped_column(

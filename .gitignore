@@ -38,3 +38,20 @@ Thumbs.db
 
 # Vagrant
 .vagrant/
+
+# Personalization local artifacts
+# services/personalizationService
+/services/personalizationService/**/.pytest_cache/
+/services/personalizationService/**/.ruff_cache/
+/services/personalizationService/**/.mypy_cache/
+/services/personalizationService/**/.coverage
+/services/personalizationService/**/.coverage.*
+/services/personalizationService/**/htmlcov/
+/services/personalizationService/**/*.egg-info/
+
+# infra/personalization
+/infra/personalization/**/.secrets/
+/infra/personalization/**/.env
+/infra/personalization/**/deployment.env
+/infra/personalization/**/.pytest_cache/
+/infra/personalization/**/.ruff_cache/

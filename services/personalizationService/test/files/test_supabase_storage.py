@@ -118,6 +118,8 @@ def test_create_never_changes_an_existing_public_bucket() -> None:
     [
         "https://evil.example/object?token=x",
         "//evil.example/object?token=x",
+        "//[invalid/object?token=x",
+        "https://[invalid/object?token=x",
         "/object/sign/wrong?token=x",
         "/object/sign/wrong",
         "/object/sign/wrong?token=x&token=y",

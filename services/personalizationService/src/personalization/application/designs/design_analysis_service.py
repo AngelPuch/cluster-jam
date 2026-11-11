@@ -23,10 +23,10 @@ from personalization.application.ports.design_analysis_ports import (
 from personalization.application.ports.template_repository_port import (
     TemplateRepositoryPort,
 )
-from personalization.application.prints.print_service import (
+from personalization.application.security.identity import VerifiedIdentity
+from personalization.application.security.permissions import (
     require_administrator,
 )
-from personalization.application.security.identity import VerifiedIdentity
 from personalization.application.templates.template_record import (
     TemplateDefinition,
 )

@@ -15,10 +15,10 @@ from personalization.application.prints.cursor import (
     encode_cursor,
 )
 from personalization.application.prints.print_record import MAX_VERSION_NUMBER
-from personalization.application.prints.print_service import (
+from personalization.application.security.identity import VerifiedIdentity
+from personalization.application.security.permissions import (
     require_administrator,
 )
-from personalization.application.security.identity import VerifiedIdentity
 from personalization.application.templates.template_record import (
     TemplateDefinition,
     TemplatePage,
