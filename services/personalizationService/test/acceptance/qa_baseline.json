@@ -1,0 +1,87 @@
+{
+  "scope": "Local Docker/WSL backend QA; no production Ubuntu or customer checkout certification",
+  "git_state": "Uncommitted final-quality-review candidate; source_sha256 and runtime_image_id identify the tested build",
+  "application_tests": {
+    "passed": 689,
+    "database_integration_passed": 120,
+    "line_coverage_percent": 79.88
+  },
+  "performance": {
+    "event": "qa.read_performance.completed",
+    "timestamp": "2026-10-29T21:59:58.418880+00:00",
+    "passed": true,
+    "users": 30,
+    "full_rnf05_load_window": true,
+    "requested_duration_seconds": 300,
+    "elapsed_seconds": 300.261,
+    "think_time_seconds": 0,
+    "warmup_requests_excluded": 40,
+    "failure_count": 0,
+    "target_p95_ms_strictly_below": 500,
+    "overall": {
+      "count": 43678,
+      "p50_ms": 193.27,
+      "p95_ms": 340.107,
+      "max_ms": 643.362
+    },
+    "by_operation": {
+      "/api/v1/prints?limit=20": {
+        "count": 21841,
+        "p50_ms": 167.666,
+        "p95_ms": 317.398,
+        "max_ms": 643.362
+      },
+      "/api/v1/prints/00000000-0000-4000-9000-000000000001": {
+        "count": 21837,
+        "p50_ms": 218.218,
+        "p95_ms": 352.349,
+        "max_ms": 571.356
+      }
+    },
+    "requests_per_second": 145.467,
+    "scope": "Internal HTTP backend; gateway TLS/rate limits excluded",
+    "identity": "Distinct ES256 clients; HTTPS JWKS fixture cached locally",
+    "providers": "No uploads, signed downloads, or external providers",
+    "generator": {
+      "python": "3.14.9",
+      "system": "Linux",
+      "machine": "x86_64",
+      "logical_cpus": 16
+    },
+    "jwks_requests": 2,
+    "hardware": {
+      "NCPU": 16,
+      "MemTotal": 8131006464,
+      "KernelVersion": "5.15.167.4-microsoft-standard-WSL2",
+      "OperatingSystem": "Docker Desktop",
+      "Architecture": "x86_64",
+      "host_platform": "Windows-11-10.0.26200-SP0"
+    },
+    "dataset": {
+      "prints": 1000,
+      "versions": 3000,
+      "file_metadata": 2000,
+      "page_size": 20,
+      "real_storage_objects": 0
+    },
+    "api_limits": {
+      "cpus": 2.0,
+      "memory_bytes": 536870912,
+      "http_workers": 2,
+      "database_cpus": 1,
+      "database_memory_bytes": 536870912
+    },
+    "runtime_image": "cluster-jam/personalization:0.1.0-local",
+    "runtime_image_id": "sha256:d618c77c8e80a1670ce9ec6b0829c0f68dd80823166400f9b651e29ecac15203",
+    "database_image": "postgres:17.11-bookworm@sha256:858bb5e98eed02eb8cafbcdc007f9a65d1b613972028944a8ec2133ccaf80d27",
+    "source_sha256": "65a8bdfd12c3fda4023b0ef755e2b8262b49d0a69357e0a4dbf411332ffe4340",
+    "revision": "406eb63ebfe1ed23038b17b30bdc61ae7024d1bf"
+  },
+  "limits": [
+    "Only internal HTTP catalog list/detail reads are load-tested",
+    "Gateway TLS and IP limits are verified separately",
+    "External providers, uploads, signed downloads and native clients are excluded",
+    "Results depend on the recorded hardware, dataset and resource limits",
+    "Catalog/Orders integration and shared observability remain pending"
+  ]
+}

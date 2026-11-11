@@ -6,6 +6,7 @@ from decimal import Decimal
 from uuid import UUID, uuid4
 
 import pytest
+from alembic import command
 from sqlalchemy import Connection, Engine, inspect, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -14,6 +15,7 @@ from personalization.infrastructure.config.settings import Settings
 from personalization.infrastructure.database.migrate import run_migrations
 from personalization.infrastructure.database.migration_config import (
     CURRENT_REVISION,
+    migration_config,
 )
 from personalization.infrastructure.database.models import (
     ApplicationModel,
@@ -437,4 +439,49 @@ def test_readiness_rejects_an_outdated_revision(
             connection.execute(
                 text("UPDATE app.alembic_version SET version_num = :revision"),
                 {"revision": CURRENT_REVISION},
+            )
+
+
+def test_lookup_migration_preserves_existing_rows_and_readiness(
+    engine: Engine, settings: Settings
+) -> None:
+    identifier = uuid4()
+    with engine.begin() as connection:
+        configuration = migration_config()
+        configuration.attributes["connection"] = connection
+        command.downgrade(configuration, "0001_personalization")
+        connection.execute(
+            text(
+                "INSERT INTO app.auditoria_local "
+                "(id,accion,recurso,recurso_id) VALUES "
+                "(:id,'MIGRATION_TEST','archivo',:id)"
+            ),
+            {"id": identifier},
+        )
+    try:
+        assert not SqlAlchemyReadinessAdapter(engine, settings).is_ready()
+        run_migrations(engine, settings, "upgrade")
+        assert SqlAlchemyReadinessAdapter(engine, settings).is_ready()
+        indexes = inspect(engine).get_indexes("archivo", schema="app")
+        assert any(
+            index["name"] == "ix_archivo_bucket_uso_estado"
+            and index["column_names"] == ["bucket", "uso", "estado"]
+            for index in indexes
+        )
+        with engine.connect() as connection:
+            assert (
+                connection.execute(
+                    text(
+                        "SELECT count(*) FROM app.auditoria_local WHERE id=:id"
+                    ),
+                    {"id": identifier},
+                ).scalar_one()
+                == 1
+            )
+    finally:
+        run_migrations(engine, settings, "upgrade")
+        with engine.begin() as connection:
+            connection.execute(
+                text("DELETE FROM app.auditoria_local WHERE id=:id"),
+                {"id": identifier},
             )

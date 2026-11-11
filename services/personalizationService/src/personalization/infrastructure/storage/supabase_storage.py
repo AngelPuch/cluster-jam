@@ -85,9 +85,7 @@ class SupabaseStorage:
             raise FileError(FileFailure.STORAGE_BUCKET_UNSAFE)
 
     def create_bucket(self) -> None:
-        """Create only a missing bucket; never modify an
-        existing one.
-        """
+        """Create a missing bucket and preserve existing settings."""
         try:
             response = self._client.get("bucket/" + self._bucket)
         except httpx.HTTPError:
@@ -109,9 +107,7 @@ class SupabaseStorage:
         self.ensure_private()
 
     def _object_path(self, record: FileRecord) -> str:
-        """Restrict the elevated key to canonical service
-        object names.
-        """
+        """Restrict the backend key to canonical object names."""
         extension = {"image/png": "png", "image/jpeg": "jpg"}.get(
             record.mime_type
         )
@@ -125,9 +121,7 @@ class SupabaseStorage:
         return self._bucket + "/" + record.object_key
 
     def upload(self, record: FileRecord, content: bytes) -> None:
-        """Use create-only semantics and never retry
-        uncertain writes.
-        """
+        """Create objects once without retrying uncertain writes."""
         path = self._object_path(record)
         if (
             len(content) != record.size_bytes
@@ -169,8 +163,11 @@ class SupabaseStorage:
             or any(character.isspace() for character in signed)
         ):
             raise FileError(FileFailure.STORAGE_UNAVAILABLE)
-        parsed = urlsplit(signed)
-        query = parse_qs(parsed.query, keep_blank_values=True)
+        try:
+            parsed = urlsplit(signed)
+            query = parse_qs(parsed.query, keep_blank_values=True)
+        except ValueError:
+            raise FileError(FileFailure.STORAGE_UNAVAILABLE) from None
         tokens = query.get("token", [])
         if (
             parsed.scheme

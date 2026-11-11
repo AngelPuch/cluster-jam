@@ -11,7 +11,10 @@ from opentelemetry.trace.propagation.tracecontext import (
     TraceContextTextMapPropagator,
 )
 
-from personalization.application.designs.draft_record import DraftRecord
+from personalization.application.designs.draft_record import (
+    DraftRecord,
+    draft_revision,
+)
 from personalization.application.designs.draft_service import DraftService
 from personalization.application.errors.design_error import (
     DesignError,
@@ -24,13 +27,10 @@ from personalization.application.errors.security_error import (
 from personalization.application.ports.access_token_verifier_port import (
     AccessTokenVerifierPort,
 )
-from personalization.application.prints.print_service import (
+from personalization.application.security.permissions import (
     require_administrator,
 )
 from personalization.interfaces.grpc.generated import personalization_pb2 as pb
-from personalization.interfaces.http.design_drafts.preconditions import (
-    draft_etag,
-)
 
 SERVICE_NAME = "clusterjam.personalization.v1.PersonalizationDrafts"
 RPC_METHOD = SERVICE_NAME + "/GetDesignDraft"
@@ -70,7 +70,7 @@ def response_for(draft: DraftRecord) -> pb.GetDesignDraftResponse:
             application.file_id = str(item.file_id)
     return pb.GetDesignDraftResponse(
         design=design,
-        etag=draft_etag(draft),
+        etag='"' + draft_revision(draft) + '"',
         catalog_validation=pb.CATALOG_VALIDATION_PENDING,
         checkout_readiness=pb.CHECKOUT_BLOCKED,
         diagnostic_only=True,
@@ -197,7 +197,14 @@ class DraftServicer:
             )
             if failure is not None:
                 span.set_status(Status(StatusCode.ERROR))
-            self._logger.info(
+            level = logging.INFO
+            if failure is not None:
+                if failure.status is grpc.StatusCode.INTERNAL:
+                    level = logging.ERROR
+                elif failure.status is grpc.StatusCode.UNAVAILABLE:
+                    level = logging.WARNING
+            self._logger.log(
+                level,
                 "gRPC request completed",
                 extra={
                     "event": "grpc.request.completed",

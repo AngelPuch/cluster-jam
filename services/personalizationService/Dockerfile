@@ -18,7 +18,8 @@ RUN uv run --locked --no-editable ruff check . \
     && uv build --no-sources
 
 FROM build AS integration
-CMD ["uv", "run", "--locked", "--no-editable", "pytest", "test/integration", "-v"]
+# Test the dependencies installed at build time without network access.
+CMD ["uv", "run", "--locked", "--no-sync", "pytest", "test/integration", "-v"]
 
 FROM build AS production-dependencies
 RUN uv sync --locked --no-dev --no-editable

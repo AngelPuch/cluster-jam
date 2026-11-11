@@ -1,7 +1,6 @@
 """Recover image jobs from committed references and intentions."""
 
 from collections.abc import Callable
-from dataclasses import dataclass
 from uuid import UUID
 
 from personalization.application.errors.file_error import (
@@ -12,6 +11,7 @@ from personalization.application.errors.image_validation_error import (
     ImageValidationError,
 )
 from personalization.application.files.file_record import FileRecord, FileState
+from personalization.application.images.processing_batch import ImageBatch
 from personalization.application.ports.thumbnail_ports import (
     ThumbnailRendererPort,
     ThumbnailRepositoryPort,
@@ -22,14 +22,6 @@ from personalization.application.thumbnails.thumbnail import (
     THUMBNAIL_USAGE_PREFIX,
     thumbnail_id,
 )
-
-
-@dataclass(frozen=True)
-class ThumbnailBatch:
-    completed: int
-    busy: int
-    failures: tuple[str, ...]
-    after: UUID | None
 
 
 class ThumbnailWorker:
@@ -100,7 +92,7 @@ class ThumbnailWorker:
         after: UUID | None,
         limit: int,
         stop_requested: Callable[[], bool] = lambda: False,
-    ) -> ThumbnailBatch:
+    ) -> ImageBatch:
         """Advance past failures to avoid starving other jobs."""
         sources = self._repository.candidates(after, limit)
         completed = busy = 0
@@ -117,7 +109,7 @@ class ThumbnailWorker:
                     busy += 1
             except (FileError, ImageValidationError) as error:
                 failures.append(error.failure.value)
-        return ThumbnailBatch(
+        return ImageBatch(
             completed,
             busy,
             tuple(failures),

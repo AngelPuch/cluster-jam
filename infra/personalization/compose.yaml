@@ -73,6 +73,12 @@ services:
 
     personalization:
         <<: *personalization-service
+        environment:
+            <<: *personalization-environment
+            HTTP_WORKERS: ${HTTP_WORKERS:-2}
+        cpus: 2.0
+        mem_limit: 512m
+        pids_limit: 128
         networks:
             - personalization-db
             - backend

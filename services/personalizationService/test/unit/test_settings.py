@@ -21,6 +21,7 @@ def isolate_environment(
         "DOWNLOAD_URL_TTL_SECONDS",
         "HTTP_HOST",
         "HTTP_PORT",
+        "HTTP_WORKERS",
         "GRPC_PORT",
         "LOG_LEVEL",
         "DB_HOST",
@@ -302,4 +303,14 @@ def test_download_url_ttl_is_short_and_bounded(
     monkeypatch.setenv("APP_ENV", "test")
     monkeypatch.setenv("DOWNLOAD_URL_TTL_SECONDS", ttl)
     with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+
+@pytest.mark.parametrize("value", ["0", "5", "invalid"])
+def test_worker_count_is_bounded_before_startup(
+    monkeypatch: pytest.MonkeyPatch, value: str
+) -> None:
+    monkeypatch.setenv("APP_ENV", "test")
+    monkeypatch.setenv("HTTP_WORKERS", value)
+    with pytest.raises(ValidationError, match="HTTP_WORKERS"):
         Settings(_env_file=None)

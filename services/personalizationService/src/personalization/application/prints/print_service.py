@@ -6,10 +6,6 @@ from personalization.application.errors.print_error import (
     PrintError,
     PrintFailure,
 )
-from personalization.application.errors.security_error import (
-    SecurityError,
-    SecurityFailure,
-)
 from personalization.application.ports.print_repository_port import (
     PrintRepositoryPort,
 )
@@ -33,14 +29,11 @@ from personalization.application.prints.print_record import (
     PrintVersionPage,
 )
 from personalization.application.security.identity import (
-    AppRole,
     VerifiedIdentity,
 )
-
-
-def require_administrator(identity: VerifiedIdentity) -> None:
-    if identity.app_role is not AppRole.ADMINISTRATOR:
-        raise SecurityError(SecurityFailure.FORBIDDEN)
+from personalization.application.security.permissions import (
+    require_administrator,
+)
 
 
 def validate_surcharge(surcharge_cents: int) -> None:

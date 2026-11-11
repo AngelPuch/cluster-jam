@@ -105,6 +105,8 @@ python -m uv run --locked mypy
 python -m uv run --locked pytest --cov --cov-fail-under=70
 ```
 
+Acceptance evidence is mapped in `test/acceptance/requirements.json`.
+The optional infrastructure load probe measures RNF05 separately.
 Postman collections are in `contracts/postman/personalization`.
 Database integration and recovery checks use disposable Docker resources;
 their commands are documented in the infrastructure guide.

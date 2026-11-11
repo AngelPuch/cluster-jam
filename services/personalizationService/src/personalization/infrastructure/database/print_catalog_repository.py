@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from sqlalchemy import Engine, String, cast, func, select
+from sqlalchemy import Engine, Select, String, cast, select, true
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, aliased
 
@@ -47,10 +47,60 @@ def map_catalog(
     )
 
 
+def catalog_statement(
+    bucket: str,
+) -> Select[PrintModel, PrintVersionModel, FileModel]:
+    """Reuse the query without sharing request filters."""
+    original = aliased(FileModel)
+    latest = (
+        select(PrintVersionModel)
+        .where(PrintVersionModel.print_id == PrintModel.id)
+        .order_by(PrintVersionModel.number.desc())
+        .limit(1)
+        .correlate(PrintModel)
+        .lateral()
+    )
+    current_version = aliased(PrintVersionModel, latest)
+    thumbnail_query = (
+        select(FileModel)
+        .where(
+            FileModel.usage
+            == THUMBNAIL_USAGE_PREFIX + cast(original.id, String),
+            FileModel.state == "DISPONIBLE",
+            FileModel.bucket == bucket,
+            FileModel.owner_id == original.owner_id,
+            FileModel.mime_type == "image/png",
+            FileModel.width_px.between(1, THUMBNAIL_SIDE_PX),
+            FileModel.height_px.between(1, THUMBNAIL_SIDE_PX),
+            FileModel.object_key == cast(FileModel.id, String) + ".png",
+        )
+        # Preserve every match while keeping this lookup correlated.
+        # PostgreSQL must not flatten it into a global thumbnail scan.
+        .offset(0)
+        .correlate(original)
+        .lateral()
+    )
+    thumbnail = aliased(FileModel, thumbnail_query)
+    return (
+        select(PrintModel, current_version, thumbnail)
+        .select_from(PrintModel)
+        .join(current_version, true())
+        .join(original, original.id == current_version.file_id)
+        .join(thumbnail, true())
+        .where(
+            PrintModel.active.is_(True),
+            original.usage == "ORIGINAL",
+            original.state == "DISPONIBLE",
+            original.bucket == bucket,
+        )
+        .order_by(PrintModel.id)
+    )
+
+
 class SqlAlchemyPrintCatalogRepository:
     def __init__(self, engine: Engine, bucket: str) -> None:
         self._engine = engine
-        self._bucket = bucket
+        self._statement = catalog_statement(bucket)
 
     def _read(
         self,
@@ -59,46 +109,7 @@ class SqlAlchemyPrintCatalogRepository:
         after: UUID | None = None,
         limit: int = 1,
     ) -> tuple[CatalogPrint, ...]:
-        original = aliased(FileModel)
-        thumbnail = aliased(FileModel)
-        latest = (
-            select(
-                PrintVersionModel.print_id.label("print_id"),
-                func.max(PrintVersionModel.number).label("number"),
-            )
-            .group_by(PrintVersionModel.print_id)
-            .subquery()
-        )
-        statement = (
-            select(PrintModel, PrintVersionModel, thumbnail)
-            .join(latest, latest.c.print_id == PrintModel.id)
-            .join(
-                PrintVersionModel,
-                (PrintVersionModel.print_id == PrintModel.id)
-                & (PrintVersionModel.number == latest.c.number),
-            )
-            .join(original, original.id == PrintVersionModel.file_id)
-            .join(
-                thumbnail,
-                thumbnail.usage
-                == THUMBNAIL_USAGE_PREFIX + cast(original.id, String),
-            )
-            .where(
-                PrintModel.active.is_(True),
-                original.usage == "ORIGINAL",
-                original.state == "DISPONIBLE",
-                original.bucket == self._bucket,
-                thumbnail.state == "DISPONIBLE",
-                thumbnail.bucket == self._bucket,
-                thumbnail.owner_id == original.owner_id,
-                thumbnail.mime_type == "image/png",
-                thumbnail.width_px.between(1, THUMBNAIL_SIDE_PX),
-                thumbnail.height_px.between(1, THUMBNAIL_SIDE_PX),
-                thumbnail.object_key == cast(thumbnail.id, String) + ".png",
-            )
-            .order_by(PrintModel.id)
-            .limit(max(1, min(limit, 101)))
-        )
+        statement = self._statement.limit(max(1, min(limit, 101)))
         if after is not None:
             statement = statement.where(PrintModel.id > after)
         if print_id is not None:

@@ -21,7 +21,9 @@ from .runtime import (
 OBJECT_LIMIT = 10_000
 
 
-def inventory(container: str) -> dict[str, Any]:
+def inventory(
+    container: str, expected_revision: str | None = None
+) -> dict[str, Any]:
     counts = ",".join(
         f"'{name}',(SELECT count(*) FROM app.{name})" for name in TABLES
     )
@@ -49,7 +51,7 @@ def inventory(container: str) -> dict[str, Any]:
         result.get("database") != "personalizacion_db"
         or result.get("role") != "app_personalizacion"
         or result.get("privileged") is not False
-        or result.get("revision") != revision()
+        or result.get("revision") != (expected_revision or revision())
         or result.get("tables") != sorted(TABLES)
     ):
         raise OperationError("SNAPSHOT_SCHEMA_MISMATCH")
@@ -177,7 +179,9 @@ class RecoveryDatabase:
             raise OperationError("RECOVERY_DATABASE_UNAVAILABLE")
         return identifier
 
-    def restore(self, dump: Path) -> dict[str, Any]:
+    def restore(
+        self, dump: Path, schema_revision: str | None = None
+    ) -> dict[str, Any]:
         identifier = self.start()
         empty = psql(
             identifier,
@@ -210,7 +214,7 @@ class RecoveryDatabase:
                 ],
                 input_file=source,
             )
-        return inventory(identifier)
+        return inventory(identifier, schema_revision)
 
     def retain(self) -> None:
         self._keep = True

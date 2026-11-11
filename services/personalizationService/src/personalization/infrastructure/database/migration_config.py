@@ -5,7 +5,8 @@ from typing import TextIO
 
 from alembic.config import Config
 
-CURRENT_REVISION = "0001_personalization"
+CURRENT_REVISION = "0002_file_lookup"
+COMPATIBLE_BACKUP_REVISIONS = ("0001_personalization", CURRENT_REVISION)
 
 
 def migration_config(output: TextIO | None = None) -> Config:

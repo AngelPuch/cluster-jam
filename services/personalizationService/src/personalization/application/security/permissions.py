@@ -1,4 +1,4 @@
-"""Apply ownership policy to owner IDs obtained by the server."""
+"""Apply shared role and ownership policies to verified identities."""
 
 from uuid import UUID
 
@@ -10,6 +10,12 @@ from personalization.application.security.identity import (
     AppRole,
     VerifiedIdentity,
 )
+
+
+def require_administrator(identity: VerifiedIdentity) -> None:
+    """Reject identities without the protected administrator role."""
+    if identity.app_role is not AppRole.ADMINISTRATOR:
+        raise SecurityError(SecurityFailure.FORBIDDEN)
 
 
 def require_resource_owner(

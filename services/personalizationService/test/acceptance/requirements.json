@@ -1,0 +1,560 @@
+{
+  "schema_version": 1,
+  "scope": "Implemented Personalization backend only; mapped evidence does not certify unimplemented customer/checkout features",
+  "line_coverage_is_functionality_coverage": false,
+  "requirements": [
+    {
+      "id": "RF08",
+      "status": "implemented",
+      "scope_note": "Catalog metadata, current price and private thumbnail download authorization"
+    },
+    {
+      "id": "RF10",
+      "status": "implemented",
+      "scope_note": "Authenticated upload with signature, Pillow decoding, byte/dimension limits and SHA-256"
+    },
+    {
+      "id": "RF11",
+      "status": "partial",
+      "scope_note": "Three physical sizes and exact mm/cm in administrative templates; product/size compatibility pending Catalog"
+    },
+    {
+      "id": "RF12",
+      "status": "partial",
+      "scope_note": "Validated application sources in administrative drafts; customer flow pending Catalog contract"
+    },
+    {
+      "id": "RF13",
+      "status": "partial",
+      "scope_note": "Local side and zone geometry checked; compatibility with external garment variant pending Catalog"
+    },
+    {
+      "id": "RF14",
+      "status": "partial",
+      "scope_note": "Approximate previews for both sides; configurable DPI warning; team has not chosen MIN_PRINT_DPI"
+    },
+    {
+      "id": "RF15",
+      "status": "partial",
+      "scope_note": "Administrative draft editing, overlap/bounds checks and frozen-state protection; customer/cart flow pending"
+    },
+    {
+      "id": "RF30",
+      "status": "partial",
+      "scope_note": "Versioned prints, prices, template drafts, zones/sizes and atomic audit; publication awaits Catalog"
+    },
+    {
+      "id": "RNF01",
+      "status": "implemented",
+      "scope_note": "Private PNG/JPEG objects and owner/admin controls"
+    },
+    {
+      "id": "RNF02",
+      "status": "verified_service_scope",
+      "scope_note": "Application ports, infrastructure adapters and HTTP/gRPC/worker interfaces"
+    },
+    {
+      "id": "RNF03",
+      "status": "verified_service_scope",
+      "scope_note": "Cached JWKS, JWT roles, ownership, HTTPS gateway and TLS RPC; global payments/WSS outside this service"
+    },
+    {
+      "id": "RNF04",
+      "status": "outside_backend_scope",
+      "scope_note": "Native Android and WPF clients postponed by user"
+    },
+    {
+      "id": "RNF05",
+      "status": "measured_separately",
+      "scope_note": "Opt-in 30-user/300-second internal HTTP catalog probe; report hardware, data, per-operation p95 and failures"
+    },
+    {
+      "id": "RNF06",
+      "status": "verified_service_scope",
+      "scope_note": "Atomic version/precondition checks and worker claims; stock reservation belongs to Catalog/Orders"
+    },
+    {
+      "id": "RNF07",
+      "status": "verified_service_scope",
+      "scope_note": "Versioned OpenAPI and protobuf; RPC explicitly diagnostic and checkout blocked"
+    },
+    {
+      "id": "RNF08",
+      "status": "partial",
+      "scope_note": "Local readiness recovery, bounded failures and durable image work tested; global Payments/Reports outage scenario unavailable"
+    },
+    {
+      "id": "RNF09",
+      "status": "verified_service_scope",
+      "scope_note": "All exposed operations linked to behavior and permission/availability evidence; line coverage is a separate metric"
+    },
+    {
+      "id": "RNF10",
+      "status": "partial",
+      "scope_note": "Compose isolation/persistence and actual backup rehearsal verified; Ubuntu deployment, off-host backup policy and client delivery remain external tasks"
+    },
+    {
+      "id": "RNF11",
+      "status": "verified_service_scope",
+      "scope_note": "GitHub Flow, pinned builds, lint/types/tests; academic UI prototypes/diagrams are separate deliverables"
+    }
+  ],
+  "operations": [
+    {
+      "operation": "GET /api/v1/admin/design-drafts",
+      "requirements": [
+        "RF12",
+        "RF15",
+        "RF30",
+        "RNF06"
+      ],
+      "access_policy": "owning_administrator",
+      "behavior_tests": [
+        "test/security/test_draft_http.py::test_create_edit_clear_noop_and_copy"
+      ],
+      "permission_or_availability_tests": [
+        "test/security/test_draft_http.py::test_every_operation_requires_administrator"
+      ]
+    },
+    {
+      "operation": "POST /api/v1/admin/design-drafts",
+      "requirements": [
+        "RF12",
+        "RF15",
+        "RF30",
+        "RNF06"
+      ],
+      "access_policy": "owning_administrator",
+      "behavior_tests": [
+        "test/security/test_draft_http.py::test_create_edit_clear_noop_and_copy"
+      ],
+      "permission_or_availability_tests": [
+        "test/security/test_draft_http.py::test_every_operation_requires_administrator"
+      ]
+    },
+    {
+      "operation": "GET /api/v1/admin/design-drafts/{designId}",
+      "requirements": [
+        "RF12",
+        "RF15",
+        "RF30",
+        "RNF06"
+      ],
+      "access_policy": "owning_administrator",
+      "behavior_tests": [
+        "test/security/test_draft_http.py::test_create_edit_clear_noop_and_copy"
+      ],
+      "permission_or_availability_tests": [
+        "test/security/test_draft_http.py::test_every_operation_requires_administrator"
+      ]
+    },
+    {
+      "operation": "PUT /api/v1/admin/design-drafts/{designId}",
+      "requirements": [
+        "RF12",
+        "RF15",
+        "RF30",
+        "RNF06"
+      ],
+      "access_policy": "owning_administrator",
+      "behavior_tests": [
+        "test/security/test_draft_http.py::test_create_edit_clear_noop_and_copy"
+      ],
+      "permission_or_availability_tests": [
+        "test/security/test_draft_http.py::test_every_operation_requires_administrator"
+      ]
+    },
+    {
+      "operation": "POST /api/v1/admin/design-drafts/{designId}/copies",
+      "requirements": [
+        "RF12",
+        "RF15",
+        "RF30",
+        "RNF06"
+      ],
+      "access_policy": "owning_administrator",
+      "behavior_tests": [
+        "test/security/test_draft_http.py::test_create_edit_clear_noop_and_copy"
+      ],
+      "permission_or_availability_tests": [
+        "test/security/test_draft_http.py::test_every_operation_requires_administrator"
+      ]
+    },
+    {
+      "operation": "GET /api/v1/admin/design-drafts/{designId}/previews",
+      "requirements": [
+        "RF14",
+        "RNF01",
+        "RNF03"
+      ],
+      "access_policy": "owning_administrator",
+      "behavior_tests": [
+        "test/security/test_preview_http.py::test_pending_ready_download_and_revision_invalidation"
+      ],
+      "permission_or_availability_tests": [
+        "test/security/test_preview_http.py::test_anonymous_client_other_admin_and_unknown_draft"
+      ]
+    },
+    {
+      "operation": "POST /api/v1/admin/design-drafts/{designId}/previews/{side}/download-urls",
+      "requirements": [
+        "RF14",
+        "RNF01",
+        "RNF03"
+      ],
+      "access_policy": "owning_administrator",
+      "behavior_tests": [
+        "test/security/test_preview_http.py::test_pending_ready_download_and_revision_invalidation"
+      ],
+      "permission_or_availability_tests": [
+        "test/security/test_preview_http.py::test_anonymous_client_other_admin_and_unknown_draft"
+      ]
+    },
+    {
+      "operation": "GET /api/v1/admin/prints",
+      "requirements": [
+        "RF30",
+        "RNF03",
+        "RNF06"
+      ],
+      "access_policy": "administrator",
+      "behavior_tests": [
+        "test/security/test_print_http.py::test_real_admin_jwt_create_version_history_and_locations"
+      ],
+      "permission_or_availability_tests": [
+        "test/security/test_print_http.py::test_all_endpoints_reject_no_token_and_client_role"
+      ]
+    },
+    {
+      "operation": "POST /api/v1/admin/prints",
+      "requirements": [
+        "RF30",
+        "RNF03",
+        "RNF06"
+      ],
+      "access_policy": "administrator",
+      "behavior_tests": [
+        "test/security/test_print_http.py::test_real_admin_jwt_create_version_history_and_locations"
+      ],
+      "permission_or_availability_tests": [
+        "test/security/test_print_http.py::test_all_endpoints_reject_no_token_and_client_role"
+      ]
+    },
+    {
+      "operation": "GET /api/v1/admin/prints/{printId}",
+      "requirements": [
+        "RF30",
+        "RNF03",
+        "RNF06"
+      ],
+      "access_policy": "administrator",
+      "behavior_tests": [
+        "test/security/test_print_http.py::test_real_admin_jwt_create_version_history_and_locations"
+      ],
+      "permission_or_availability_tests": [
+        "test/security/test_print_http.py::test_all_endpoints_reject_no_token_and_client_role"
+      ]
+    },
+    {
+      "operation": "PATCH /api/v1/admin/prints/{printId}",
+      "requirements": [
+        "RF30",
+        "RNF03",
+        "RNF06"
+      ],
+      "access_policy": "administrator",
+      "behavior_tests": [
+        "test/security/test_print_http.py::test_http_lifecycle_retains_versions_and_returns_current_etag"
+      ],
+      "permission_or_availability_tests": [
+        "test/security/test_print_http.py::test_all_endpoints_reject_no_token_and_client_role"
+      ]
+    },
+    {
+      "operation": "GET /api/v1/admin/prints/{printId}/versions",
+      "requirements": [
+        "RF30",
+        "RNF03",
+        "RNF06"
+      ],
+      "access_policy": "administrator",
+      "behavior_tests": [
+        "test/security/test_print_http.py::test_real_admin_jwt_create_version_history_and_locations"
+      ],
+      "permission_or_availability_tests": [
+        "test/security/test_print_http.py::test_all_endpoints_reject_no_token_and_client_role"
+      ]
+    },
+    {
+      "operation": "POST /api/v1/admin/prints/{printId}/versions",
+      "requirements": [
+        "RF30",
+        "RNF03",
+        "RNF06"
+      ],
+      "access_policy": "administrator",
+      "behavior_tests": [
+        "test/security/test_print_http.py::test_real_admin_jwt_create_version_history_and_locations"
+      ],
+      "permission_or_availability_tests": [
+        "test/security/test_print_http.py::test_all_endpoints_reject_no_token_and_client_role"
+      ]
+    },
+    {
+      "operation": "GET /api/v1/admin/prints/{printId}/versions/{versionId}",
+      "requirements": [
+        "RF30",
+        "RNF03",
+        "RNF06"
+      ],
+      "access_policy": "administrator",
+      "behavior_tests": [
+        "test/security/test_print_http.py::test_real_admin_jwt_create_version_history_and_locations"
+      ],
+      "permission_or_availability_tests": [
+        "test/security/test_print_http.py::test_all_endpoints_reject_no_token_and_client_role"
+      ]
+    },
+    {
+      "operation": "GET /api/v1/admin/prints/{printId}/versions/{versionId}/thumbnail",
+      "requirements": [
+        "RF08",
+        "RNF01",
+        "RNF03"
+      ],
+      "access_policy": "administrator",
+      "behavior_tests": [
+        "test/security/test_thumbnail_http.py::test_admin_can_read_metadata_and_create_private_download"
+      ],
+      "permission_or_availability_tests": [
+        "test/security/test_thumbnail_http.py::test_guard_runs_before_accessing_images"
+      ]
+    },
+    {
+      "operation": "POST /api/v1/admin/prints/{printId}/versions/{versionId}/thumbnail/download-urls",
+      "requirements": [
+        "RF08",
+        "RNF01",
+        "RNF03"
+      ],
+      "access_policy": "administrator",
+      "behavior_tests": [
+        "test/security/test_thumbnail_http.py::test_admin_can_read_metadata_and_create_private_download"
+      ],
+      "permission_or_availability_tests": [
+        "test/security/test_thumbnail_http.py::test_guard_runs_before_accessing_images"
+      ]
+    },
+    {
+      "operation": "GET /api/v1/admin/template-versions",
+      "requirements": [
+        "RF11",
+        "RF13",
+        "RF30"
+      ],
+      "access_policy": "administrator",
+      "behavior_tests": [
+        "test/security/test_template_http.py::test_admin_creates_reads_and_versions_exact_mm_and_cm"
+      ],
+      "permission_or_availability_tests": [
+        "test/security/test_template_http.py::test_all_operations_enforce_admin_before_data_access"
+      ]
+    },
+    {
+      "operation": "POST /api/v1/admin/template-versions",
+      "requirements": [
+        "RF11",
+        "RF13",
+        "RF30"
+      ],
+      "access_policy": "administrator",
+      "behavior_tests": [
+        "test/security/test_template_http.py::test_admin_creates_reads_and_versions_exact_mm_and_cm"
+      ],
+      "permission_or_availability_tests": [
+        "test/security/test_template_http.py::test_all_operations_enforce_admin_before_data_access"
+      ]
+    },
+    {
+      "operation": "GET /api/v1/admin/template-versions/{templateId}",
+      "requirements": [
+        "RF11",
+        "RF13",
+        "RF30"
+      ],
+      "access_policy": "administrator",
+      "behavior_tests": [
+        "test/security/test_template_http.py::test_admin_creates_reads_and_versions_exact_mm_and_cm"
+      ],
+      "permission_or_availability_tests": [
+        "test/security/test_template_http.py::test_all_operations_enforce_admin_before_data_access"
+      ]
+    },
+    {
+      "operation": "POST /api/v1/admin/template-versions/{templateId}/design-analyses",
+      "requirements": [
+        "RF11",
+        "RF12",
+        "RF13",
+        "RF14",
+        "RF15"
+      ],
+      "access_policy": "administrator",
+      "behavior_tests": [
+        "test/security/test_design_analysis_http.py::test_analysis_returns_computed_geometry_and_safe_per_unit_money"
+      ],
+      "permission_or_availability_tests": [
+        "test/security/test_design_analysis_http.py::test_missing_jwt_and_customer_are_rejected_before_reading_originals"
+      ]
+    },
+    {
+      "operation": "POST /api/v1/files",
+      "requirements": [
+        "RF10",
+        "RNF01",
+        "RNF03"
+      ],
+      "access_policy": "owner_or_administrator",
+      "behavior_tests": [
+        "test/security/test_file_http.py::test_real_jwt_upload_metadata_and_private_download"
+      ],
+      "permission_or_availability_tests": [
+        "test/security/test_file_http.py::test_other_client_is_forbidden_before_storage_signing"
+      ]
+    },
+    {
+      "operation": "GET /api/v1/files/{fileId}",
+      "requirements": [
+        "RF10",
+        "RNF01",
+        "RNF03"
+      ],
+      "access_policy": "owner_or_administrator",
+      "behavior_tests": [
+        "test/security/test_file_http.py::test_real_jwt_upload_metadata_and_private_download"
+      ],
+      "permission_or_availability_tests": [
+        "test/security/test_file_http.py::test_other_client_is_forbidden_before_storage_signing"
+      ]
+    },
+    {
+      "operation": "POST /api/v1/files/{fileId}/download-urls",
+      "requirements": [
+        "RF10",
+        "RNF01",
+        "RNF03"
+      ],
+      "access_policy": "owner_or_administrator",
+      "behavior_tests": [
+        "test/security/test_file_http.py::test_real_jwt_upload_metadata_and_private_download"
+      ],
+      "permission_or_availability_tests": [
+        "test/security/test_file_http.py::test_other_client_is_forbidden_before_storage_signing"
+      ]
+    },
+    {
+      "operation": "GET /api/v1/prints",
+      "requirements": [
+        "RF08",
+        "RNF03",
+        "RNF05"
+      ],
+      "access_policy": "client_or_administrator",
+      "behavior_tests": [
+        "test/security/test_catalog_http.py::test_catalog_contract_and_download_use_real_signed_jwt"
+      ],
+      "permission_or_availability_tests": [
+        "test/security/test_catalog_http.py::test_every_catalog_operation_requires_jwt"
+      ]
+    },
+    {
+      "operation": "GET /api/v1/prints/{printId}",
+      "requirements": [
+        "RF08",
+        "RNF03",
+        "RNF05"
+      ],
+      "access_policy": "client_or_administrator",
+      "behavior_tests": [
+        "test/security/test_catalog_http.py::test_catalog_contract_and_download_use_real_signed_jwt"
+      ],
+      "permission_or_availability_tests": [
+        "test/security/test_catalog_http.py::test_every_catalog_operation_requires_jwt"
+      ]
+    },
+    {
+      "operation": "POST /api/v1/prints/{printId}/versions/{versionId}/thumbnail/download-urls",
+      "requirements": [
+        "RF08",
+        "RNF03",
+        "RNF05"
+      ],
+      "access_policy": "client_or_administrator",
+      "behavior_tests": [
+        "test/security/test_catalog_http.py::test_catalog_contract_and_download_use_real_signed_jwt"
+      ],
+      "permission_or_availability_tests": [
+        "test/security/test_catalog_http.py::test_every_catalog_operation_requires_jwt"
+      ]
+    },
+    {
+      "operation": "GET /health/live",
+      "requirements": [
+        "RNF08",
+        "RNF10"
+      ],
+      "access_policy": "public",
+      "behavior_tests": [
+        "test/e2e/test_http_foundation.py::test_health_and_contract"
+      ],
+      "permission_or_availability_tests": [
+        "test/e2e/test_http_foundation.py::test_liveness_is_independent_and_readiness_recovers"
+      ]
+    },
+    {
+      "operation": "GET /health/ready",
+      "requirements": [
+        "RNF08",
+        "RNF10"
+      ],
+      "access_policy": "public",
+      "behavior_tests": [
+        "test/e2e/test_http_foundation.py::test_health_and_contract"
+      ],
+      "permission_or_availability_tests": [
+        "test/e2e/test_http_foundation.py::test_liveness_is_independent_and_readiness_recovers"
+      ]
+    },
+    {
+      "operation": "RPC clusterjam.personalization.v1.PersonalizationDrafts/GetDesignDraft",
+      "requirements": [
+        "RNF03",
+        "RNF07"
+      ],
+      "access_policy": "owning_administrator",
+      "behavior_tests": [
+        "test/rpc/test_draft_rpc.py::test_own_snapshot_etag_source_oneof_and_local_jwks_cache"
+      ],
+      "permission_or_availability_tests": [
+        "test/rpc/test_draft_rpc.py::test_security_precedes_database_access"
+      ]
+    }
+  ],
+  "infrastructure_evidence": {
+    "RNF05": [
+      "infra/personalization/verify_read_performance.py"
+    ],
+    "RNF08": [
+      "infra/personalization/verify_https.py",
+      "infra/personalization/verify_operations.py"
+    ],
+    "RNF10": [
+      "infra/personalization/verify_stack.py",
+      "infra/personalization/verify_deploy_commands.py",
+      "infra/personalization/verify_operations.py"
+    ],
+    "RNF11": [
+      ".github/workflows/personalization-ci.yml"
+    ]
+  }
+}

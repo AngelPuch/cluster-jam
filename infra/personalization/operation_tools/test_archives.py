@@ -113,6 +113,8 @@ def test_object_metadata_rejects_unsafe_paths_and_limits(
         ("database", "another_db"),
         ("schema_revision", "future_revision"),
         ("format_version", True),
+        ("format_version", 1.0),
+        ("format_version", "1"),
         ("database_image", "untrusted:latest"),
         ("dump_bytes", True),
         ("dump_bytes", 0),
@@ -124,6 +126,8 @@ def test_object_metadata_rejects_unsafe_paths_and_limits(
         ("storage_origin", "https://user:password@supabase.example.test"),
         ("storage_origin", "https://supabase.example.test/?token=private"),
         ("pending_files", True),
+        ("pending_files", 0.0),
+        ("pending_files", "0"),
         ("row_counts", {}),
         ("objects", []),
     ],
@@ -380,3 +384,15 @@ def test_new_backup_cannot_be_nested_in_an_existing_backup(
         create_backup(context, bundle_directory / "nested")
     assert not (bundle_directory / "nested").exists()
     verify_bundle(bundle_directory)
+
+
+def test_index_only_upgrade_keeps_previous_backups_verifiable(
+    bundle_directory: Path,
+) -> None:
+    manifest = bundle_directory / "manifest.json"
+    data = json.loads(manifest.read_bytes())
+    data["schema_revision"] = "0001_personalization"
+    manifest.write_text(json.dumps(data), encoding="utf-8")
+    assert verify_bundle(bundle_directory).metadata["schema_revision"] == (
+        "0001_personalization"
+    )

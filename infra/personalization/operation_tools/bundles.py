@@ -18,6 +18,7 @@ from .runtime import (
     TABLES,
     ComposeContext,
     OperationError,
+    backup_revisions,
     external_directory,
     external_location,
     json_object,
@@ -78,9 +79,11 @@ def verify_bundle(directory: Path) -> BackupBundle:
     objects = metadata["objects"]
     origin = metadata["storage_origin"]
     if (
-        metadata["format_version"] != 1
+        not isinstance(metadata["format_version"], int)
+        or metadata["format_version"] != 1
         or isinstance(metadata["format_version"], bool)
-        or metadata["schema_revision"] != revision()
+        or not isinstance(metadata["schema_revision"], str)
+        or metadata["schema_revision"] not in backup_revisions()
         or metadata["database"] != "personalizacion_db"
         or not isinstance(metadata["backup_id"], str)
         or re.fullmatch(r"[0-9a-f]{32}", metadata["backup_id"]) is None
@@ -130,6 +133,7 @@ def verify_bundle(directory: Path) -> BackupBundle:
         or counts["archivo"] != len(entries)
         or any(entry.bucket != metadata["bucket"] for entry in entries)
         or isinstance(metadata["pending_files"], bool)
+        or not isinstance(metadata["pending_files"], int)
         or metadata["pending_files"]
         != sum(entry.state == "PENDIENTE_CARGA" for entry in entries)
     ):
@@ -288,7 +292,10 @@ def restore_snapshot(
             raise OperationError("RECOVERY_WORKSPACE_MUST_BE_NEW")
     recovery = RecoveryDatabase(bundle.metadata["database_image"], workspace)
     try:
-        snapshot = recovery.restore(bundle.directory / "database.dump")
+        snapshot = recovery.restore(
+            bundle.directory / "database.dump",
+            schema_revision=bundle.metadata["schema_revision"],
+        )
         if snapshot["counts"] != bundle.metadata["row_counts"] or snapshot[
             "objects"
         ] != [entry.mapping() for entry in bundle.objects]:

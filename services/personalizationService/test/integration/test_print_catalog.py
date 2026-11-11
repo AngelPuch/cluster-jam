@@ -2,6 +2,7 @@
 
 import os
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from uuid import UUID, uuid4
 
@@ -346,3 +347,30 @@ def test_corrupt_identity_or_unsafe_json_money_fails_closed(
     with pytest.raises(PrintError) as error:
         SqlAlchemyPrintCatalogRepository(engine, BUCKET).get(created.id)
     assert error.value.failure is PrintFailure.PRINT_DATABASE_UNAVAILABLE
+
+
+def test_shared_query_keeps_concurrent_cursors_and_detail_filters_isolated(
+    engine: Engine, seed: Seed
+) -> None:
+    prints = SqlAlchemyPrintRepository(engine, BUCKET)
+    identifiers = sorted(
+        prints.create(
+            seed.actor, seed.name + str(index), None, seed.file_id, index
+        ).id
+        for index in range(4)
+    )
+    publish_thumbnail(engine, seed.file_id)
+    catalog = SqlAlchemyPrintCatalogRepository(engine, BUCKET)
+
+    def read(index: int) -> None:
+        position = index % 4
+        item = catalog.get(identifiers[position])
+        assert item is not None and item.id == identifiers[position]
+        page = catalog.list(identifiers[position], 2)
+        assert [item.id for item in page] == (
+            identifiers[position + 1 : position + 3]
+        )
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        list(executor.map(read, range(32)))
+    assert [item.id for item in catalog.list(None, 20)] == identifiers
