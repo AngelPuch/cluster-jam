@@ -1,0 +1,16 @@
+spring:
+    application:
+        name: catalog-service
+
+server:
+    address: "${HTTP_ADDRESS:127.0.0.1}"
+    port: "${HTTP_PORT:8083}"
+    error:
+        include-message: never
+        include-stacktrace: never
+        include-exception: false
+        include-binding-errors: never
+
+catalog:
+    environment: "${APP_ENV:development}"
+    readiness-available: "${CATALOG_READINESS_AVAILABLE:true}"
