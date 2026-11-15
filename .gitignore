@@ -12,6 +12,8 @@ coverage/
 target/
 .gradle/
 build/
+out/
+*.iml
 
 # Python
 __pycache__/

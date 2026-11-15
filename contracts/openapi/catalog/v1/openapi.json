@@ -1,0 +1,143 @@
+{
+  "openapi" : "3.1.0",
+  "info" : {
+    "description" : "HTTP API for the Cluster JAM catalog and inventory service.",
+    "title" : "Cluster JAM Catalog Service",
+    "version" : "1.0.0"
+  },
+  "servers" : [ {
+    "url" : "/"
+  } ],
+  "tags" : [ {
+    "description" : "Technical health checks.",
+    "name" : "Health"
+  } ],
+  "paths" : {
+    "/health/live" : {
+      "get" : {
+        "operationId" : "live",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HealthResponse"
+                }
+              }
+            },
+            "description" : "The process is alive."
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description" : "RFC 9457 Problem Details."
+          }
+        },
+        "summary" : "Check if the service process can respond.",
+        "tags" : [ "Health" ]
+      }
+    },
+    "/health/ready" : {
+      "get" : {
+        "operationId" : "ready",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/HealthResponse"
+                }
+              }
+            },
+            "description" : "The service is ready."
+          },
+          "503" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description" : "The service is temporarily unavailable."
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description" : "RFC 9457 Problem Details."
+          }
+        },
+        "summary" : "Check if the service is ready to accept traffic.",
+        "tags" : [ "Health" ]
+      }
+    }
+  },
+  "components" : {
+    "schemas" : {
+      "HealthResponse" : {
+        "type" : "object",
+        "properties" : {
+          "status" : {
+            "type" : "string",
+            "enum" : [ "ok" ],
+            "example" : "ok"
+          }
+        },
+        "required" : [ "status" ]
+      },
+      "ProblemDetails" : {
+        "type" : "object",
+        "properties" : {
+          "code" : {
+            "type" : "string",
+            "example" : "SERVICE_UNAVAILABLE"
+          },
+          "detail" : {
+            "type" : "string",
+            "example" : "The service is temporarily unavailable."
+          },
+          "errors" : {
+            "type" : "array",
+            "description" : "Controlled validation messages when applicable.",
+            "items" : {
+              "type" : "string"
+            }
+          },
+          "instance" : {
+            "type" : "string",
+            "example" : "/health/ready"
+          },
+          "status" : {
+            "type" : "integer",
+            "format" : "int32",
+            "example" : 503
+          },
+          "title" : {
+            "type" : "string",
+            "example" : "Service Unavailable"
+          },
+          "traceId" : {
+            "type" : "string",
+            "example" : "4bf92f3577b34da6a3ce929d0e0e4736",
+            "pattern" : "^[0-9a-f]{32}$"
+          },
+          "type" : {
+            "type" : "string",
+            "example" : "about:blank"
+          }
+        },
+        "required" : [ "code", "detail", "instance", "status", "title", "traceId", "type" ]
+      }
+    }
+  }
+}

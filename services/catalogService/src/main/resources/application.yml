@@ -1,4 +1,7 @@
 spring:
+    main:
+        banner-mode: off
+        log-startup-info: false
     application:
         name: catalog-service
 
@@ -14,3 +17,32 @@ server:
 catalog:
     environment: "${APP_ENV:development}"
     readiness-available: "${CATALOG_READINESS_AVAILABLE:true}"
+
+springdoc:
+    api-docs:
+        enabled: "${CATALOG_DOCS_ENABLED:false}"
+        path: /openapi.json
+    swagger-ui:
+        enabled: "${CATALOG_DOCS_ENABLED:false}"
+        path: /docs
+        disable-swagger-default-url: true
+    paths-to-match: /health/**,/api/v1/**
+    writer-with-order-by-keys: true
+    writer-with-default-pretty-printer: true
+
+logging:
+    level:
+        root: WARN
+        org.springframework.web.servlet.PageNotFound: ERROR
+        com.clusterjam.catalog: "${LOG_LEVEL:INFO}"
+    structured:
+        format:
+            console: logstash
+        json:
+            exclude: "@timestamp,@version,level_value,thread_name,logger_name,stack_trace"
+            customizer: com.clusterjam.catalog.infrastructure.observability.UtcLogTimestamp
+            add:
+                service_name: "${spring.application.name}"
+                service_version: "${SERVICE_VERSION:@project.version@}"
+                environment: "${catalog.environment}"
+                instance_id: "${INSTANCE_ID:${random.uuid}}"
