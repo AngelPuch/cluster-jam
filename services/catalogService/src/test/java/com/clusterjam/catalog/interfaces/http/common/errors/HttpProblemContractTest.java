@@ -34,14 +34,14 @@ class HttpProblemContractTest {
 
     @Test
     void missingRouteUsesProblemDetailsAndContinuesTrace() throws IOException, InterruptedException {
-        var response = send("GET", "/api/v1/missing?debug=private-value");
+        var response = send("GET", "/swagger-ui/missing-test-file.js?debug=private-value");
         var problem = json.readTree(response.body());
 
         assertEquals(404, response.statusCode());
         assertEquals("application/problem+json", response.headers().firstValue("Content-Type").orElseThrow());
         assertEquals("no-store", response.headers().firstValue("Cache-Control").orElseThrow());
         assertEquals("NOT_FOUND", problem.get("code").stringValue());
-        assertEquals("/api/v1/missing", problem.get("instance").stringValue());
+        assertEquals("/swagger-ui/missing-test-file.js", problem.get("instance").stringValue());
         assertEquals(TRACE_ID, problem.get("traceId").stringValue());
         assertEquals(TRACE_ID, response.headers().firstValue("X-Trace-Id").orElseThrow());
         UUID.fromString(response.headers().firstValue("X-Request-Id").orElseThrow());
