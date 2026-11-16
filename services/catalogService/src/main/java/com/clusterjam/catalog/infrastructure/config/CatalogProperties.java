@@ -7,8 +7,7 @@ import org.springframework.validation.annotation.Validated;
 @Validated
 @ConfigurationProperties(prefix = "catalog")
 public record CatalogProperties(
-    @NotNull Environment environment,
-    boolean readinessAvailable
+    @NotNull Environment environment
 ) {
 
     public enum Environment {

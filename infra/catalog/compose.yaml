@@ -1,0 +1,24 @@
+name: clusterjam-catalog-dev
+
+services:
+    db-catalogo:
+        image: postgres:18.7-bookworm
+        environment:
+            POSTGRES_DB: catalogo_db
+            POSTGRES_USER: postgres
+            POSTGRES_PASSWORD: "${CATALOG_POSTGRES_ADMIN_PASSWORD:?Set CATALOG_POSTGRES_ADMIN_PASSWORD}"
+            CATALOG_DB_PASSWORD: "${CATALOG_DB_PASSWORD:?Set CATALOG_DB_PASSWORD}"
+            CATALOG_MIGRATION_PASSWORD: "${CATALOG_MIGRATION_PASSWORD:?Set CATALOG_MIGRATION_PASSWORD}"
+        ports:
+            - "127.0.0.1:5436:5432"
+        volumes:
+            - catalog-data:/var/lib/postgresql
+            - ./postgres/001-bootstrap.sql:/docker-entrypoint-initdb.d/001-bootstrap.sql:ro
+        healthcheck:
+            test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "postgres", "-d", "catalogo_db"]
+            interval: 2s
+            timeout: 3s
+            retries: 15
+
+volumes:
+    catalog-data:
