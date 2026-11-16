@@ -3,12 +3,17 @@ package com.clusterjam.catalog.interfaces.http.common.errors;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.clusterjam.catalog.application.products.CatalogProductException;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.dao.TransientDataAccessException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -61,6 +66,30 @@ public class ProblemDetailsAdvice extends ResponseEntityExceptionHandler {
                 HttpStatus.UNPROCESSABLE_CONTENT, headers, httpRequest, List.of("Invalid request parameters.")));
         }
         return convert(mapper.response(status, headers, httpRequest, List.of()));
+    }
+
+    @ExceptionHandler(CatalogProductException.class)
+    public ResponseEntity<?> catalogProduct(CatalogProductException exception, HttpServletRequest request) {
+        ProblemCode code = switch (exception.reason()) {
+            case MISSING -> ProblemCode.NOT_FOUND;
+            case DUPLICATE, INVALID_TRANSITION -> ProblemCode.CONFLICT;
+            case INVALID_REFERENCE -> ProblemCode.UNPROCESSABLE_ENTITY;
+            case STALE -> ProblemCode.PRECONDITION_FAILED;
+        };
+        return mapper.response(code, request);
+    }
+
+    @ExceptionHandler(OptimisticLockingFailureException.class)
+    public ResponseEntity<?> concurrentEdit(HttpServletRequest request) {
+        return mapper.response(ProblemCode.PRECONDITION_FAILED, request);
+    }
+
+    @ExceptionHandler({
+        DataAccessResourceFailureException.class, TransientDataAccessException.class,
+        CannotCreateTransactionException.class
+    })
+    public ResponseEntity<?> postgresUnavailable(HttpServletRequest request) {
+        return mapper.response(ProblemCode.SERVICE_UNAVAILABLE, request);
     }
 
     @ExceptionHandler(Exception.class)

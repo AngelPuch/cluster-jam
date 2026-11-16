@@ -9,9 +9,10 @@ public final class PostgresReadinessProbe implements ReadinessProbe {
     private static final String CHECK_SCHEMA = """
         SELECT current_database() = 'catalogo_db'
             AND bool_and(success AND type = 'SQL')
-            AND array_agg(version::text ORDER BY installed_rank) = ARRAY['1', '2']
+            AND array_agg(version::text ORDER BY installed_rank) = ARRAY['1', '2', '3', '4']
             AND array_agg(script::text ORDER BY installed_rank) = ARRAY[
-                'V1__create_catalog_schema.sql', 'V2__seed_catalog_reference_data.sql'
+                'V1__create_catalog_schema.sql', 'V2__seed_catalog_reference_data.sql',
+                'V3__add_catalog_admin_audit.sql', 'V4__grant_catalog_orm_inserts.sql'
             ]
         FROM app.flyway_schema_history
         """;

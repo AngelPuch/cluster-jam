@@ -13,6 +13,506 @@
     "name" : "Health"
   } ],
   "paths" : {
+    "/api/v1/admin/products" : {
+      "get" : {
+        "operationId" : "products",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 20,
+            "maximum" : 100,
+            "minimum" : 1
+          }
+        }, {
+          "in" : "query",
+          "name" : "after",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageViewProductView"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description" : "RFC 9457 Problem Details."
+          }
+        },
+        "security" : [ {
+          "supabaseBearer" : [ ]
+        } ],
+        "summary" : "List products for catalog administrators.",
+        "tags" : [ "Admin catalog" ]
+      },
+      "post" : {
+        "operationId" : "createProduct",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreateProduct"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProductView"
+                }
+              }
+            },
+            "description" : "Draft created.",
+            "headers" : {
+              "ETag" : {
+                "description" : "Strong validator for the returned representation.",
+                "schema" : {
+                  "type" : "string"
+                },
+                "style" : "simple"
+              },
+              "Location" : {
+                "schema" : {
+                  "type" : "string"
+                },
+                "style" : "simple"
+              }
+            }
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description" : "RFC 9457 Problem Details."
+          }
+        },
+        "security" : [ {
+          "supabaseBearer" : [ ]
+        } ],
+        "summary" : "Create a draft product.",
+        "tags" : [ "Admin catalog" ]
+      }
+    },
+    "/api/v1/admin/products/{productId}" : {
+      "get" : {
+        "operationId" : "product",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "productId",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProductView"
+                }
+              }
+            },
+            "description" : "Product.",
+            "headers" : {
+              "ETag" : {
+                "description" : "Strong validator for the returned representation.",
+                "schema" : {
+                  "type" : "string"
+                },
+                "style" : "simple"
+              }
+            }
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description" : "RFC 9457 Problem Details."
+          }
+        },
+        "security" : [ {
+          "supabaseBearer" : [ ]
+        } ],
+        "summary" : "Read a product and its current revision.",
+        "tags" : [ "Admin catalog" ]
+      },
+      "patch" : {
+        "operationId" : "editProduct",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "productId",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "description" : "One strong ETag returned by this resource.",
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/EditProduct"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProductView"
+                }
+              }
+            },
+            "description" : "Product updated.",
+            "headers" : {
+              "ETag" : {
+                "description" : "Strong validator for the returned representation.",
+                "schema" : {
+                  "type" : "string"
+                },
+                "style" : "simple"
+              }
+            }
+          },
+          "409" : {
+            "$ref" : "#/components/responses/CatalogConflict"
+          },
+          "412" : {
+            "$ref" : "#/components/responses/CatalogStaleRevision"
+          },
+          "428" : {
+            "$ref" : "#/components/responses/CatalogMissingRevision"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description" : "RFC 9457 Problem Details."
+          }
+        },
+        "security" : [ {
+          "supabaseBearer" : [ ]
+        } ],
+        "summary" : "Edit, publish or retire a product using its current revision.",
+        "tags" : [ "Admin catalog" ]
+      }
+    },
+    "/api/v1/admin/products/{productId}/variants" : {
+      "get" : {
+        "operationId" : "variants",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "productId",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 20,
+            "maximum" : 100,
+            "minimum" : 1
+          }
+        }, {
+          "in" : "query",
+          "name" : "after",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageViewVariantView"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description" : "RFC 9457 Problem Details."
+          }
+        },
+        "security" : [ {
+          "supabaseBearer" : [ ]
+        } ],
+        "summary" : "List the variants of a product for catalog administrators.",
+        "tags" : [ "Admin catalog" ]
+      },
+      "post" : {
+        "operationId" : "createVariant",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "productId",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/CreateVariant"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/VariantView"
+                }
+              }
+            },
+            "description" : "Draft variant created.",
+            "headers" : {
+              "ETag" : {
+                "description" : "Strong validator for the returned representation.",
+                "schema" : {
+                  "type" : "string"
+                },
+                "style" : "simple"
+              },
+              "Location" : {
+                "schema" : {
+                  "type" : "string"
+                },
+                "style" : "simple"
+              }
+            }
+          },
+          "409" : {
+            "$ref" : "#/components/responses/CatalogConflict"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description" : "RFC 9457 Problem Details."
+          }
+        },
+        "security" : [ {
+          "supabaseBearer" : [ ]
+        } ],
+        "summary" : "Create a draft variant with a zero inventory balance.",
+        "tags" : [ "Admin catalog" ]
+      }
+    },
+    "/api/v1/admin/products/{productId}/variants/{variantId}" : {
+      "get" : {
+        "operationId" : "variant",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "productId",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "in" : "path",
+          "name" : "variantId",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/VariantView"
+                }
+              }
+            },
+            "description" : "Variant.",
+            "headers" : {
+              "ETag" : {
+                "description" : "Strong validator for the returned representation.",
+                "schema" : {
+                  "type" : "string"
+                },
+                "style" : "simple"
+              }
+            }
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description" : "RFC 9457 Problem Details."
+          }
+        },
+        "security" : [ {
+          "supabaseBearer" : [ ]
+        } ],
+        "summary" : "Read a variant that belongs to the product and its current revision.",
+        "tags" : [ "Admin catalog" ]
+      },
+      "patch" : {
+        "operationId" : "editVariant",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "productId",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "in" : "path",
+          "name" : "variantId",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "description" : "One strong ETag returned by this resource.",
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/EditVariant"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/VariantView"
+                }
+              }
+            },
+            "description" : "Variant updated.",
+            "headers" : {
+              "ETag" : {
+                "description" : "Strong validator for the returned representation.",
+                "schema" : {
+                  "type" : "string"
+                },
+                "style" : "simple"
+              }
+            }
+          },
+          "409" : {
+            "$ref" : "#/components/responses/CatalogConflict"
+          },
+          "412" : {
+            "$ref" : "#/components/responses/CatalogStaleRevision"
+          },
+          "428" : {
+            "$ref" : "#/components/responses/CatalogMissingRevision"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description" : "RFC 9457 Problem Details."
+          }
+        },
+        "security" : [ {
+          "supabaseBearer" : [ ]
+        } ],
+        "summary" : "Edit the price, publish or retire a variant using its current revision.",
+        "tags" : [ "Admin catalog" ]
+      }
+    },
     "/health/live" : {
       "get" : {
         "operationId" : "live",
@@ -83,7 +583,140 @@
     }
   },
   "components" : {
+    "responses" : {
+      "CatalogConflict" : {
+        "content" : {
+          "application/problem+json" : {
+            "schema" : {
+              "$ref" : "#/components/schemas/ProblemDetails"
+            }
+          }
+        },
+        "description" : "Duplicate SKU or combination, or invalid state transition."
+      },
+      "CatalogMissingRevision" : {
+        "content" : {
+          "application/problem+json" : {
+            "schema" : {
+              "$ref" : "#/components/schemas/ProblemDetails"
+            }
+          }
+        },
+        "description" : "A current strong ETag is required in If-Match."
+      },
+      "CatalogStaleRevision" : {
+        "content" : {
+          "application/problem+json" : {
+            "schema" : {
+              "$ref" : "#/components/schemas/ProblemDetails"
+            }
+          }
+        },
+        "description" : "The validator does not match the current revision."
+      }
+    },
     "schemas" : {
+      "CreateProduct" : {
+        "type" : "object",
+        "additionalProperties" : false,
+        "properties" : {
+          "description" : {
+            "type" : [ "string", "null" ],
+            "maxLength" : 2000,
+            "minLength" : 0,
+            "pattern" : "[^\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F\\x7F-\\x9F]*"
+          },
+          "name" : {
+            "type" : "string",
+            "maxLength" : 120,
+            "minLength" : 0,
+            "pattern" : "[^\\x00-\\x1F\\x7F-\\x9F]+"
+          },
+          "typeId" : {
+            "type" : "integer",
+            "format" : "int32",
+            "exclusiveMinimum" : 0,
+            "maximum" : 32767
+          }
+        },
+        "required" : [ "name", "typeId" ]
+      },
+      "CreateVariant" : {
+        "type" : "object",
+        "additionalProperties" : false,
+        "properties" : {
+          "basePriceCents" : {
+            "type" : "integer",
+            "format" : "int64",
+            "exclusiveMinimum" : 0,
+            "maximum" : 10000000
+          },
+          "colorId" : {
+            "type" : "integer",
+            "format" : "int32",
+            "exclusiveMinimum" : 0,
+            "maximum" : 32767
+          },
+          "sizeId" : {
+            "type" : "integer",
+            "format" : "int32",
+            "exclusiveMinimum" : 0,
+            "maximum" : 32767
+          },
+          "sku" : {
+            "type" : "string",
+            "minLength" : 1,
+            "pattern" : "^[A-Z0-9][A-Z0-9_.-]{0,59}$"
+          }
+        },
+        "required" : [ "basePriceCents", "colorId", "sizeId", "sku" ]
+      },
+      "EditProduct" : {
+        "type" : "object",
+        "additionalProperties" : false,
+        "properties" : {
+          "description" : {
+            "type" : [ "string", "null" ],
+            "maxLength" : 2000,
+            "minLength" : 0,
+            "pattern" : "[^\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F\\x7F-\\x9F]*"
+          },
+          "name" : {
+            "type" : "string",
+            "maxLength" : 120,
+            "minLength" : 0,
+            "pattern" : "[^\\x00-\\x1F\\x7F-\\x9F]+"
+          },
+          "status" : {
+            "type" : "string",
+            "enum" : [ "DRAFT", "PUBLISHED", "RETIRED" ]
+          },
+          "typeId" : {
+            "type" : "integer",
+            "format" : "int32",
+            "exclusiveMinimum" : 0,
+            "maximum" : 32767
+          }
+        },
+        "required" : [ "name", "status", "typeId" ]
+      },
+      "EditVariant" : {
+        "type" : "object",
+        "additionalProperties" : false,
+        "properties" : {
+          "basePriceCents" : {
+            "type" : "integer",
+            "format" : "int64",
+            "exclusiveMinimum" : 0,
+            "maximum" : 10000000
+          },
+          "status" : {
+            "type" : "string",
+            "enum" : [ "DRAFT", "PUBLISHED", "RETIRED" ]
+          }
+        },
+        "required" : [ "basePriceCents", "status" ]
+      },
       "HealthResponse" : {
         "type" : "object",
         "properties" : {
@@ -94,6 +727,36 @@
           }
         },
         "required" : [ "status" ]
+      },
+      "PageViewProductView" : {
+        "type" : "object",
+        "properties" : {
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ProductView"
+            }
+          },
+          "nextCursor" : {
+            "type" : [ "string", "null" ],
+            "format" : "uuid"
+          }
+        }
+      },
+      "PageViewVariantView" : {
+        "type" : "object",
+        "properties" : {
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/VariantView"
+            }
+          },
+          "nextCursor" : {
+            "type" : [ "string", "null" ],
+            "format" : "uuid"
+          }
+        }
       },
       "ProblemDetails" : {
         "type" : "object",
@@ -137,6 +800,65 @@
           }
         },
         "required" : [ "code", "detail", "instance", "status", "title", "traceId", "type" ]
+      },
+      "ProductView" : {
+        "type" : "object",
+        "properties" : {
+          "description" : {
+            "type" : [ "string", "null" ]
+          },
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string",
+            "enum" : [ "DRAFT", "PUBLISHED", "RETIRED" ]
+          },
+          "typeId" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "VariantView" : {
+        "type" : "object",
+        "properties" : {
+          "basePriceCents" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "colorId" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "currency" : {
+            "type" : "string",
+            "enum" : [ "MXN" ]
+          },
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "productId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "sizeId" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "sku" : {
+            "type" : "string"
+          },
+          "status" : {
+            "type" : "string",
+            "enum" : [ "DRAFT", "PUBLISHED", "RETIRED" ]
+          }
+        }
       }
     },
     "securitySchemes" : {
