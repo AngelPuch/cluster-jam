@@ -11,6 +11,26 @@ spring:
         log-startup-info: false
     application:
         name: catalog-service
+    datasource:
+        url: "${CATALOG_DB_URL:jdbc:postgresql://127.0.0.1:5436/catalogo_db}"
+        username: "${CATALOG_DB_USER:app_catalogo}"
+        password: "${CATALOG_DB_PASSWORD:}"
+        hikari:
+            minimum-idle: 0
+            maximum-pool-size: 8
+            connection-timeout: 1000
+            validation-timeout: 500
+            initialization-fail-timeout: -1
+            data-source-properties:
+                "[connectTimeout]": "2"
+                "[socketTimeout]": "3"
+                "[cancelSignalTimeout]": "1"
+    jdbc:
+        template:
+            query-timeout: 2s
+    sql:
+        init:
+            mode: never
 
 server:
     address: "${HTTP_ADDRESS:127.0.0.1}"
@@ -24,7 +44,6 @@ server:
 
 catalog:
     environment: "${APP_ENV:development}"
-    readiness-available: "${CATALOG_READINESS_AVAILABLE:true}"
 
     security:
         supabase-url: "${SUPABASE_URL:}"

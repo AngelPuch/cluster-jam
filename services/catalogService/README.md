@@ -1,17 +1,43 @@
 # Cluster JAM Catalog Service
 
-Spring Boot service for catalog and inventory. This version exposes health
-checks, an OpenAPI contract, correlated JSON request logs and stateless
-authorization for future catalog routes.
+Spring Boot service for catalog and inventory. It provides health checks,
+an OpenAPI contract, correlated JSON request logs and stateless authorization.
+Flyway versions the PostgreSQL catalog schema and its reference data.
 
 ## Build and run
 
-Use JDK 21 and the included Maven Wrapper.
+Use JDK 21 and the included Maven Wrapper. For local PostgreSQL, start
+Docker Desktop and run the following commands from this service directory
+in PowerShell 7. Copy .env.example to .env and fill the three database
+passwords with distinct local values. Use unquoted values, for example
+random hexadecimal strings. Keep .env out of Git.
 
-On Windows PowerShell:
+    docker compose --env-file .env -f ../../infra/catalog/compose.yaml up -d --wait
+    foreach ($line in Get-Content -LiteralPath .env) {
+        if ($line -match '^([A-Z][A-Z0-9_]*)=(.*)$') {
+            [Environment]::SetEnvironmentVariable($Matches[1], $Matches[2], 'Process')
+        }
+    }
 
-    .\mvnw.cmd clean verify
-    $env:CATALOG_DOCS_ENABLED = 'true'
+Apply the migrations explicitly as migrator_catalogo. The API runs as app_catalogo.
+
+    $env:FLYWAY_URL = $env:CATALOG_DB_URL
+    $env:FLYWAY_USER = 'migrator_catalogo'
+    $env:FLYWAY_PASSWORD = $env:CATALOG_MIGRATION_PASSWORD
+    try {
+        .\mvnw.cmd -B flyway:migrate flyway:validate flyway:info
+        if ($LASTEXITCODE -ne 0) { throw 'Catalog migrations failed.' }
+    } finally {
+        Remove-Item Env:FLYWAY_URL, Env:FLYWAY_USER, Env:FLYWAY_PASSWORD, Env:CATALOG_MIGRATION_PASSWORD, Env:CATALOG_POSTGRES_ADMIN_PASSWORD -ErrorAction SilentlyContinue
+    }
+
+    $env:CATALOG_VERIFY_POSTGRES = 'true'
+    try {
+        .\mvnw.cmd clean verify
+        if ($LASTEXITCODE -ne 0) { throw 'Catalog verification failed.' }
+    } finally {
+        Remove-Item Env:CATALOG_VERIFY_POSTGRES -ErrorAction SilentlyContinue
+    }
     .\mvnw.cmd spring-boot:run
 
 The default base URL is http://127.0.0.1:8083.
@@ -19,14 +45,38 @@ The default base URL is http://127.0.0.1:8083.
 | Endpoint | Result |
 | --- | --- |
 | GET /health/live | 200 and status ok when the HTTP process responds |
-| GET /health/ready | 200 and status ok, or 503 with Problem Details |
+| GET /health/ready | 200 when PostgreSQL and the expected Flyway history are available, otherwise 503 with Problem Details |
 | GET /docs | Swagger UI when CATALOG_DOCS_ENABLED is true |
 | GET /openapi.json | OpenAPI JSON when CATALOG_DOCS_ENABLED is true |
 
 Set APP_ENV, HTTP_ADDRESS or HTTP_PORT to override the local defaults.
-Set CATALOG_READINESS_AVAILABLE=false and restart to simulate a dependency
-failure. The initial probe reads this setting. A later branch will connect
-it to PostgreSQL and schema checks.
+CATALOG_DB_URL, CATALOG_DB_USER and CATALOG_DB_PASSWORD configure the API
+connection. The local database listens on 127.0.0.1:5436. Use a trusted
+PostgreSQL server and certificate verification with sslmode=verify-full
+outside local development.
+
+The bootstrap script runs when the PostgreSQL volume is first initialized.
+From this module, migrations live in
+src/main/java/com/clusterjam/catalog/infrastructure/database/migrations.
+Flyway resolves that directory from the module's pom.xml and runs from the
+checkout before the application JAR is deployed. V1 creates the catalog
+tables and indexes. V2 seeds reference data. Use new versioned files for
+changes to deployed schemas. The optional local fixture lives in
+src/test/resources/fixtures/catalog-demo.sql.
+
+Run Maven verify alone for the HTTP and contract checks without a database.
+The ready-success HTTP test is enabled by CATALOG_VERIFY_POSTGRES after
+the migrations have run.
+
+To stop the local database and preserve its data:
+
+    docker compose --env-file .env -f ../../infra/catalog/compose.yaml stop db-catalogo
+
+The API leaves its HTTP listener available while PostgreSQL is unavailable.
+Readiness checks versions 1 and 2 on each request and recovers when the
+database and history are accessible. Flyway validate verifies checksums.
+The connection pool allows up to eight connections and waits up to 1 s
+for one. The API role has a 500 ms lock limit and 1.5 s statement limit.
 
 The .env.example file documents the variables. Set them in the shell or the
 IDE run configuration. Errors carry traceId when the request enters the HTTP
