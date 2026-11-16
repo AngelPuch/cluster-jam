@@ -13,6 +13,7 @@ public enum ProblemCode {
     PAYLOAD_TOO_LARGE(413, "The request content exceeds the allowed size."),
     UNSUPPORTED_MEDIA_TYPE(415, "The request content type is not supported."),
     UNPROCESSABLE_ENTITY(422, "The request did not pass validation."),
+    PRECONDITION_REQUIRED(428, "An If-Match precondition is required."),
     TOO_MANY_REQUESTS(429, "Too many requests were sent."),
     INTERNAL_SERVER_ERROR(500, "An unexpected error occurred."),
     SERVICE_UNAVAILABLE(503, "The service is temporarily unavailable."),

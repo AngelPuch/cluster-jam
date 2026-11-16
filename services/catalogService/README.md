@@ -3,6 +3,9 @@
 Spring Boot service for catalog and inventory. It provides health checks,
 an OpenAPI contract, correlated JSON request logs and stateless authorization.
 Flyway versions the PostgreSQL catalog schema and its reference data.
+Catalog administrators can manage products, variants, prices and publication.
+Spring Data JPA and Hibernate persist the catalog and enforce optimistic
+revisions. The readiness check reads the Flyway history through JDBC.
 
 ## Build and run
 
@@ -31,13 +34,7 @@ Apply the migrations explicitly as migrator_catalogo. The API runs as app_catalo
         Remove-Item Env:FLYWAY_URL, Env:FLYWAY_USER, Env:FLYWAY_PASSWORD, Env:CATALOG_MIGRATION_PASSWORD, Env:CATALOG_POSTGRES_ADMIN_PASSWORD -ErrorAction SilentlyContinue
     }
 
-    $env:CATALOG_VERIFY_POSTGRES = 'true'
-    try {
-        .\mvnw.cmd clean verify
-        if ($LASTEXITCODE -ne 0) { throw 'Catalog verification failed.' }
-    } finally {
-        Remove-Item Env:CATALOG_VERIFY_POSTGRES -ErrorAction SilentlyContinue
-    }
+    .\mvnw.cmd clean verify
     .\mvnw.cmd spring-boot:run
 
 The default base URL is http://127.0.0.1:8083.
@@ -60,21 +57,29 @@ From this module, migrations live in
 src/main/java/com/clusterjam/catalog/infrastructure/database/migrations.
 Flyway resolves that directory from the module's pom.xml and runs from the
 checkout before the application JAR is deployed. V1 creates the catalog
-tables and indexes. V2 seeds reference data. Use new versioned files for
-changes to deployed schemas. The optional local fixture lives in
-src/test/resources/fixtures/catalog-demo.sql.
+tables and indexes. V2 seeds reference data. V3 adds the local admin audit
+and the initial write permissions. V4 grants Hibernate the insert columns
+it needs for generated identifiers and revision values. Use new versioned
+files for changes to deployed schemas.
 
-Run Maven verify alone for the HTTP and contract checks without a database.
-The ready-success HTTP test is enabled by CATALOG_VERIFY_POSTGRES after
-the migrations have run.
+Run Maven verify for the standard HTTP and contract checks. For the admin
+integration tests, set CATALOG_VERIFY_POSTGRES=true and load the database
+environment for a migrated development or test database. The tests send
+requests through the API as app_catalogo and use CATALOG_MIGRATION_PASSWORD
+with migrator_catalogo to inspect the inventory and audit rows. Hibernate
+validates its mappings against that database during the integration run. The test
+requests create sample records. Clear the test flag and migration password
+before launching the API.
 
 To stop the local database and preserve its data:
 
     docker compose --env-file .env -f ../../infra/catalog/compose.yaml stop db-catalogo
 
 The API leaves its HTTP listener available while PostgreSQL is unavailable.
-Readiness checks versions 1 and 2 on each request and recovers when the
+Readiness checks versions 1 through 4 on each request and recovers when the
 database and history are accessible. Flyway validate verifies checksums.
+The application starts with Hibernate DDL generation disabled and checks
+database availability through readiness.
 The connection pool allows up to eight connections and waits up to 1 s
 for one. The API role has a 500 ms lock limit and 1.5 s statement limit.
 
@@ -101,6 +106,18 @@ In local development, an unset issuer leaves that credential type unavailable.
 Set SUPABASE_URL for staging and production. Docs are enabled locally with
 CATALOG_DOCS_ENABLED=true. Set CATALOG_WRITES_PER_MINUTE or
 CATALOG_MAX_JSON_BYTES to change the per-instance write quota or JSON limit.
+
+## Manage products and variants
+
+Use an administrator Bearer token with /api/v1/admin/products and its nested
+/{productId}/variants resource. GET lists results with limit and after, POST
+creates a draft, and PATCH on an item edits its fields or changes its status.
+Read the item's ETag and send it verbatim as If-Match on PATCH.
+
+Use DRAFT, PUBLISHED or RETIRED. Publication and retirement preserve the
+resource IDs. A variant has a fixed SKU, size and color and an editable price
+in MXN cents. Variant creation initializes the inventory and records the
+admin audit in the same transaction.
 
 ## Update the OpenAPI snapshot
 

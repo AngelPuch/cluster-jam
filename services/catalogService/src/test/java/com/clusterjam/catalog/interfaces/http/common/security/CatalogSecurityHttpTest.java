@@ -60,7 +60,7 @@ import tools.jackson.databind.json.JsonMapper;
 class CatalogSecurityHttpTest {
 
     private static final String PRODUCTS = "/api/v1/products";
-    private static final String ADMIN_PRODUCTS = "/api/v1/admin/products";
+    private static final String ADMIN_PROBE = "/api/v1/admin/security-probe";
     private static final String VARIANT = "/api/v1/internal/variants/demo";
     private static final String RESERVATIONS = "/api/v1/internal/stock-reservations";
     private static final LocalJwks KEYS = new LocalJwks();
@@ -93,9 +93,9 @@ class CatalogSecurityHttpTest {
 
         String clientToken = human("cliente", Instant.now().plusSeconds(180));
         assertEquals(200, send("GET", PRODUCTS, clientToken, null).statusCode());
-        problem(send("POST", ADMIN_PRODUCTS, clientToken, "{\"name\":\"Polo\"}"), 403, "FORBIDDEN");
+        problem(send("POST", ADMIN_PROBE, clientToken, "{\"name\":\"Polo\"}"), 403, "FORBIDDEN");
         String admin = human("administrador", Instant.now().plusSeconds(180));
-        assertEquals(200, send("POST", ADMIN_PRODUCTS, admin, "{\"name\":\"Polo\"}").statusCode());
+        assertEquals(200, send("POST", ADMIN_PROBE, admin, "{\"name\":\"Polo\"}").statusCode());
         problem(send("GET", VARIANT, admin, null), 401, "UNAUTHORIZED");
     }
 
@@ -128,13 +128,13 @@ class CatalogSecurityHttpTest {
     @Test
     void validatesWriteSizeSchemaAndQuota() throws Exception {
         String admin = human("administrador", Instant.now().plusSeconds(180));
-        problem(send("POST", ADMIN_PRODUCTS, admin, "{\"name\":\"" + "a".repeat(2048) + "\"}"),
+        problem(send("POST", ADMIN_PROBE, admin, "{\"name\":\"" + "a".repeat(2048) + "\"}"),
             413, "PAYLOAD_TOO_LARGE");
-        problem(send("POST", ADMIN_PRODUCTS, admin, "{\"name\":\"Polo\",\"unexpected\":true}"),
+        problem(send("POST", ADMIN_PROBE, admin, "{\"name\":\"Polo\",\"unexpected\":true}"),
             422, "UNPROCESSABLE_ENTITY");
-        assertEquals(200, send("POST", ADMIN_PRODUCTS, admin, "{\"name\":\"Polo\"}").statusCode());
-        assertEquals(200, send("POST", ADMIN_PRODUCTS, admin, "{\"name\":\"Polo\"}").statusCode());
-        var limited = send("POST", ADMIN_PRODUCTS, admin, "{\"name\":\"Polo\"}");
+        assertEquals(200, send("POST", ADMIN_PROBE, admin, "{\"name\":\"Polo\"}").statusCode());
+        assertEquals(200, send("POST", ADMIN_PROBE, admin, "{\"name\":\"Polo\"}").statusCode());
+        var limited = send("POST", ADMIN_PROBE, admin, "{\"name\":\"Polo\"}");
         problem(limited, 429, "TOO_MANY_REQUESTS");
         assertTrue(Integer.parseInt(limited.headers().firstValue("Retry-After").orElseThrow()) > 0);
     }
@@ -206,7 +206,7 @@ class CatalogSecurityHttpTest {
             return List.of("Polo");
         }
 
-        @PostMapping("/admin/products")
+        @PostMapping("/admin/security-probe")
         String product(@RequestBody ProductInput body) {
             return body.name();
         }

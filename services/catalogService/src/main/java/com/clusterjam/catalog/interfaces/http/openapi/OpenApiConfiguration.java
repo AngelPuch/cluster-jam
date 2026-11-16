@@ -29,7 +29,10 @@ public class OpenApiConfiguration {
     OpenAPI catalogOpenApi() {
         Components components = new Components()
             .addSecuritySchemes(USER_BEARER, bearer("Supabase access token."))
-            .addSecuritySchemes(SERVICE_BEARER, bearer("Service token with catalog-service audience."));
+            .addSecuritySchemes(SERVICE_BEARER, bearer("Service token with catalog-service audience."))
+            .addResponses("CatalogConflict", problem("Duplicate SKU or combination, or invalid state transition."))
+            .addResponses("CatalogStaleRevision", problem("The validator does not match the current revision."))
+            .addResponses("CatalogMissingRevision", problem("A current strong ETag is required in If-Match."));
         ModelConverters.getInstance(true).read(ProblemDetailsDto.class).forEach(components::addSchemas);
         return new OpenAPI()
             .info(new Info()
@@ -48,12 +51,15 @@ public class OpenApiConfiguration {
                 String scheme = route.startsWith("/api/v1/internal/") ? SERVICE_BEARER : USER_BEARER;
                 operation.addSecurityItem(new SecurityRequirement().addList(scheme));
             }
-            ApiResponse response = new ApiResponse().description("RFC 9457 Problem Details.")
-                .content(new Content().addMediaType(
-                    org.springframework.http.MediaType.APPLICATION_PROBLEM_JSON_VALUE,
-                    new MediaType().schema(new Schema<>().$ref("#/components/schemas/ProblemDetails"))));
-            operation.getResponses().putIfAbsent("default", response);
+            operation.getResponses().putIfAbsent("default", problem("RFC 9457 Problem Details."));
         }));
+    }
+
+    private ApiResponse problem(String description) {
+        return new ApiResponse().description(description)
+            .content(new Content().addMediaType(
+                org.springframework.http.MediaType.APPLICATION_PROBLEM_JSON_VALUE,
+                new MediaType().schema(new Schema<>().$ref("#/components/schemas/ProblemDetails"))));
     }
 
     private SecurityScheme bearer(String description) {

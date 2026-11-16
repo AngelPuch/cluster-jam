@@ -28,6 +28,14 @@ spring:
     jdbc:
         template:
             query-timeout: 2s
+    jpa:
+        open-in-view: false
+        hibernate:
+            ddl-auto: none
+        properties:
+            "[hibernate.boot.allow_jdbc_metadata_access]": "false"
+            "[hibernate.jdbc.log.errors]": "false"
+            "[jakarta.persistence.database-product-name]": "PostgreSQL"
     sql:
         init:
             mode: never
