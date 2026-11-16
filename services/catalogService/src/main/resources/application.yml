@@ -1,4 +1,11 @@
 spring:
+    jackson:
+        deserialization:
+            fail-on-unknown-properties: true
+    servlet:
+        multipart:
+            max-file-size: 10000000B
+            max-request-size: 10100000B
     main:
         banner-mode: off
         log-startup-info: false
@@ -8,6 +15,7 @@ spring:
 server:
     address: "${HTTP_ADDRESS:127.0.0.1}"
     port: "${HTTP_PORT:8083}"
+    max-http-request-header-size: 16KB
     error:
         include-message: never
         include-stacktrace: never
@@ -17,6 +25,12 @@ server:
 catalog:
     environment: "${APP_ENV:development}"
     readiness-available: "${CATALOG_READINESS_AVAILABLE:true}"
+
+    security:
+        supabase-url: "${SUPABASE_URL:}"
+        service-jwt-issuer: "${SERVICE_JWT_ISSUER:}"
+        writes-per-minute: "${CATALOG_WRITES_PER_MINUTE:30}"
+        max-json-bytes: "${CATALOG_MAX_JSON_BYTES:65536}"
 
 springdoc:
     api-docs:

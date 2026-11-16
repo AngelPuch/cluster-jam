@@ -8,6 +8,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -16,6 +17,8 @@ import org.springframework.web.context.request.ServletWebRequest;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
+import tools.jackson.core.exc.StreamConstraintsException;
+import tools.jackson.databind.exc.UnrecognizedPropertyException;
 
 @RestControllerAdvice
 public class ProblemDetailsAdvice extends ResponseEntityExceptionHandler {
@@ -39,6 +42,16 @@ public class ProblemDetailsAdvice extends ResponseEntityExceptionHandler {
             return null;
         }
         HttpServletRequest httpRequest = ((ServletWebRequest) request).getRequest();
+        if (exception instanceof HttpMessageNotReadableException unreadable) {
+            Throwable cause = unreadable.getMostSpecificCause();
+            if (cause instanceof StreamConstraintsException) {
+                return convert(mapper.response(HttpStatus.CONTENT_TOO_LARGE, headers, httpRequest, List.of()));
+            }
+            if (cause instanceof UnrecognizedPropertyException) {
+                return convert(mapper.response(HttpStatus.UNPROCESSABLE_CONTENT, headers, httpRequest,
+                    List.of("The request contains an unsupported field.")));
+            }
+        }
         if (exception instanceof MethodArgumentNotValidException invalid) {
             return convert(mapper.response(
                 HttpStatus.UNPROCESSABLE_CONTENT, headers, httpRequest, fieldErrors(invalid)));

@@ -41,6 +41,10 @@ class CatalogOpenApiContractTest {
         assertTrue(json.at("/paths/~1health~1ready/get/responses/503/content/application~1problem+json").isObject());
         assertTrue(json.at("/components/schemas/ProblemDetails").isObject());
 
+        assertEquals("bearer", json.at("/components/securitySchemes/supabaseBearer/scheme").stringValue());
+        assertEquals("bearer", json.at("/components/securitySchemes/serviceBearer/scheme").stringValue());
+        assertTrue(json.at("/paths/~1health~1live/get/security").isMissingNode());
+
         String generated = response.body().replace("\r\n", "\n").stripTrailing() + "\n";
         if (Boolean.getBoolean("catalog.openapi.write")) {
             Files.createDirectories(CONTRACT.getParent());

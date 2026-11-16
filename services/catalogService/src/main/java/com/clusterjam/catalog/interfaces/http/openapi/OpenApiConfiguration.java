@@ -11,6 +11,8 @@ import io.swagger.v3.oas.models.media.Content;
 import io.swagger.v3.oas.models.media.MediaType;
 import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.responses.ApiResponse;
+import io.swagger.v3.oas.models.security.SecurityRequirement;
+import io.swagger.v3.oas.models.security.SecurityScheme;
 import io.swagger.v3.oas.models.servers.Server;
 import io.swagger.v3.oas.models.tags.Tag;
 import org.springdoc.core.customizers.OpenApiCustomizer;
@@ -20,9 +22,14 @@ import org.springframework.context.annotation.Configuration;
 @Configuration(proxyBeanMethods = false)
 public class OpenApiConfiguration {
 
+    private static final String USER_BEARER = "supabaseBearer";
+    private static final String SERVICE_BEARER = "serviceBearer";
+
     @Bean
     OpenAPI catalogOpenApi() {
-        Components components = new Components();
+        Components components = new Components()
+            .addSecuritySchemes(USER_BEARER, bearer("Supabase access token."))
+            .addSecuritySchemes(SERVICE_BEARER, bearer("Service token with catalog-service audience."));
         ModelConverters.getInstance(true).read(ProblemDetailsDto.class).forEach(components::addSchemas);
         return new OpenAPI()
             .info(new Info()
@@ -36,12 +43,23 @@ public class OpenApiConfiguration {
 
     @Bean
     OpenApiCustomizer commonProblemResponse() {
-        return api -> api.getPaths().values().forEach(path -> path.readOperations().forEach(operation -> {
+        return api -> api.getPaths().forEach((route, path) -> path.readOperations().forEach(operation -> {
+            if (route.startsWith("/api/v1/")) {
+                String scheme = route.startsWith("/api/v1/internal/") ? SERVICE_BEARER : USER_BEARER;
+                operation.addSecurityItem(new SecurityRequirement().addList(scheme));
+            }
             ApiResponse response = new ApiResponse().description("RFC 9457 Problem Details.")
                 .content(new Content().addMediaType(
                     org.springframework.http.MediaType.APPLICATION_PROBLEM_JSON_VALUE,
                     new MediaType().schema(new Schema<>().$ref("#/components/schemas/ProblemDetails"))));
             operation.getResponses().putIfAbsent("default", response);
         }));
+    }
+
+    private SecurityScheme bearer(String description) {
+        return new SecurityScheme().type(SecurityScheme.Type.HTTP)
+            .scheme("bearer")
+            .bearerFormat("JWT")
+            .description(description);
     }
 }

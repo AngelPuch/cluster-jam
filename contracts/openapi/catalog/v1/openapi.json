@@ -138,6 +138,20 @@
         },
         "required" : [ "code", "detail", "instance", "status", "title", "traceId", "type" ]
       }
+    },
+    "securitySchemes" : {
+      "serviceBearer" : {
+        "bearerFormat" : "JWT",
+        "description" : "Service token with catalog-service audience.",
+        "scheme" : "bearer",
+        "type" : "http"
+      },
+      "supabaseBearer" : {
+        "bearerFormat" : "JWT",
+        "description" : "Supabase access token.",
+        "scheme" : "bearer",
+        "type" : "http"
+      }
     }
   }
 }
