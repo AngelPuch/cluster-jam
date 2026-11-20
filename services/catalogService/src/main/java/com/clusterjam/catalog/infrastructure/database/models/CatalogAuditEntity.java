@@ -43,6 +43,14 @@ public class CatalogAuditEntity {
     protected CatalogAuditEntity() {
     }
 
+    public CatalogAuditEntity(UUID actor, UUID photoId, String action, int version, boolean active) {
+        this.actor = actor;
+        this.action = action;
+        resource = "PHOTO";
+        resourceId = photoId;
+        details = Map.of("version", version, "active", active);
+    }
+
     public CatalogAuditEntity(Change change) {
         actor = change.actor();
         action = change.previousStatus() == null ? "CREATE" : "UPDATE";

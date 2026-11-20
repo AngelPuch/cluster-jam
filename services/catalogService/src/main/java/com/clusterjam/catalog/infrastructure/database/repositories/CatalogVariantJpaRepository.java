@@ -10,6 +10,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface CatalogVariantJpaRepository extends JpaRepository<CatalogVariantEntity, UUID> {
 
+    boolean existsByProductIdAndColorId(UUID productId, short colorId);
+
     List<CatalogVariantEntity> findByProductIdOrderByIdAsc(UUID productId, Limit limit);
 
     List<CatalogVariantEntity> findByProductIdAndIdGreaterThanOrderByIdAsc(UUID productId, UUID after, Limit limit);

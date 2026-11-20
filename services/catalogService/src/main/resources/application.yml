@@ -52,6 +52,10 @@ server:
 
 catalog:
     environment: "${APP_ENV:development}"
+    photos:
+        bucket: "${CATALOG_PHOTOS_BUCKET:catalog-photos}"
+        key: "${CATALOG_STORAGE_KEY:}"
+        cleanup-delay-ms: "${CATALOG_PHOTO_CLEANUP_DELAY_MS:60000}"
 
     security:
         supabase-url: "${SUPABASE_URL:}"

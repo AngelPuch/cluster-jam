@@ -245,6 +245,315 @@
         "tags" : [ "Admin catalog" ]
       }
     },
+    "/api/v1/admin/products/{productId}/colors/{colorId}/photos/{side}" : {
+      "delete" : {
+        "operationId" : "retire",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "productId",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "in" : "path",
+          "name" : "colorId",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "maximum" : 32767,
+            "minimum" : 1
+          }
+        }, {
+          "in" : "path",
+          "name" : "side",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "enum" : [ "FRONT", "BACK" ]
+          }
+        }, {
+          "in" : "header",
+          "name" : "If-Match",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PhotoView"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description" : "RFC 9457 Problem Details."
+          }
+        },
+        "security" : [ {
+          "supabaseBearer" : [ ]
+        } ],
+        "summary" : "Retire the photo using its current If-Match ETag.",
+        "tags" : [ "Admin photos" ]
+      },
+      "get" : {
+        "operationId" : "get",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "productId",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "in" : "path",
+          "name" : "colorId",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "maximum" : 32767,
+            "minimum" : 1
+          }
+        }, {
+          "in" : "path",
+          "name" : "side",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "enum" : [ "FRONT", "BACK" ]
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PhotoView"
+                }
+              }
+            },
+            "description" : "Photo metadata.",
+            "headers" : {
+              "ETag" : {
+                "schema" : {
+                  "type" : "string"
+                },
+                "style" : "simple"
+              }
+            }
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description" : "RFC 9457 Problem Details."
+          }
+        },
+        "security" : [ {
+          "supabaseBearer" : [ ]
+        } ],
+        "summary" : "Read photo slot metadata and its ETag.",
+        "tags" : [ "Admin photos" ]
+      },
+      "put" : {
+        "operationId" : "upload",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "productId",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "in" : "path",
+          "name" : "colorId",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "maximum" : 32767,
+            "minimum" : 1
+          }
+        }, {
+          "in" : "path",
+          "name" : "side",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "enum" : [ "FRONT", "BACK" ]
+          }
+        }, {
+          "description" : "Current photo ETag for replacement.",
+          "in" : "header",
+          "name" : "If-Match",
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "description" : "Use * only to create an unused slot.",
+          "in" : "header",
+          "name" : "If-None-Match",
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "multipart/form-data" : {
+              "schema" : {
+                "type" : "object",
+                "properties" : {
+                  "file" : {
+                    "type" : "string",
+                    "format" : "binary"
+                  }
+                },
+                "required" : [ "file" ]
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PhotoView"
+                }
+              }
+            },
+            "description" : "Photo replaced.",
+            "headers" : {
+              "ETag" : {
+                "schema" : {
+                  "type" : "string"
+                },
+                "style" : "simple"
+              }
+            }
+          },
+          "201" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PhotoView"
+                }
+              }
+            },
+            "description" : "Photo created.",
+            "headers" : {
+              "ETag" : {
+                "schema" : {
+                  "type" : "string"
+                },
+                "style" : "simple"
+              }
+            }
+          },
+          "412" : {
+            "$ref" : "#/components/responses/CatalogStaleRevision"
+          },
+          "428" : {
+            "$ref" : "#/components/responses/CatalogMissingRevision"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description" : "RFC 9457 Problem Details."
+          }
+        },
+        "security" : [ {
+          "supabaseBearer" : [ ]
+        } ],
+        "summary" : "Create with If-None-Match * or replace with the current If-Match ETag.",
+        "tags" : [ "Admin photos" ]
+      }
+    },
+    "/api/v1/admin/products/{productId}/colors/{colorId}/photos/{side}/links" : {
+      "post" : {
+        "operationId" : "links",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "productId",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "in" : "path",
+          "name" : "colorId",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "maximum" : 32767,
+            "minimum" : 1
+          }
+        }, {
+          "in" : "path",
+          "name" : "side",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "enum" : [ "FRONT", "BACK" ]
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Links"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description" : "RFC 9457 Problem Details."
+          }
+        },
+        "security" : [ {
+          "supabaseBearer" : [ ]
+        } ],
+        "summary" : "Issue private photo and thumbnail links valid for 60 seconds.",
+        "tags" : [ "Admin photos" ]
+      }
+    },
     "/api/v1/admin/products/{productId}/variants" : {
       "get" : {
         "operationId" : "variants",
@@ -728,6 +1037,21 @@
         },
         "required" : [ "status" ]
       },
+      "Links" : {
+        "type" : "object",
+        "properties" : {
+          "expiresAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "imageUrl" : {
+            "type" : "string"
+          },
+          "thumbnailUrl" : {
+            "type" : "string"
+          }
+        }
+      },
       "PageViewProductView" : {
         "type" : "object",
         "properties" : {
@@ -755,6 +1079,30 @@
           "nextCursor" : {
             "type" : [ "string", "null" ],
             "format" : "uuid"
+          }
+        }
+      },
+      "PhotoView" : {
+        "type" : "object",
+        "properties" : {
+          "active" : {
+            "type" : "boolean"
+          },
+          "colorId" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "productId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "side" : {
+            "type" : "string",
+            "enum" : [ "FRONT", "BACK" ]
           }
         }
       },
