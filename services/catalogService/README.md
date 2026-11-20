@@ -76,7 +76,7 @@ To stop the local database and preserve its data:
     docker compose --env-file .env -f ../../infra/catalog/compose.yaml stop db-catalogo
 
 The API leaves its HTTP listener available while PostgreSQL is unavailable.
-Readiness checks versions 1 through 4 on each request and recovers when the
+Readiness checks versions 1 through 5 on each request and recovers when the
 database and history are accessible. Flyway validate verifies checksums.
 The application starts with Hibernate DDL generation disabled and checks
 database availability through readiness.
@@ -118,6 +118,32 @@ Use DRAFT, PUBLISHED or RETIRED. Publication and retirement preserve the
 resource IDs. A variant has a fixed SKU, size and color and an editable price
 in MXN cents. Variant creation initializes the inventory and records the
 admin audit in the same transaction.
+
+## Product photos
+
+Administrative photos use /api/v1/admin/products/{productId}/colors/{colorId}/photos/{side},
+with FRONT or BACK. PUT accepts a single multipart file part. Use
+If-None-Match: * for a new slot or the current If-Match ETag for replacement.
+GET returns metadata. DELETE retires the slot with If-Match. POST /links
+issues private read links for an active photo for 60 seconds.
+
+Configure CATALOG_PHOTOS_BUCKET and CATALOG_STORAGE_KEY in the server
+environment. Use a private catalog-only Supabase bucket limited to
+10,000,000 bytes and image/png. Inputs may be PNG or JPEG. The API validates
+image signatures and dimensions, re-encodes PNG and generates a thumbnail.
+Inputs are limited to 8192 pixels per side and 16 million pixels in total.
+
+Apply V5 before starting this binary. Photo metadata, audit and cleanup
+tasks use PostgreSQL. A pending task is persisted before upload and is
+locked during the upload and the final reference change. Failed uploads
+are eligible for cleanup after one hour. Replaced or retired objects are
+eligible after five minutes. The worker checks active references before
+deleting a pair and retries failures in later cycles. Its delay defaults
+to 60000 ms through CATALOG_PHOTO_CLEANUP_DELAY_MS.
+
+The photo integration scenarios run with CATALOG_VERIFY_POSTGRES=true
+against a migrated test database and a fake Storage provider. Manually
+verify upload, signed links and retirement with a development bucket.
 
 ## Update the OpenAPI snapshot
 

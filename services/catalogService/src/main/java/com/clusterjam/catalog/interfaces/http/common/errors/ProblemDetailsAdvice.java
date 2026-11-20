@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.clusterjam.catalog.application.products.CatalogProductException;
+import com.clusterjam.catalog.application.photos.PhotoFailure;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.OptimisticLockingFailureException;
@@ -75,6 +76,16 @@ public class ProblemDetailsAdvice extends ResponseEntityExceptionHandler {
             case DUPLICATE, INVALID_TRANSITION -> ProblemCode.CONFLICT;
             case INVALID_REFERENCE -> ProblemCode.UNPROCESSABLE_ENTITY;
             case STALE -> ProblemCode.PRECONDITION_FAILED;
+        };
+        return mapper.response(code, request);
+    }
+
+    @ExceptionHandler(PhotoFailure.class)
+    public ResponseEntity<?> photoFailure(PhotoFailure failure, HttpServletRequest request) {
+        ProblemCode code = switch (failure.reason()) {
+            case INVALID_IMAGE -> ProblemCode.UNPROCESSABLE_ENTITY;
+            case TOO_LARGE -> ProblemCode.PAYLOAD_TOO_LARGE;
+            case BUSY, STORAGE_UNAVAILABLE -> ProblemCode.SERVICE_UNAVAILABLE;
         };
         return mapper.response(code, request);
     }
