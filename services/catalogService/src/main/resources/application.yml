@@ -52,6 +52,8 @@ server:
 
 catalog:
     environment: "${APP_ENV:development}"
+    reads:
+        cursor-key: "${CATALOG_CURSOR_KEY:}"
     photos:
         bucket: "${CATALOG_PHOTOS_BUCKET:catalog-photos}"
         key: "${CATALOG_STORAGE_KEY:}"

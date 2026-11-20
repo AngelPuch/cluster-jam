@@ -15,6 +15,12 @@ public class CatalogInventoryEntity {
     @Column(name = "variante_id")
     private UUID variantId;
 
+    @Column(name = "stock_fisico", insertable = false, updatable = false, nullable = false)
+    private int physical;
+
+    @Column(name = "stock_reservado", insertable = false, updatable = false, nullable = false)
+    private int reserved;
+
     protected CatalogInventoryEntity() {
     }
 

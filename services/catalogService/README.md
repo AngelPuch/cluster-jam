@@ -76,7 +76,7 @@ To stop the local database and preserve its data:
     docker compose --env-file .env -f ../../infra/catalog/compose.yaml stop db-catalogo
 
 The API leaves its HTTP listener available while PostgreSQL is unavailable.
-Readiness checks versions 1 through 5 on each request and recovers when the
+Readiness checks versions 1 through 6 on each request and recovers when the
 database and history are accessible. Flyway validate verifies checksums.
 The application starts with Hibernate DDL generation disabled and checks
 database availability through readiness.
@@ -144,6 +144,44 @@ to 60000 ms through CATALOG_PHOTO_CLEANUP_DELAY_MS.
 The photo integration scenarios run with CATALOG_VERIFY_POSTGRES=true
 against a migrated test database and a fake Storage provider. Manually
 verify upload, signed links and retirement with a development bucket.
+
+## Read catalog and compatibility
+
+GET /api/v1/products lists published products using name, typeId, sizeId,
+colorId, minPriceCents, maxPriceCents, limit and cursor. Variant filters
+match one published variant. Prices use integer MXN cents. Lists use UUID
+order and a signed cursor bound to the normalized filters and page size.
+Set CATALOG_CURSOR_KEY to a stable random Base64 value of at least 32 bytes.
+
+GET /api/v1/products/{productId} includes one page of published variants,
+their available quantities and photo references for the colors on that
+page. Photo links are issued on GET of the returned linksPath after checking
+publication. Text reads are independent of Storage availability.
+GET /api/v1/catalog/references returns the migration-maintained types,
+sizes and colors.
+
+Internal reads use /api/v1/internal/variants/{variantId} and
+/api/v1/internal/products/{productId}/sizes/{sizeId}. A known but retired
+reference returns its states with published/compatible=false. An unknown
+association returns 404. Personalization requires catalog:compatibility;
+Orders uses catalog:read and receives the commerce section with price and
+availableQuantity. Catálogo verifies the service issuer and catalog-service
+audience even when the request arrives through the gateway.
+
+Apply V6 for the reference and inventory read permissions. The local Nginx
+configuration is infra/catalog/nginx.local.conf and listens on
+127.0.0.1:8084 with Catálogo on 8083. The shared gateway routes to the
+clusterjam-catalog:8083 alias on its backend network.
+
+CatalogDevIdentity in test sources provides local development JWKS on
+127.0.0.1:8095 and refreshes short-lived service tokens in .local/identity.
+Configure SERVICE_JWT_ISSUER=http://127.0.0.1:8095 for this fixture. A deployed
+environment uses its configured trusted HTTPS service issuer.
+
+The two catalog read integration tests run with CATALOG_VERIFY_POSTGRES=true.
+Set CATALOG_NGINX_EXE to an installed Nginx executable to run their HTTP calls
+through the local gateway. The tests verify signed JWTs, database queries
+and cursor behavior.
 
 ## Update the OpenAPI snapshot
 
