@@ -80,9 +80,11 @@ public class HttpSecurityConfiguration {
         base(http);
         return http.securityMatcher("/api/v1", "/api/v1/**")
             .authorizeHttpRequests(access -> access
-                .requestMatchers(HttpMethod.GET, "/api/v1/products", "/api/v1/products/**")
+                .requestMatchers(HttpMethod.GET, "/api/v1/products", "/api/v1/products/**",
+                    "/api/v1/catalog/references")
                 .hasAnyAuthority(CatalogAuthority.CLIENT, CatalogAuthority.ADMIN)
-                .requestMatchers(HttpMethod.HEAD, "/api/v1/products", "/api/v1/products/**")
+                .requestMatchers(HttpMethod.HEAD, "/api/v1/products", "/api/v1/products/**",
+                    "/api/v1/catalog/references")
                 .hasAnyAuthority(CatalogAuthority.CLIENT, CatalogAuthority.ADMIN)
                 .requestMatchers("/api/v1/admin", "/api/v1/admin/**").hasAuthority(CatalogAuthority.ADMIN)
                 .anyRequest().denyAll())

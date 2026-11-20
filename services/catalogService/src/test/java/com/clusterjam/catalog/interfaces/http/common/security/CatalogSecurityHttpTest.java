@@ -59,9 +59,9 @@ import tools.jackson.databind.json.JsonMapper;
 )
 class CatalogSecurityHttpTest {
 
-    private static final String PRODUCTS = "/api/v1/products";
+    private static final String PRODUCTS = "/api/v1/products/security-probe";
     private static final String ADMIN_PROBE = "/api/v1/admin/security-probe";
-    private static final String VARIANT = "/api/v1/internal/variants/demo";
+    private static final String VARIANT = "/api/v1/internal/variants/security-probe";
     private static final String RESERVATIONS = "/api/v1/internal/stock-reservations";
     private static final LocalJwks KEYS = new LocalJwks();
 
@@ -201,7 +201,7 @@ class CatalogSecurityHttpTest {
     @RestController
     static class TestEndpoints {
 
-        @GetMapping("/products")
+        @GetMapping("/products/security-probe")
         List<String> products() {
             return List.of("Polo");
         }
@@ -211,7 +211,7 @@ class CatalogSecurityHttpTest {
             return body.name();
         }
 
-        @GetMapping("/internal/variants/{id}")
+        @GetMapping("/internal/variants/security-probe")
         String variant() {
             return "variant";
         }

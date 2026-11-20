@@ -822,6 +822,360 @@
         "tags" : [ "Admin catalog" ]
       }
     },
+    "/api/v1/catalog/references" : {
+      "get" : {
+        "operationId" : "references",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/References"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description" : "RFC 9457 Problem Details."
+          }
+        },
+        "security" : [ {
+          "supabaseBearer" : [ ]
+        } ],
+        "summary" : "Read the type, size and color reference data maintained by catalog migrations.",
+        "tags" : [ "Catalog" ]
+      }
+    },
+    "/api/v1/internal/products/{productId}/sizes/{sizeId}" : {
+      "get" : {
+        "operationId" : "productSize",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "productId",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "in" : "path",
+          "name" : "sizeId",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "maximum" : 32767,
+            "minimum" : 1
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProductSize"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description" : "RFC 9457 Problem Details."
+          }
+        },
+        "security" : [ {
+          "serviceBearer" : [ ]
+        } ],
+        "summary" : "Resolve a product-size association, including unpublished and retired references.",
+        "tags" : [ "Catalog compatibility" ]
+      }
+    },
+    "/api/v1/internal/variants/{variantId}" : {
+      "get" : {
+        "operationId" : "variant_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "variantId",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Compatibility"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description" : "RFC 9457 Problem Details."
+          }
+        },
+        "security" : [ {
+          "serviceBearer" : [ ]
+        } ],
+        "summary" : "Resolve variant references and states. The catalog:read scope also receives price and stock.",
+        "tags" : [ "Catalog compatibility" ]
+      }
+    },
+    "/api/v1/products" : {
+      "get" : {
+        "operationId" : "search",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "name",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "maxLength" : 120,
+            "minLength" : 0
+          }
+        }, {
+          "in" : "query",
+          "name" : "typeId",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "exclusiveMinimum" : 0,
+            "maximum" : 32767
+          }
+        }, {
+          "in" : "query",
+          "name" : "sizeId",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "exclusiveMinimum" : 0,
+            "maximum" : 32767
+          }
+        }, {
+          "in" : "query",
+          "name" : "colorId",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "exclusiveMinimum" : 0,
+            "maximum" : 32767
+          }
+        }, {
+          "in" : "query",
+          "name" : "minPriceCents",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64",
+            "minimum" : 0
+          }
+        }, {
+          "in" : "query",
+          "name" : "maxPriceCents",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int64",
+            "minimum" : 0
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 20,
+            "maximum" : 100,
+            "minimum" : 1
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "maxLength" : 512,
+            "minLength" : 0
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/PageCard"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description" : "RFC 9457 Problem Details."
+          }
+        },
+        "security" : [ {
+          "supabaseBearer" : [ ]
+        } ],
+        "summary" : "List published products with filters matched on the same published variant.",
+        "tags" : [ "Catalog" ]
+      }
+    },
+    "/api/v1/products/{productId}" : {
+      "get" : {
+        "operationId" : "detail",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "productId",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 20,
+            "maximum" : 100,
+            "minimum" : 1
+          }
+        }, {
+          "in" : "query",
+          "name" : "cursor",
+          "required" : false,
+          "schema" : {
+            "type" : "string",
+            "maxLength" : 512,
+            "minLength" : 0
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Detail"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description" : "RFC 9457 Problem Details."
+          }
+        },
+        "security" : [ {
+          "supabaseBearer" : [ ]
+        } ],
+        "summary" : "Read a published product with one page of published variants and their photo references.",
+        "tags" : [ "Catalog" ]
+      }
+    },
+    "/api/v1/products/{productId}/colors/{colorId}/photos/{side}/links" : {
+      "get" : {
+        "operationId" : "links_1",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "productId",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "in" : "path",
+          "name" : "colorId",
+          "required" : true,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "maximum" : 32767,
+            "minimum" : 1
+          }
+        }, {
+          "in" : "path",
+          "name" : "side",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "enum" : [ "FRONT", "BACK" ]
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Links"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description" : "RFC 9457 Problem Details."
+          }
+        },
+        "security" : [ {
+          "supabaseBearer" : [ ]
+        } ],
+        "summary" : "Issue 60-second photo links after checking product and color publication.",
+        "tags" : [ "Catalog" ]
+      }
+    },
     "/health/live" : {
       "get" : {
         "operationId" : "live",
@@ -925,6 +1279,101 @@
       }
     },
     "schemas" : {
+      "Card" : {
+        "type" : "object",
+        "properties" : {
+          "available" : {
+            "type" : "boolean"
+          },
+          "basePriceFromCents" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "cover" : {
+            "$ref" : "#/components/schemas/PhotoRef"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "typeId" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "Color" : {
+        "type" : "object",
+        "properties" : {
+          "hex" : {
+            "type" : "string"
+          },
+          "id" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "name" : {
+            "type" : "string"
+          }
+        }
+      },
+      "Commerce" : {
+        "type" : "object",
+        "properties" : {
+          "availableQuantity" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "basePriceCents" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "currency" : {
+            "type" : "string"
+          }
+        }
+      },
+      "Compatibility" : {
+        "type" : "object",
+        "properties" : {
+          "colorId" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "commerce" : {
+            "$ref" : "#/components/schemas/Commerce"
+          },
+          "productId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "productStatus" : {
+            "type" : "string",
+            "enum" : [ "DRAFT", "PUBLISHED", "RETIRED" ]
+          },
+          "published" : {
+            "type" : "boolean"
+          },
+          "sizeId" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "variantId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "variantStatus" : {
+            "type" : "string",
+            "enum" : [ "DRAFT", "PUBLISHED", "RETIRED" ]
+          }
+        }
+      },
       "CreateProduct" : {
         "type" : "object",
         "additionalProperties" : false,
@@ -979,6 +1428,34 @@
           }
         },
         "required" : [ "basePriceCents", "colorId", "sizeId", "sku" ]
+      },
+      "Detail" : {
+        "type" : "object",
+        "properties" : {
+          "description" : {
+            "type" : "string"
+          },
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "photos" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/PhotoRef"
+            }
+          },
+          "typeId" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "variants" : {
+            "$ref" : "#/components/schemas/PageVariant"
+          }
+        }
       },
       "EditProduct" : {
         "type" : "object",
@@ -1052,6 +1529,34 @@
           }
         }
       },
+      "PageCard" : {
+        "type" : "object",
+        "properties" : {
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Card"
+            }
+          },
+          "nextCursor" : {
+            "type" : "string"
+          }
+        }
+      },
+      "PageVariant" : {
+        "type" : "object",
+        "properties" : {
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Variant"
+            }
+          },
+          "nextCursor" : {
+            "type" : "string"
+          }
+        }
+      },
       "PageViewProductView" : {
         "type" : "object",
         "properties" : {
@@ -1079,6 +1584,22 @@
           "nextCursor" : {
             "type" : [ "string", "null" ],
             "format" : "uuid"
+          }
+        }
+      },
+      "PhotoRef" : {
+        "type" : "object",
+        "properties" : {
+          "colorId" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "linksPath" : {
+            "type" : "string"
+          },
+          "side" : {
+            "type" : "string",
+            "enum" : [ "FRONT", "BACK" ]
           }
         }
       },
@@ -1149,6 +1670,29 @@
         },
         "required" : [ "code", "detail", "instance", "status", "title", "traceId", "type" ]
       },
+      "ProductSize" : {
+        "type" : "object",
+        "properties" : {
+          "compatible" : {
+            "type" : "boolean"
+          },
+          "hasPublishedVariants" : {
+            "type" : "boolean"
+          },
+          "productId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "productStatus" : {
+            "type" : "string",
+            "enum" : [ "DRAFT", "PUBLISHED", "RETIRED" ]
+          },
+          "sizeId" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
       "ProductView" : {
         "type" : "object",
         "properties" : {
@@ -1169,6 +1713,92 @@
           "typeId" : {
             "type" : "integer",
             "format" : "int32"
+          }
+        }
+      },
+      "References" : {
+        "type" : "object",
+        "properties" : {
+          "colors" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Color"
+            }
+          },
+          "sizes" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Size"
+            }
+          },
+          "types" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Type"
+            }
+          }
+        }
+      },
+      "Size" : {
+        "type" : "object",
+        "properties" : {
+          "code" : {
+            "type" : "string"
+          },
+          "id" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "order" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
+      "Type" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "name" : {
+            "type" : "string"
+          }
+        }
+      },
+      "Variant" : {
+        "type" : "object",
+        "properties" : {
+          "availableQuantity" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "basePriceCents" : {
+            "type" : "integer",
+            "format" : "int64"
+          },
+          "colorId" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "currency" : {
+            "type" : "string"
+          },
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "productId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "sizeId" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "sku" : {
+            "type" : "string"
           }
         }
       },
