@@ -3,6 +3,7 @@ package com.clusterjam.catalog.interfaces.http.common.errors;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.clusterjam.catalog.application.inventory.InventoryFailure;
 import com.clusterjam.catalog.application.products.CatalogProductException;
 import com.clusterjam.catalog.application.photos.PhotoFailure;
 import jakarta.servlet.http.HttpServletRequest;
@@ -67,6 +68,16 @@ public class ProblemDetailsAdvice extends ResponseEntityExceptionHandler {
                 HttpStatus.UNPROCESSABLE_CONTENT, headers, httpRequest, List.of("Invalid request parameters.")));
         }
         return convert(mapper.response(status, headers, httpRequest, List.of()));
+    }
+
+    @ExceptionHandler(InventoryFailure.class)
+    public ResponseEntity<?> inventoryFailure(InventoryFailure failure, HttpServletRequest request) {
+        ProblemCode code = switch (failure.reason()) {
+            case MISSING -> ProblemCode.NOT_FOUND;
+            case INVALID -> ProblemCode.UNPROCESSABLE_ENTITY;
+            case CONFLICT -> ProblemCode.CONFLICT;
+        };
+        return mapper.response(code, request);
     }
 
     @ExceptionHandler(CatalogProductException.class)

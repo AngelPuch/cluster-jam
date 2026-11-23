@@ -76,7 +76,7 @@ To stop the local database and preserve its data:
     docker compose --env-file .env -f ../../infra/catalog/compose.yaml stop db-catalogo
 
 The API leaves its HTTP listener available while PostgreSQL is unavailable.
-Readiness checks versions 1 through 6 on each request and recovers when the
+Readiness checks versions 1 through 7 on each request and recovers when the
 database and history are accessible. Flyway validate verifies checksums.
 The application starts with Hibernate DDL generation disabled and checks
 database availability through readiness.
@@ -168,20 +168,58 @@ Orders uses catalog:read and receives the commerce section with price and
 availableQuantity. Catálogo verifies the service issuer and catalog-service
 audience even when the request arrives through the gateway.
 
-Apply V6 for the reference and inventory read permissions. The local Nginx
-configuration is infra/catalog/nginx.local.conf and listens on
-127.0.0.1:8084 with Catálogo on 8083. The shared gateway routes to the
-clusterjam-catalog:8083 alias on its backend network.
-
-CatalogDevIdentity in test sources provides local development JWKS on
-127.0.0.1:8095 and refreshes short-lived service tokens in .local/identity.
-Configure SERVICE_JWT_ISSUER=http://127.0.0.1:8095 for this fixture. A deployed
-environment uses its configured trusted HTTPS service issuer.
+Apply V6 for the reference and inventory read permissions. The shared
+gateway routes to the clusterjam-catalog:8083 alias on its backend network.
+For direct local HTTP use 127.0.0.1:8083 and real user tokens from Auth.
+The local Nginx configuration and CatalogDevIdentity described in the
+branch-7 handoff are not tracked in the main revision used for branch 8.
 
 The two catalog read integration tests run with CATALOG_VERIFY_POSTGRES=true.
-Set CATALOG_NGINX_EXE to an installed Nginx executable to run their HTTP calls
-through the local gateway. The tests verify signed JWTs, database queries
-and cursor behavior.
+Keep CATALOG_NGINX_EXE unset for this checkout's direct HTTP checks. The
+tests verify signed JWTs, database queries and cursor behavior.
+
+## Inventory adjustments
+
+Apply V7 before starting this binary. Only human administrators may use
+/api/v1/admin/variants/{variantId}/inventory. GET returns physicalQuantity,
+reservedQuantity, availableQuantity and version. Available is physical
+minus reserved, including for draft or retired variants.
+
+POST /adjustments accepts an integer quantityDelta from -1000000 through
+1000000, excluding zero, and a nonblank reason of at most 200 characters
+without control or format characters. Leading and trailing whitespace in
+reason is stripped. Actor identity comes from the validated user JWT.
+Physical stock cannot fall below reserved stock. The request never changes
+reserved stock, product publication or price.
+
+Send one UUID Idempotency-Key per administrator action and keep it for all
+retries. Keys are scoped to actor and ADJUST_INVENTORY_V1. The SHA-256 input
+is variant UUID, newline, integer delta, newline, normalized reason in UTF-8.
+A successful result is retained with its movement without automatic expiry.
+Reusing the key with different content returns 409. Another administrator
+has an independent namespace. Failed transactions do not consume a key.
+
+The first request and identical retries return 201, the same Location and
+historical movement. Idempotency-Replayed distinguishes a replay. Read GET
+on the inventory resource for the current balance after later operations.
+GET /movements lists immutable administrative movements by ascending
+inventory version, with limit 1..100 and afterVersion (initially 0). Follow
+nextAfterVersion when non-null. GET /movements/{movementId} scopes the
+lookup to the variant.
+
+InventoryService owns the transaction; InventoryJdbcStore uses the same
+DataSource and Spring transaction as JPA with parameterized PostgreSQL
+statements. INSERT ON CONFLICT serializes equal keys and SELECT FOR UPDATE
+serializes inventory writes. Stock, movement and key commit together; the
+deferred movement FK prevents committing an incomplete idempotency claim.
+app_catalogo can append and read movements/keys, and update only physical
+stock, version and inventory timestamp. It cannot edit or delete history.
+Lock or database unavailability returns 503; retry with the same key.
+
+InventoryAdminHttpTest adds three PostgreSQL HTTP tests for permissions,
+validation, historical replay, key conflict, reserved stock and concurrency.
+The decoder override exists only in test sources; Postman uses real Auth
+credentials. The shared Nginx route also forwards /api/v1/admin/variants.
 
 ## Update the OpenAPI snapshot
 
