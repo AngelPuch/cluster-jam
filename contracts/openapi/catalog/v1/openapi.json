@@ -822,6 +822,254 @@
         "tags" : [ "Admin catalog" ]
       }
     },
+    "/api/v1/admin/variants/{variantId}/inventory" : {
+      "get" : {
+        "operationId" : "balance",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "variantId",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Balance"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description" : "RFC 9457 Problem Details."
+          }
+        },
+        "security" : [ {
+          "supabaseBearer" : [ ]
+        } ],
+        "summary" : "Read the current physical, reserved and available inventory as an administrator.",
+        "tags" : [ "Admin inventory" ]
+      }
+    },
+    "/api/v1/admin/variants/{variantId}/inventory/adjustments" : {
+      "post" : {
+        "description" : "Administrator only. A UUID Idempotency-Key is required. Identical retries return the original 201 and historical movement; changed content with the same actor and key returns 409. A zero delta is invalid. Physical stock cannot fall below reserved stock.",
+        "operationId" : "adjust",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "variantId",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "description" : "One canonical UUID per administrator action.",
+          "in" : "header",
+          "name" : "Idempotency-Key",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AdjustmentInput"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "201" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Movement"
+                }
+              }
+            },
+            "description" : "Adjustment created or original result replayed.",
+            "headers" : {
+              "Idempotency-Replayed" : {
+                "schema" : {
+                  "type" : "boolean"
+                },
+                "style" : "simple"
+              },
+              "Location" : {
+                "description" : "Administrative movement URL.",
+                "schema" : {
+                  "type" : "string"
+                },
+                "style" : "simple"
+              }
+            }
+          },
+          "409" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description" : "Insufficient unreserved stock, key conflict or numeric limit."
+          },
+          "422" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description" : "Invalid input or missing/invalid idempotency key."
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description" : "RFC 9457 Problem Details."
+          }
+        },
+        "security" : [ {
+          "supabaseBearer" : [ ]
+        } ],
+        "summary" : "Record an audited physical stock delta without changing reserved stock.",
+        "tags" : [ "Admin inventory" ]
+      }
+    },
+    "/api/v1/admin/variants/{variantId}/inventory/movements" : {
+      "get" : {
+        "operationId" : "history",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "variantId",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "in" : "query",
+          "name" : "afterVersion",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 0,
+            "minimum" : 0
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "type" : "integer",
+            "format" : "int32",
+            "default" : 20,
+            "maximum" : 100,
+            "minimum" : 1
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/History"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description" : "RFC 9457 Problem Details."
+          }
+        },
+        "security" : [ {
+          "supabaseBearer" : [ ]
+        } ],
+        "summary" : "Read inventory movements in ascending inventory version order.",
+        "tags" : [ "Admin inventory" ]
+      }
+    },
+    "/api/v1/admin/variants/{variantId}/inventory/movements/{movementId}" : {
+      "get" : {
+        "operationId" : "movement",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "variantId",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        }, {
+          "in" : "path",
+          "name" : "movementId",
+          "required" : true,
+          "schema" : {
+            "type" : "string",
+            "format" : "uuid"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Movement"
+                }
+              }
+            },
+            "description" : "OK"
+          },
+          "default" : {
+            "content" : {
+              "application/problem+json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ProblemDetails"
+                }
+              }
+            },
+            "description" : "RFC 9457 Problem Details."
+          }
+        },
+        "security" : [ {
+          "supabaseBearer" : [ ]
+        } ],
+        "summary" : "Read a historical movement belonging to this variant as an administrator.",
+        "tags" : [ "Admin inventory" ]
+      }
+    },
     "/api/v1/catalog/references" : {
       "get" : {
         "operationId" : "references",
@@ -1279,6 +1527,49 @@
       }
     },
     "schemas" : {
+      "AdjustmentInput" : {
+        "type" : "object",
+        "properties" : {
+          "quantityDelta" : {
+            "type" : "integer",
+            "format" : "int32",
+            "maximum" : 1000000,
+            "minimum" : -1000000
+          },
+          "reason" : {
+            "type" : "string",
+            "maxLength" : 200,
+            "minLength" : 0,
+            "pattern" : "[^\\p{Cc}\\p{Cf}]+"
+          }
+        },
+        "required" : [ "quantityDelta", "reason" ]
+      },
+      "Balance" : {
+        "type" : "object",
+        "properties" : {
+          "availableQuantity" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "physicalQuantity" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "reservedQuantity" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "variantId" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "version" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
       "Card" : {
         "type" : "object",
         "properties" : {
@@ -1514,6 +1805,21 @@
         },
         "required" : [ "status" ]
       },
+      "History" : {
+        "type" : "object",
+        "properties" : {
+          "items" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Movement"
+            }
+          },
+          "nextAfterVersion" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        }
+      },
       "Links" : {
         "type" : "object",
         "properties" : {
@@ -1526,6 +1832,57 @@
           },
           "thumbnailUrl" : {
             "type" : "string"
+          }
+        }
+      },
+      "Movement" : {
+        "type" : "object",
+        "properties" : {
+          "actorRef" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "availableQuantity" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "createdAt" : {
+            "type" : "string",
+            "format" : "date-time"
+          },
+          "id" : {
+            "type" : "string",
+            "format" : "uuid"
+          },
+          "inventoryVersion" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "physicalAfter" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "physicalBefore" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "quantityDelta" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "reason" : {
+            "type" : "string"
+          },
+          "reservedQuantity" : {
+            "type" : "integer",
+            "format" : "int32"
+          },
+          "type" : {
+            "type" : "string"
+          },
+          "variantId" : {
+            "type" : "string",
+            "format" : "uuid"
           }
         }
       },
