@@ -1,4 +1,17 @@
 spring:
+    rabbitmq:
+        host: "${CATALOG_RABBITMQ_HOST:127.0.0.1}"
+        port: "${CATALOG_RABBITMQ_PORT:5672}"
+        virtual-host: "${CATALOG_RABBITMQ_VHOST:clusterjam}"
+        username: "${CATALOG_RABBITMQ_USER:catalog-consumer}"
+        password: "${CATALOG_RABBITMQ_PASSWORD:}"
+        dynamic: false
+        connection-timeout: 3s
+        requested-heartbeat: 30s
+        ssl:
+            enabled: "${CATALOG_RABBITMQ_TLS:false}"
+            validate-server-certificate: true
+            verify-hostname: true
     jackson:
         deserialization:
             fail-on-unknown-properties: true
@@ -51,6 +64,8 @@ server:
         include-binding-errors: never
 
 catalog:
+    messaging:
+        enabled: "${CATALOG_MESSAGING_ENABLED:false}"
     environment: "${APP_ENV:development}"
     reads:
         cursor-key: "${CATALOG_CURSOR_KEY:}"
