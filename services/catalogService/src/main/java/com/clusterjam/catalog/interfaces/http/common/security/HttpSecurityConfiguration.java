@@ -25,7 +25,6 @@ import org.springframework.security.web.access.intercept.AuthorizationFilter;
 public class HttpSecurityConfiguration {
 
     private static final String INTERNAL = "/api/v1/internal";
-    private static final String RESERVATIONS = INTERNAL + "/stock-reservations";
 
     private final SecurityProblemHandlers problems;
     private final WriteQuotaFilter writeQuota;
@@ -54,12 +53,6 @@ public class HttpSecurityConfiguration {
                     INTERNAL + "/variants/{variantId}",
                     INTERNAL + "/products/{productId}/sizes/{sizeId}")
                 .hasAnyAuthority(CatalogAuthority.READ, CatalogAuthority.COMPATIBILITY)
-                .requestMatchers(HttpMethod.GET, RESERVATIONS + "/{id}")
-                .hasAuthority(CatalogAuthority.RESERVE)
-                .requestMatchers(HttpMethod.POST, RESERVATIONS,
-                    RESERVATIONS + "/{id}/confirmations", RESERVATIONS + "/{id}/releases",
-                    RESERVATIONS + "/{id}/consumptions")
-                .hasAuthority(CatalogAuthority.RESERVE)
                 .anyRequest().denyAll())
             .oauth2ResourceServer(oauth -> oauth.authenticationEntryPoint(problems)
                 .withObjectPostProcessor(bearerFailures())

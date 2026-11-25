@@ -76,7 +76,7 @@ To stop the local database and preserve its data:
     docker compose --env-file .env -f ../../infra/catalog/compose.yaml stop db-catalogo
 
 The API leaves its HTTP listener available while PostgreSQL is unavailable.
-Readiness checks versions 1 through 7 on each request and recovers when the
+Readiness checks versions 1 through 8 on each request and recovers when the
 database and history are accessible. Flyway validate verifies checksums.
 The application starts with Hibernate DDL generation disabled and checks
 database availability through readiness.
@@ -98,7 +98,7 @@ come from app_metadata.app_role. Public health checks remain anonymous.
 Set SERVICE_JWT_ISSUER when a dedicated service issuer is available.
 It must publish public keys at its /.well-known/jwks.json. Internal requests
 require audience catalog-service and a permitted subject and scope. Orders
-uses catalog:read and catalog:reserve. Personalization uses
+uses catalog:read for internal reads. Reservation writes use AMQP. Personalization uses
 catalog:compatibility. The same subject can receive multiple allowed scopes.
 Catalog validates service credentials issued by that provider.
 
@@ -212,8 +212,8 @@ DataSource and Spring transaction as JPA with parameterized PostgreSQL
 statements. INSERT ON CONFLICT serializes equal keys and SELECT FOR UPDATE
 serializes inventory writes. Stock, movement and key commit together; the
 deferred movement FK prevents committing an incomplete idempotency claim.
-app_catalogo can append and read movements/keys, and update only physical
-stock, version and inventory timestamp. It cannot edit or delete history.
+app_catalogo can append and read movements/keys. Adjustments change physical
+stock and reservations change reserved stock, with the same inventory revision. It cannot edit or delete history.
 Lock or database unavailability returns 503; retry with the same key.
 
 InventoryAdminHttpTest adds three PostgreSQL HTTP tests for permissions,
@@ -230,3 +230,48 @@ Run from this service directory on Windows:
 
 Commit the generated contracts/openapi/catalog/v1/openapi.json from the
 monorepo root. The standard verification detects drift against the snapshot.
+
+## Reserve stock (branch 9)
+
+Apply V8 and provision the existing local broker with
+infra/rabbitmq/provision-catalog-local.py. The process uses the catalog-consumer
+account; the local smoke test uses orders-test-publisher.
+Set CATALOG_MESSAGING_ENABLED=true only after provisioning and migration.
+The loopback development broker uses port 5672 and TLS=false.
+Staging uses its existing AMQPS configuration and trusted certificates.
+
+Catalog consumes only cmd.catalog.reserve-stock.v1. Its type is the full
+routing key; the common envelope has messageId, type, orderId, occurredAt and data.
+See contracts/events/catalog-reservations.v1.md from the monorepo root.
+
+ReservationService owns the local transaction. The inbox key deduplicates
+messages and its operation/order unique constraint protects one purchase from
+being executed again under another message ID. The consumer name identifies
+the operation, not a shared queue. Rejected orders have inbox and outbox records
+without a reservation row. Physical stock stays unchanged.
+Product/variant share locks stabilize publication and price; ordered inventory
+update locks protect availability. Database wall time is checked after locking.
+The retained basket expires fifteen minutes after its creation.
+
+The consumer uses manual acknowledgements after commit, prefetch 1 and up to
+three technical attempts in memory. Invalid input or exhausted attempts are
+rejected without requeue. RabbitMQ routes them through the native DLX/DLQ.
+There are no message hashes, SQL quarantine, durable failure counters or
+AMQP status queries. The runtime does not configure broker resources.
+Readiness still checks database/migrations; check the queue consumer in RabbitMQ.
+
+ReservationMessageReaderTest checks ordinary JSON/ISO-8601 and basic domain data.
+ReservationCommandConsumerTest checks ACK order and the bounded rejection path.
+ReservationStockTest has three PostgreSQL tests for order/message idempotency,
+whole-basket rejection and competing buyers for the last unit.
+ReservationRabbitTest adds one optional live-broker smoke test.
+Set CATALOG_VERIFY_POSTGRES=true for database tests and
+CATALOG_VERIFY_RABBITMQ=true for the loopback broker test.
+Both require a migrated test/development database and fixture migrator password.
+The broker test also needs CATALOG_TEST_ORDERS_PASSWORD.
+Clear test flags and migration/admin credentials before launching the API.
+
+Results stay PENDING in app.outbox_catalogo in this branch.
+Branch 10 implements the reservation lifecycle and expiration job.
+Branch 11 implements the periodic outbox publisher with confirms/mandatory.
+Until those branches are complete, this branch does not complete a checkout.

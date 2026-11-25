@@ -107,7 +107,7 @@ class CatalogSecurityHttpTest {
 
         assertEquals(200, send("GET", VARIANT, readOnly, null).statusCode());
         problem(send("POST", RESERVATIONS, readOnly, "{}"), 403, "FORBIDDEN");
-        assertEquals(200, send("POST", RESERVATIONS, orders, "{}").statusCode());
+        problem(send("POST", RESERVATIONS, orders, "{}"), 403, "FORBIDDEN");
         assertEquals(200, send("GET", VARIANT, personalization, null).statusCode());
         problem(send("POST", RESERVATIONS, personalization, "{}"), 403, "FORBIDDEN");
         problem(send("GET", PRODUCTS, orders, null), 401, "UNAUTHORIZED");
