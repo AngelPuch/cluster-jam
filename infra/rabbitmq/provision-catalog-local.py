@@ -37,8 +37,15 @@ call("PUT", "/policies/clusterjam/catalog-reservations-dlq", {
 })
 for exchange, queue, key in (
     ("catalog.commands", "catalog.commands.v1", "cmd.catalog.reserve-stock.v1"),
+    ("catalog.commands", "catalog.commands.v1", "cmd.catalog.confirm-reservation.v1"),
+    ("catalog.commands", "catalog.commands.v1", "cmd.catalog.release-reservation.v1"),
+    ("catalog.commands", "catalog.commands.v1", "cmd.catalog.consume-stock.v1"),
     ("catalog.events", "orders.checkout.v1", "catalog.inventory.reservation-created.v1"),
     ("catalog.events", "orders.checkout.v1", "catalog.inventory.reservation-rejected.v1"),
+    ("catalog.events", "orders.checkout.v1", "catalog.inventory.reservation-confirmed.v1"),
+    ("catalog.events", "orders.checkout.v1", "catalog.inventory.reservation-released.v1"),
+    ("catalog.events", "orders.checkout.v1", "catalog.inventory.reservation-expired.v1"),
+    ("catalog.events", "orders.checkout.v1", "catalog.inventory.stock-consumed.v1"),
     ("clusterjam.dlx", "catalog.commands.v1.dlq", "catalog.commands.v1"),
 ):
     call("POST", f"/bindings/clusterjam/e/{exchange}/q/{queue}", {"routing_key": key, "arguments": {}})

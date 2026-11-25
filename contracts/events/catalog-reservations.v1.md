@@ -1,52 +1,61 @@
-# Catalog reservations v1
+# Catalog reservations v1 (branches 9-10)
 
-Branch 9 consumes only `cmd.catalog.reserve-stock.v1`.
-The input exchange is `catalog.commands`; the durable queue is `catalog.commands.v1`.
-Outbox results target `catalog.events` and `orders.checkout.v1`.
+All commands target the topic exchange catalog.commands and durable queue
+catalog.commands.v1. Results target catalog.events and orders.checkout.v1.
+Results remain PENDING in outbox until branch 11 implements the publisher.
 
-| Message | data |
+| Type / routing key | data |
 | --- | --- |
 | cmd.catalog.reserve-stock.v1 | quoteValidUntil, lines[{variantId, quantity, expectedBasePriceCents}] |
+| cmd.catalog.confirm-reservation.v1 | reservationId, paymentId |
+| cmd.catalog.release-reservation.v1 | reservationId, reason |
+| cmd.catalog.consume-stock.v1 | reservationId |
 | catalog.inventory.reservation-created.v1 | reservationId, expiresAt |
 | catalog.inventory.reservation-rejected.v1 | reason: OUT_OF_STOCK, VARIANT_UNAVAILABLE, PRICE_CHANGED or QUOTE_EXPIRED |
+| catalog.inventory.reservation-confirmed.v1 | reservationId, paymentId |
+| catalog.inventory.reservation-released.v1 | reservationId, reason |
+| catalog.inventory.reservation-expired.v1 | reservationId, expiresAt |
+| catalog.inventory.stock-consumed.v1 | reservationId |
 
-All messages use messageId (UUID), type (the complete routing key), orderId (UUID),
-occurredAt (ISO-8601 instant), and data. Publish JSON as persistent with AMQP
-message_id=messageId, correlation_id=orderId and type=type.
-Do not regenerate an ID when retrying publication.
+The common envelope is messageId (UUID), type (full routing key), orderId (UUID),
+occurredAt (normal ISO-8601 instant) and data.
+Publish persistent JSON, with AMQP message_id=messageId, correlation_id=orderId
+and type=type. Preserve IDs on retry. No JSON canonicalization or body hashes.
 
-One order is one purchase. The reserve handler deduplicates by message ID and,
-as a business safeguard, by order ID. The inbox consumer name is the operation
-type, so future confirmation/release handlers have their own namespace.
-An already processed order retains its first reserve result; creating a new
-purchase requires a new order. No body hashes are compared.
+Quantities and base prices are positive integer values. Base prices use MXN
+cents up to the existing 10000000 administrative limit. Variants are distinct.
+The release reason is required and at most 200 characters.
+Each reservation ID must belong to the envelope orderId.
 
-Quantities are positive integers. Base prices are positive integer MXN cents,
-up to the existing administrative limit of 10000000. Variants must be distinct.
-Orders groups design lines by variant and supplies its server-side quote.
-Timestamps use ordinary ISO-8601; fractional seconds are not fixed.
+One order is one purchase. Inbox identifies its logical consumer by operation
+type and deduplicates messages and operations for that order. Future purchases
+must use a new order. Exact repeated deliveries do not create new output facts.
 
-Example (replace identifiers/times when used by a real producer):
+| Transition | Inventory effect |
+| --- | --- |
+| New ACTIVA | Increase reserved only |
+| ACTIVA -> CONFIRMADA | No inventory delta; remember paymentId |
+| ACTIVA/CONFIRMADA -> LIBERADA | Decrease reserved once |
+| ACTIVA -> EXPIRADA | Decrease reserved once |
+| CONFIRMADA -> CONSUMIDA | Decrease physical and reserved once |
 
-```json
-{
-  "messageId": "00000000-0000-4000-8000-000000000003",
-  "type": "cmd.catalog.reserve-stock.v1",
-  "orderId": "00000000-0000-4000-8000-000000000001",
-  "occurredAt": "2026-11-25T18:00:00Z",
-  "data": {
-    "quoteValidUntil": "2026-11-25T18:05:00Z",
-    "lines": [{
-      "variantId": "00000000-0000-4000-8000-000000000004",
-      "quantity": 2,
-      "expectedBasePriceCents": 19900
-    }]
-  }
-}
-```
+Confirmation rechecks the PostgreSQL wall clock after obtaining the reservation
+lock. It succeeds only strictly before expiry. A late confirmation expires an
+active reservation immediately, including releasing stock and writing the
+expiration event in the same transaction.
+The periodic worker checks due active reservations every 30 seconds.
 
-Inbox, the whole basket or rejection, and its outbox result commit together.
-The consumer then acknowledges the delivery. Invalid input and three exhausted
-technical attempts are rejected without requeue into the native DLQ.
-Branch 9 stores results as PENDING; branch 11 publishes them.
-Branch 10 supplies confirmation, release, expiry and physical stock consumption.
+Confirmation of an expired/released reservation and release of an already
+expired/released reservation keep the existing terminal evidence. They do not
+create another confirmed/released event. The inbox result points to that
+existing event. Confirmed reservations do not expire.
+
+Unknown or foreign reservation IDs, conflicting payment identities and invalid
+state transitions roll back and are rejected without requeue to DLQ. They do
+not create preventive rows or false release events. Technical failures retain
+the three-attempt policy. ACK follows commit.
+
+Orders sends confirmation only after it has accredited payment, and serializes
+production against cancellation on its order row. Catalog does not contact
+Stripe or decide reimbursement. Production consumption is after checkout and
+does not change its pivot. No AMQP status-query protocol is introduced.

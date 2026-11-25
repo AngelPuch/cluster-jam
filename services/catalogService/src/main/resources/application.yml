@@ -64,6 +64,8 @@ server:
         include-binding-errors: never
 
 catalog:
+    reservations:
+        expiration-enabled: "${CATALOG_RESERVATION_EXPIRATION_ENABLED:true}"
     messaging:
         enabled: "${CATALOG_MESSAGING_ENABLED:false}"
     environment: "${APP_ENV:development}"
