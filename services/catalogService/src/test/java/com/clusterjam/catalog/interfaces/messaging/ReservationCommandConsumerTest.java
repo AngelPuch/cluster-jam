@@ -7,7 +7,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.lang.reflect.Proxy;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 
+import com.clusterjam.catalog.application.ports.ReservationLifecycleStore;
+import com.clusterjam.catalog.application.reservations.InvalidReservationMessage;
+import com.clusterjam.catalog.application.reservations.ReservationLifecycleService;
+import com.clusterjam.catalog.application.reservations.ReservationMessages.Command;
 import com.clusterjam.catalog.application.reservations.ReservationMessages.ReserveCommand;
 import com.clusterjam.catalog.application.reservations.ReservationService;
 import com.rabbitmq.client.Channel;
@@ -34,7 +39,7 @@ class ReservationCommandConsumerTest {
                 }
             };
             var reader = new ReservationMessageReader(new JsonMapper(), factory.getValidator());
-            var consumer = new ReservationCommandConsumer(reader, service);
+            var consumer = new ReservationCommandConsumer(reader, service, lifecycle(command -> { }));
             Channel channel = channel(returned, acks, rejects);
             consumer.receive(message(false), channel);
             assertEquals(1, calls.get());
@@ -60,12 +65,58 @@ class ReservationCommandConsumerTest {
                 }
             };
             var reader = new ReservationMessageReader(new JsonMapper(), factory.getValidator());
-            new ReservationCommandConsumer(reader, service)
+            new ReservationCommandConsumer(reader, service, lifecycle(command -> { }))
                 .receive(message(false), channel(new AtomicBoolean(), acks, rejects));
             assertEquals(3, calls.get());
             assertEquals(0, acks.get());
             assertEquals(1, rejects.get());
         }
+    }
+
+    @Test
+    void rejectsInvalidLifecycleOperationsWithoutTechnicalRetries() throws Exception {
+        try (var factory = Validation.buildDefaultValidatorFactory()) {
+            var calls = new AtomicInteger();
+            var acks = new AtomicInteger();
+            var rejects = new AtomicInteger();
+            var reader = new ReservationMessageReader(new JsonMapper(), factory.getValidator());
+            var lifecycle = lifecycle(command -> {
+                calls.incrementAndGet();
+                throw new InvalidReservationMessage();
+            });
+            Message original = message(false);
+            var properties = original.getMessageProperties();
+            properties.setReceivedRoutingKey("cmd.catalog.confirm-reservation.v1");
+            properties.setType("cmd.catalog.confirm-reservation.v1");
+            String body = """
+                {"messageId":"00000000-0000-4000-8000-000000000003",
+                 "type":"cmd.catalog.confirm-reservation.v1",
+                 "orderId":"00000000-0000-4000-8000-000000000001",
+                 "occurredAt":"2026-11-25T18:00:00Z",
+                 "data":{"reservationId":"00000000-0000-4000-8000-000000000004",
+                 "paymentId":"00000000-0000-4000-8000-000000000005"}}
+                """;
+            var consumer = new ReservationCommandConsumer(reader, new ReservationService(command -> { }), lifecycle);
+            consumer.receive(new Message(body.getBytes(java.nio.charset.StandardCharsets.UTF_8), properties),
+                channel(new AtomicBoolean(), acks, rejects));
+            assertEquals(1, calls.get());
+            assertEquals(0, acks.get());
+            assertEquals(1, rejects.get());
+        }
+    }
+
+    private ReservationLifecycleService lifecycle(Consumer<Command> action) {
+        return new ReservationLifecycleService(new ReservationLifecycleStore() {
+            @Override
+            public void transition(Command command) {
+                action.accept(command);
+            }
+
+            @Override
+            public boolean expireNext() {
+                return false;
+            }
+        });
     }
 
     private Channel channel(AtomicBoolean returned, AtomicInteger acks, AtomicInteger rejects) {

@@ -3,6 +3,8 @@ package com.clusterjam.catalog.interfaces.messaging;
 import java.io.IOException;
 
 import com.clusterjam.catalog.application.reservations.InvalidReservationMessage;
+import com.clusterjam.catalog.application.reservations.ReservationLifecycleService;
+import com.clusterjam.catalog.application.reservations.ReservationMessages.Command;
 import com.clusterjam.catalog.application.reservations.ReservationMessages.ReserveCommand;
 import com.clusterjam.catalog.application.reservations.ReservationService;
 import com.rabbitmq.client.Channel;
@@ -15,18 +17,22 @@ public final class ReservationCommandConsumer {
     private static final Logger LOG = LoggerFactory.getLogger(ReservationCommandConsumer.class);
     private final ReservationMessageReader reader;
     private final ReservationService service;
+    private final ReservationLifecycleService lifecycle;
 
-    public ReservationCommandConsumer(ReservationMessageReader reader, ReservationService service) {
+    public ReservationCommandConsumer(
+        ReservationMessageReader reader, ReservationService service, ReservationLifecycleService lifecycle
+    ) {
         this.reader = reader;
         this.service = service;
+        this.lifecycle = lifecycle;
     }
 
     public void receive(Message message, Channel channel) throws IOException {
         var properties = message.getMessageProperties();
         long tag = properties.getDeliveryTag();
-        ReserveCommand command;
+        Command command;
         try {
-            command = reader.read(message.getBody(), properties.getReceivedRoutingKey());
+            command = reader.readCommand(message.getBody(), properties.getReceivedRoutingKey());
             if (!"catalog.commands".equals(properties.getReceivedExchange())
                 || !command.messageId().toString().equalsIgnoreCase(properties.getMessageId())
                 || !command.orderId().toString().equalsIgnoreCase(properties.getCorrelationId())
@@ -41,8 +47,17 @@ public final class ReservationCommandConsumer {
 
         for (int attempt = 1; attempt <= 3; attempt++) {
             try {
-                service.reserve(command);
+                if (command instanceof ReserveCommand reserve) {
+                    service.reserve(reserve);
+                } else {
+                    lifecycle.transition(command);
+                }
                 break;
+            } catch (InvalidReservationMessage invalidState) {
+                LOG.atWarn().addKeyValue("message_id", command.messageId())
+                    .addKeyValue("order_id", command.orderId()).log("catalog_reservation_invalid_operation");
+                channel.basicReject(tag, false);
+                return;
             } catch (RuntimeException technical) {
                 if (attempt == 3) {
                     LOG.atWarn().addKeyValue("message_id", command.messageId())

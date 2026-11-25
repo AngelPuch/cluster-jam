@@ -1,5 +1,6 @@
 package com.clusterjam.catalog.infrastructure.config;
 
+import com.clusterjam.catalog.application.reservations.ReservationLifecycleService;
 import com.clusterjam.catalog.application.reservations.ReservationService;
 import com.clusterjam.catalog.interfaces.messaging.ReservationCommandConsumer;
 import com.clusterjam.catalog.interfaces.messaging.ReservationMessageReader;
@@ -18,7 +19,8 @@ public class ReservationMessagingConfiguration {
 
     @Bean
     SimpleMessageListenerContainer reservationCommandsContainer(
-        ConnectionFactory connectionFactory, ReservationMessageReader reader, ReservationService service
+        ConnectionFactory connectionFactory, ReservationMessageReader reader,
+        ReservationService service, ReservationLifecycleService lifecycle
     ) {
         var container = new SimpleMessageListenerContainer(connectionFactory);
         container.setQueueNames("catalog.commands.v1");
@@ -31,7 +33,7 @@ public class ReservationMessagingConfiguration {
         container.setRecoveryInterval(5000L);
         container.setErrorHandler(error -> LoggerFactory.getLogger(ReservationMessagingConfiguration.class)
             .warn("catalog_reservation_delivery_failed"));
-        var consumer = new ReservationCommandConsumer(reader, service);
+        var consumer = new ReservationCommandConsumer(reader, service, lifecycle);
         container.setMessageListener((ChannelAwareMessageListener) consumer::receive);
         return container;
     }

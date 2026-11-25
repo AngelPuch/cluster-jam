@@ -76,7 +76,7 @@ To stop the local database and preserve its data:
     docker compose --env-file .env -f ../../infra/catalog/compose.yaml stop db-catalogo
 
 The API leaves its HTTP listener available while PostgreSQL is unavailable.
-Readiness checks versions 1 through 8 on each request and recovers when the
+Readiness checks versions 1 through 9 on each request and recovers when the
 database and history are accessible. Flyway validate verifies checksums.
 The application starts with Hibernate DDL generation disabled and checks
 database availability through readiness.
@@ -231,16 +231,17 @@ Run from this service directory on Windows:
 Commit the generated contracts/openapi/catalog/v1/openapi.json from the
 monorepo root. The standard verification detects drift against the snapshot.
 
-## Reserve stock (branch 9)
+## Reserve stock and complete its lifecycle (branches 9-10)
 
-Apply V8 and provision the existing local broker with
+Apply V8 and V9 and provision the existing local broker with
 infra/rabbitmq/provision-catalog-local.py. The process uses the catalog-consumer
 account; the local smoke test uses orders-test-publisher.
 Set CATALOG_MESSAGING_ENABLED=true only after provisioning and migration.
 The loopback development broker uses port 5672 and TLS=false.
 Staging uses its existing AMQPS configuration and trusted certificates.
 
-Catalog consumes only cmd.catalog.reserve-stock.v1. Its type is the full
+Catalog consumes reserve-stock, confirm-reservation, release-reservation and
+consume-stock commands from catalog.commands.v1. Its type is the full
 routing key; the common envelope has messageId, type, orderId, occurredAt and data.
 See contracts/events/catalog-reservations.v1.md from the monorepo root.
 
@@ -272,6 +273,33 @@ The broker test also needs CATALOG_TEST_ORDERS_PASSWORD.
 Clear test flags and migration/admin credentials before launching the API.
 
 Results stay PENDING in app.outbox_catalogo in this branch.
-Branch 10 implements the reservation lifecycle and expiration job.
+Branch 10 supplies confirmation, release, production consumption and an expiration
+worker with a 30-second delay and at most ten separate transactions per pass.
 Branch 11 implements the periodic outbox publisher with confirms/mandatory.
-Until those branches are complete, this branch does not complete a checkout.
+Until the publisher and Orders/Payments are integrated, this service does not
+complete a checkout by itself.
+
+The pivot is ACTIVA -> CONFIRMADA under the reservation row lock and the
+PostgreSQL wall clock. Confirmation keeps physical/reserved stock unchanged;
+production consumption removes both quantities once. Release and expiration
+remove only reserved stock. All inventory locks use variant order.
+
+V9 adds payment_id and ultimo_evento_id to real reservations. The payment
+reference is not a foreign key to another service. The last-event link lets a
+late confirmation or release retain the already recorded terminal evidence,
+without generating another event or fake success. Inbox and the last-event FK
+are checked in the same commit as the state/stock/outbox changes.
+
+Unknown/foreign reservations, contradictory payment identity and inadmissible
+production/release states are invalid operations. They roll back and are
+rejected without requeue to the native DLQ, rather than claiming that a
+reservation was released. A message already handled by inbox has no new effect.
+
+The expiration worker uses the existing scheduling configuration from the photo
+feature. CATALOG_RESERVATION_EXPIRATION_ENABLED defaults to true; turn it off
+only while running deterministic integration tests. It works independently of
+RabbitMQ availability and leaves expiration results in outbox.
+ReservationLifecycleReaderTest adds one DTO test.
+ReservationLifecycleTest adds five PostgreSQL scenarios, including wall time
+after waiting for a row lock. The existing live RabbitMQ smoke test now also
+confirms and consumes with repeated deliveries.
