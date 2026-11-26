@@ -1,8 +1,9 @@
-# Catalog reservations v1 (branches 9-10)
+# Catalog reservations v1 (branches 9-11)
 
 All commands target the topic exchange catalog.commands and durable queue
 catalog.commands.v1. Results target catalog.events and orders.checkout.v1.
-Results remain PENDING in outbox until branch 11 implements the publisher.
+Results enter outbox as PENDING. With the branch-11 publisher enabled, they
+become PUBLISHED after a positive publisher confirm without a mandatory return.
 
 | Type / routing key | data |
 | --- | --- |
@@ -59,3 +60,23 @@ Orders sends confirmation only after it has accredited payment, and serializes
 production against cancellation on its order row. Catalog does not contact
 Stripe or decide reimbursement. Production consumption is after checkout and
 does not change its pivot. No AMQP status-query protocol is introduced.
+
+## Delivery and publication
+
+The message contracts above do not change in branch 11.
+The publisher polls pending rows every five seconds, at most ten per pass,
+with a separate SQL transaction per row. It holds a NO KEY UPDATE row lock
+through publication and SQL commit, preserving key-share reads of existing FKs.
+The deployment assumes one instance and one scheduled publisher.
+
+Correlated confirms, returns and mandatory publication are enabled together.
+Messages use persistent delivery mode. A positive confirm alone does not prove
+a route: the publisher also checks the returned-message result.
+A publication failure retains PENDING and the same messageId for a later cycle.
+If the broker accepted a message before its SQL mark was lost, delivery may
+repeat. Inbox remains responsible for an idempotent consumer effect.
+
+PUBLISHED describes broker acceptance/routing, not Orders' business result.
+No AMQP status queries, new business messages or HTTP reservation routes are
+introduced. Native DLQ remains for rejected consumer deliveries; publication
+failures are retried from outbox.

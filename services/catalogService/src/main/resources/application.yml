@@ -1,4 +1,9 @@
 spring:
+    task:
+        scheduling:
+            pool:
+                size: 3
+
     rabbitmq:
         host: "${CATALOG_RABBITMQ_HOST:127.0.0.1}"
         port: "${CATALOG_RABBITMQ_PORT:5672}"
@@ -6,6 +11,10 @@ spring:
         username: "${CATALOG_RABBITMQ_USER:catalog-consumer}"
         password: "${CATALOG_RABBITMQ_PASSWORD:}"
         dynamic: false
+        publisher-confirm-type: correlated
+        publisher-returns: true
+        template:
+            mandatory: true
         connection-timeout: 3s
         requested-heartbeat: 30s
         ssl:
@@ -64,6 +73,8 @@ server:
         include-binding-errors: never
 
 catalog:
+    outbox:
+        enabled: "${CATALOG_OUTBOX_PUBLISHER_ENABLED:false}"
     reservations:
         expiration-enabled: "${CATALOG_RESERVATION_EXPIRATION_ENABLED:true}"
     messaging:

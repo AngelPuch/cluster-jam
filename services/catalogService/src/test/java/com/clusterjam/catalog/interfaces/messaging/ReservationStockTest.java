@@ -29,6 +29,8 @@ import tools.jackson.databind.json.JsonMapper;
 @EnabledIfEnvironmentVariable(named = "CATALOG_VERIFY_POSTGRES", matches = "true")
 @SpringBootTest(properties = {
     "catalog.messaging.enabled=false",
+    "catalog.outbox.enabled=false",
+    "catalog.reservations.expiration-enabled=false",
     "catalog.environment=test",
     "catalog.security.supabase-url=https://catalog-test.supabase.co",
     "catalog.reads.cursor-key=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",

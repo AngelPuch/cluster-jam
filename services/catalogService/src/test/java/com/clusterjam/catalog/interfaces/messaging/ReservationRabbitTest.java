@@ -28,6 +28,7 @@ import tools.jackson.databind.json.JsonMapper;
 @SpringBootTest(properties = {
     "catalog.messaging.enabled=true",
     "catalog.reservations.expiration-enabled=false",
+    "catalog.outbox.enabled=false",
     "catalog.environment=test",
     "catalog.security.supabase-url=https://catalog-test.supabase.co",
     "catalog.reads.cursor-key=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",

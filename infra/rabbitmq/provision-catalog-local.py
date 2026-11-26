@@ -53,8 +53,13 @@ for exchange, queue, key in (
 for user, variable, write, read in (
     ("catalog-consumer", "CATALOG_RABBITMQ_PASSWORD", r"^catalog\.events$", r"^catalog\.commands\.v1$"),
     ("orders-test-publisher", "CATALOG_TEST_ORDERS_PASSWORD", r"^catalog\.commands$", "^$"),
+    ("catalog-publisher-test", "CATALOG_TEST_OUTBOX_PASSWORD", r"^catalog\.publisher\.test\..+$",
+     r"^(catalog\.events|catalog\.publisher\.test\..+)$"),
 ):
     call("PUT", "/users/" + user, {"password": os.environ[variable], "tags": ""})
-    call("PUT", "/permissions/clusterjam/" + user, {"configure": "^$", "write": write, "read": read})
+    configure = r"^catalog\.publisher\.test\..+$" if user == "catalog-publisher-test" else "^$"
+    call("PUT", "/permissions/clusterjam/" + user, {
+        "configure": configure, "write": write, "read": read
+    })
 
 print("Catalog queue, native DLQ and local runtime/test accounts are ready.")

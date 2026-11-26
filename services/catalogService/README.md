@@ -76,7 +76,7 @@ To stop the local database and preserve its data:
     docker compose --env-file .env -f ../../infra/catalog/compose.yaml stop db-catalogo
 
 The API leaves its HTTP listener available while PostgreSQL is unavailable.
-Readiness checks versions 1 through 9 on each request and recovers when the
+Readiness checks versions 1 through 10 on each request and recovers when the
 database and history are accessible. Flyway validate verifies checksums.
 The application starts with Hibernate DDL generation disabled and checks
 database availability through readiness.
@@ -231,9 +231,9 @@ Run from this service directory on Windows:
 Commit the generated contracts/openapi/catalog/v1/openapi.json from the
 monorepo root. The standard verification detects drift against the snapshot.
 
-## Reserve stock and complete its lifecycle (branches 9-10)
+## Reserve stock, complete its lifecycle and publish results (branches 9-11)
 
-Apply V8 and V9 and provision the existing local broker with
+Apply V8, V9 and V10 and provision the existing local broker with
 infra/rabbitmq/provision-catalog-local.py. The process uses the catalog-consumer
 account; the local smoke test uses orders-test-publisher.
 Set CATALOG_MESSAGING_ENABLED=true only after provisioning and migration.
@@ -272,12 +272,12 @@ Both require a migrated test/development database and fixture migrator password.
 The broker test also needs CATALOG_TEST_ORDERS_PASSWORD.
 Clear test flags and migration/admin credentials before launching the API.
 
-Results stay PENDING in app.outbox_catalogo in this branch.
+Results are committed as PENDING in app.outbox_catalogo. The publisher marks them
+PUBLISHED only after a positive broker confirm without a returned message.
 Branch 10 supplies confirmation, release, production consumption and an expiration
 worker with a 30-second delay and at most ten separate transactions per pass.
-Branch 11 implements the periodic outbox publisher with confirms/mandatory.
-Until the publisher and Orders/Payments are integrated, this service does not
-complete a checkout by itself.
+Branch 11 supplies the periodic outbox publisher with confirms/mandatory.
+Orders/Payments must still be integrated to complete a checkout across services.
 
 The pivot is ACTIVA -> CONFIRMADA under the reservation row lock and the
 PostgreSQL wall clock. Confirmation keeps physical/reserved stock unchanged;
@@ -303,3 +303,56 @@ ReservationLifecycleReaderTest adds one DTO test.
 ReservationLifecycleTest adds five PostgreSQL scenarios, including wall time
 after waiting for a row lock. The existing live RabbitMQ smoke test now also
 confirms and consumes with repeated deliveries.
+
+## Publish the catalog outbox (branch 11)
+
+Apply V10, provision RabbitMQ and set CATALOG_OUTBOX_PUBLISHER_ENABLED=true.
+This flag is independent of CATALOG_MESSAGING_ENABLED and defaults to false.
+The broker does not scan the database: CatalogOutboxWorker polls every five
+seconds and processes up to ten rows. Only one service instance/publisher is
+part of this project deployment.
+
+Each publishNext call owns a separate technical SQL transaction. It selects the
+oldest pending row with LIMIT 1 FOR NO KEY UPDATE SKIP LOCKED, publishes
+persistent JSON, waits up to three seconds for a correlated publisher confirm,
+checks that no mandatory return was received, then updates estado/publicado_en.
+The row lock is retained until commit. This lock mode still excludes competing
+writers while allowing the key-share reads used by the existing outbox FKs.
+Only outbox rows are selected/updated by this transaction.
+
+AMQP message_id stays equal to the outbox ID, correlation_id is orderId and
+type is the routing key. The JSON body is read from the committed JSONB value.
+CorrelationData belongs to Spring's per-publication confirmation mechanism;
+it does not change the event ID or add a saga attempt.
+
+A nack, missing route, unavailable connection or missing confirm leaves the
+row pending. The worker stops that pass and retries in a later cycle.
+Successful earlier rows in the pass have already committed.
+If publication succeeds but the SQL commit fails, the same message may be
+sent again. Consumers must retain their inbox idempotency.
+
+PUBLISHED means routed and acknowledged by RabbitMQ. It does not mean that
+Orders processed the event or that the purchase completed.
+Publishing failures stay in outbox; the existing native DLQ is for rejected
+consumer deliveries. Neither creates a SQL quarantine or error exchange.
+Readiness still checks PostgreSQL and migrations, not broker delivery.
+
+The local provisioning script also creates catalog-publisher-test. It can
+create/read only temporary catalog.publisher.test.* queues and bind them to
+catalog.events. It cannot publish catalog events or consume Orders' queue.
+Set CATALOG_TEST_OUTBOX_PASSWORD only for the local broker integration tests.
+Never run the application with a test/admin account.
+
+RabbitMqCatalogEventPublisherTest adds two unit tests.
+OutboxPublicationTest adds one PostgreSQL test for locking, rollback and retry.
+OutboxRabbitTest adds two local broker tests for confirms/returns and recovery
+after an unavailable connection. It uses exclusive temporary observer queues
+and cleans up only the outbox fixtures it created.
+The failure probe uses a closed loopback port; it does not stop the shared broker.
+Existing reservation integration tests explicitly keep the publisher disabled.
+
+Set CATALOG_VERIFY_POSTGRES=true and CATALOG_VERIFY_RABBITMQ=true for the
+essential integration run. It needs the usual migration password plus
+CATALOG_TEST_ORDERS_PASSWORD and CATALOG_TEST_OUTBOX_PASSWORD.
+Turn scheduled expiration/publication off during deterministic tests; clear
+test/admin/migration credentials before starting the application.
