@@ -21,6 +21,7 @@ import {
 } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { ReceivePaymentNoticeService } from '../../../application/payments/receive-payment-notice.service';
+import { ReceiveRefundNoticeService } from '../../../application/payments/receive-refund-notice.service';
 import {
     PaymentPersistenceUnavailable,
     PaymentProviderMismatch,
@@ -37,11 +38,12 @@ export class StripeWebhookController {
         private readonly verifier: StripeWebhookVerifier,
         private readonly payments: ReceivePaymentNoticeService,
         private readonly logger: JsonLogger,
+        private readonly refunds: ReceiveRefundNoticeService,
     ) {}
 
     @Post()
     @HttpCode(200)
-    @ApiOperation({ summary: 'Receive signed Stripe test-mode PaymentIntent events' })
+    @ApiOperation({ summary: 'Receive signed Stripe test-mode payment and refund events' })
     @ApiConsumes('application/json')
     @ApiHeader({
         name: 'Stripe-Signature',
@@ -62,7 +64,10 @@ export class StripeWebhookController {
         try {
             const notice = this.verifier.verify(request.rawBody, signature);
             if (notice) {
-                await this.payments.execute(notice);
+                if ('refundId' in notice) {
+                    if (await this.refunds.execute(notice))
+                        this.logger.warn({ event: 'payments.refund.unresolved', stripe_event_id: notice.eventId });
+                } else await this.payments.execute(notice);
                 this.logger.log({ event: 'payments.webhook.processed', stripe_event_id: notice.eventId });
             }
             return { received: true };

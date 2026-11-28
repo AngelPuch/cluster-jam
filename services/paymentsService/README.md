@@ -6,8 +6,8 @@ safe logs/errors and the Stripe test-mode payment preparation core. The core
 persists operation identity before calling Stripe, then saves the result with
 inbox and a pending outbox event in one transaction. RabbitMQ consumes enable
 commands with manual ACK after commit and publishes outbox every five seconds.
-Signed PaymentIntent webhooks and command-driven cancellation are implemented; full refunds and protected
-payment access follow separately. There are no user-facing payment operations yet.
+Signed payment/refund webhooks, cancellation and full-refund commands are implemented.
+Protected user payment access follows separately.
 
 ## Run locally
 
@@ -32,12 +32,13 @@ npm run start:dev
 Stripe sends signed snapshot events to `POST /api/v1/webhooks/stripe`.
 Set its separate `STRIPE_WEBHOOK_SECRET` in the private `.env` and subscribe to
 `payment_intent.succeeded`, `payment_intent.canceled`,
-`payment_intent.payment_failed` and `payment_intent.processing`.
+`payment_intent.payment_failed`, `payment_intent.processing`, `refund.created`,
+`refund.updated` and `refund.failed`.
 The endpoint verifies the signature over the original body, reads the current
 PaymentIntent through the SDK outside SQL, then commits state, inbox and outbox.
 Repeated/late events cannot duplicate credit or undo paid/refunded money.
 A reusable card decline stays pending. Missing configuration/dependencies return
-a non-success response for retry. Refund notifications follow with compensation.
+a non-success response for retry.
 
 The local database uses loopback port 5437, database `payments_db` and runtime
 role `app_pagos`. `migrator_pagos` owns schema `app` and applies versioned
@@ -70,7 +71,12 @@ manual replay preserves the message ID. Cancellation checks Stripe before writin
 uses `payment:cancel:<paymentId>` and resolves uncertain responses by reading the
 same intent. A concurrent charge is credited for Orders to request a refund;
 only confirmed zero-charge cancellation produces a no-charge result.
-Full refund handlers follow separately; refund commands currently go to DLQ.
+Full refunds use one persisted operation per payment and the key
+`payment:refund:<paymentId>`. Pending refunds retain `PAGADO`; only confirmed full
+success sets `REEMBOLSADO` and publishes a result. Failed operations keep their
+provider reference for review rather than creating another refund automatically.
+Unknown creation results older than 23 hours require manual recovery.
+Apply migrations before restarting an updated consumer.
 
 Use `.env.example` for configuration. Staging/production require `DB_SSL=true`
 and a trusted PostgreSQL certificate; `DB_CA_PATH` supplies a private CA when

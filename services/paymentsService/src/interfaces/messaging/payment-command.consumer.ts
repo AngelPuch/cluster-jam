@@ -3,6 +3,7 @@ import type { Channel, ConsumeMessage } from 'amqplib';
 import { setTimeout as delay } from 'node:timers/promises';
 import { EnablePaymentService } from '../../application/payments/enable-payment.service';
 import { CancelPaymentService } from '../../application/payments/cancel-payment.service';
+import { RefundPaymentService } from '../../application/payments/refund-payment.service';
 import {
     PaymentCommandConflict,
     PaymentProviderMismatch,
@@ -19,6 +20,7 @@ export class PaymentCommandConsumer {
         private readonly logger: JsonLogger,
         private readonly traces: TraceContextService,
         @Inject(CancelPaymentService) private readonly cancellation: Pick<CancelPaymentService, 'execute'>,
+        @Inject(RefundPaymentService) private readonly refund: Pick<RefundPaymentService, 'execute'>,
     ) {}
 
     async receive(message: ConsumeMessage, channel: Channel): Promise<void> {
@@ -41,8 +43,7 @@ export class PaymentCommandConsumer {
                     messageId.toLowerCase() !== command.messageId.toLowerCase() ||
                     typeof orderId !== 'string' ||
                     orderId.toLowerCase() !== command.orderId.toLowerCase() ||
-                    message.properties.type !== String(command.type) ||
-                    command.type === PaymentMessageType.Refund
+                    message.properties.type !== String(command.type)
                 ) {
                     throw new InvalidPaymentCommand();
                 }
@@ -55,7 +56,8 @@ export class PaymentCommandConsumer {
             for (let attempt = 1; attempt <= 3; attempt++) {
                 try {
                     if (command.type === PaymentMessageType.Enable) await this.handler.execute(command);
-                    else await this.cancellation.execute(command);
+                    else if (command.type === PaymentMessageType.Cancel) await this.cancellation.execute(command);
+                    else await this.refund.execute(command);
                 } catch (error) {
                     const permanent =
                         error instanceof PaymentCommandConflict ||

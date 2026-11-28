@@ -13,6 +13,10 @@ export class StripeFixture {
     succeedOnNextCancel = false;
     blockCancellation = false;
     private readonly cancelledKeys = new Map<string, Record<string, unknown>>();
+    readonly refunds = new Map<string, Record<string, unknown>>();
+    readonly refundRequests: Array<{ key: string; form: URLSearchParams }> = [];
+    nextRefundStatus = 'succeeded';
+    dropRefundResponses = 0;
     dropCreateResponses = 0;
     responseOverride: Record<string, unknown> = {};
     private readonly server = createServer((request, response) => {
@@ -75,6 +79,34 @@ export class StripeFixture {
                 response.destroy();
                 return;
             }
+        } else if (request.method === 'POST' && request.url === '/v1/refunds') {
+            const chunks: Buffer[] = [];
+            for await (const chunk of request) chunks.push(Buffer.from(chunk as Uint8Array));
+            const form = new URLSearchParams(Buffer.concat(chunks).toString());
+            const key = String(request.headers['idempotency-key'] ?? '');
+            this.refundRequests.push({ key, form });
+            intent = this.refunds.get(key);
+            if (!intent) {
+                intent = {
+                    id: 're_fixture' + randomUUID().replaceAll('-', ''),
+                    object: 'refund',
+                    payment_intent: form.get('payment_intent'),
+                    amount: Number(form.get('amount')),
+                    currency: 'mxn',
+                    status: this.nextRefundStatus,
+                    metadata: Object.fromEntries(
+                        [...form.entries()]
+                            .filter(([name]) => name.startsWith('metadata['))
+                            .map(([name, value]) => [name.slice(9, -1), value]),
+                    ),
+                };
+                this.refunds.set(key, intent);
+            }
+            if (this.dropRefundResponses > 0) {
+                this.dropRefundResponses--;
+                response.destroy();
+                return;
+            }
         } else if (request.method === 'POST' && request.url?.endsWith('/cancel')) {
             const id = request.url.split('/')[3];
             const key = String(request.headers['idempotency-key'] ?? '');
@@ -113,6 +145,7 @@ export class StripeFixture {
             intent = [...this.intents.values()].find(
                 (value) => request.url === '/v1/payment_intents/' + String(value.id),
             );
+            intent ??= [...this.refunds.values()].find((value) => request.url === '/v1/refunds/' + String(value.id));
         }
         if (!intent) {
             response.writeHead(404).end();

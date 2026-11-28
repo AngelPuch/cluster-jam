@@ -1,6 +1,6 @@
 import { Injectable, type OnApplicationShutdown } from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import { PAYMENTS_MIGRATION_NAME, PAYMENTS_SCHEMA_VERSION } from './migrations/1795741200000-record-stripe-creation';
+import { PAYMENTS_MIGRATION_NAME, PAYMENTS_SCHEMA_VERSION } from './migrations/1795824000000-record-refund-creation';
 
 @Injectable()
 export class DatabaseReadiness implements OnApplicationShutdown {

@@ -16,6 +16,12 @@ import { CancelPaymentService } from './application/payments/cancel-payment.serv
 import { CANCEL_PAYMENT_STORE, CANCEL_PAYMENT_GATEWAY } from './application/ports/cancel-payment.port';
 import { TypeormCancelPaymentStore } from './infrastructure/database/typeorm-cancel-payment.store';
 import { StripeCancelGateway } from './infrastructure/stripe/stripe-cancel.gateway';
+import { RefundPaymentService } from './application/payments/refund-payment.service';
+import { ReceiveRefundNoticeService } from './application/payments/receive-refund-notice.service';
+import { REFUND_PAYMENT_STORE, REFUND_GATEWAY, REFUND_NOTICE_STORE } from './application/ports/refund-payment.port';
+import { TypeormRefundStore } from './infrastructure/database/typeorm-refund.store';
+import { TypeormRefundNoticeStore } from './infrastructure/database/typeorm-refund-notice.store';
+import { StripeRefundGateway } from './infrastructure/stripe/stripe-refund.gateway';
 
 @Module({
     imports: [DatabaseModule],
@@ -23,6 +29,11 @@ import { StripeCancelGateway } from './infrastructure/stripe/stripe-cancel.gatew
     providers: [
         EnablePaymentService,
         CancelPaymentService,
+        RefundPaymentService,
+        ReceiveRefundNoticeService,
+        { provide: REFUND_PAYMENT_STORE, useClass: TypeormRefundStore },
+        { provide: REFUND_GATEWAY, useClass: StripeRefundGateway },
+        { provide: REFUND_NOTICE_STORE, useClass: TypeormRefundNoticeStore },
         { provide: CANCEL_PAYMENT_STORE, useClass: TypeormCancelPaymentStore },
         { provide: CANCEL_PAYMENT_GATEWAY, useClass: StripeCancelGateway },
         ReceivePaymentNoticeService,
@@ -47,6 +58,6 @@ import { StripeCancelGateway } from './infrastructure/stripe/stripe-cancel.gatew
             },
         },
     ],
-    exports: [EnablePaymentService, CancelPaymentService],
+    exports: [EnablePaymentService, CancelPaymentService, RefundPaymentService],
 })
 export class PaymentsModule {}

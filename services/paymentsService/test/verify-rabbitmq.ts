@@ -8,6 +8,9 @@ import { EnablePaymentService } from '../src/application/payments/enable-payment
 import { CancelPaymentService } from '../src/application/payments/cancel-payment.service';
 import { TypeormCancelPaymentStore } from '../src/infrastructure/database/typeorm-cancel-payment.store';
 import { StripeCancelGateway } from '../src/infrastructure/stripe/stripe-cancel.gateway';
+import { RefundPaymentService } from '../src/application/payments/refund-payment.service';
+import { TypeormRefundStore } from '../src/infrastructure/database/typeorm-refund.store';
+import { StripeRefundGateway } from '../src/infrastructure/stripe/stripe-refund.gateway';
 import {
     PaymentMessageType,
     type EnablePayment,
@@ -107,6 +110,7 @@ export async function verifyRabbitMq(database: DataSource): Promise<void> {
                 new TypeormCancelPaymentStore(database, readiness),
                 new StripeCancelGateway(stripe),
             ),
+            new RefundPaymentService(new TypeormRefundStore(database, readiness), new StripeRefundGateway(stripe)),
         );
         worker = new PaymentsMessagingWorker(config, broker, consumer, publication, logger);
         admin = await connect(adminUri);
