@@ -1,0 +1,34 @@
+name: clusterjam-payments-dev
+
+services:
+    db-pagos:
+        image: postgres:17.11-bookworm@sha256:858bb5e98eed02eb8cafbcdc007f9a65d1b613972028944a8ec2133ccaf80d27
+        environment:
+            POSTGRES_DB: payments_db
+            POSTGRES_USER: postgres
+            POSTGRES_PASSWORD: "${PAYMENTS_POSTGRES_ADMIN_PASSWORD:?Set PAYMENTS_POSTGRES_ADMIN_PASSWORD}"
+            DB_PASSWORD: "${DB_PASSWORD:?Set DB_PASSWORD}"
+            PAYMENTS_MIGRATION_PASSWORD: "${PAYMENTS_MIGRATION_PASSWORD:?Set PAYMENTS_MIGRATION_PASSWORD}"
+        ports:
+            - "127.0.0.1:5437:5432"
+        volumes:
+            - payments-data:/var/lib/postgresql/data
+            - ./postgres/001-bootstrap.sql:/docker-entrypoint-initdb.d/001-bootstrap.sql:ro
+        healthcheck:
+            test:
+                [
+                    "CMD",
+                    "pg_isready",
+                    "-h",
+                    "127.0.0.1",
+                    "-U",
+                    "postgres",
+                    "-d",
+                    "payments_db",
+                ]
+            interval: 2s
+            timeout: 3s
+            retries: 15
+
+volumes:
+    payments-data:

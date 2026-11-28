@@ -1,0 +1,9 @@
+**
+!services/
+!services/paymentsService/
+!services/paymentsService/package.json
+!services/paymentsService/package-lock.json
+!services/paymentsService/nest-cli.json
+!services/paymentsService/tsconfig*.json
+!services/paymentsService/src/
+!services/paymentsService/src/**
