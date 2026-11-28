@@ -3,6 +3,8 @@ import { randomUUID } from 'node:crypto';
 import { readLogCorrelation } from './trace-context.service';
 
 const EVENTS: Record<string, string> = {
+    'payments.migrations.applied': 'Payments migrations applied.',
+    'payments.migrations.failed': 'Payments migrations could not be applied.',
     'service.started': 'Payments service started.',
     'service.failed': 'Payments service could not start.',
     'http.request.completed': 'HTTP request completed.',

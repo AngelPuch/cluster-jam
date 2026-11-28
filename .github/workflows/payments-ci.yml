@@ -5,12 +5,14 @@ on:
         paths:
             - "services/paymentsService/**"
             - "infra/payments/**"
+            - "contracts/events/payments.v1.md"
             - ".github/workflows/payments-ci.yml"
     push:
         branches: [main]
         paths:
             - "services/paymentsService/**"
             - "infra/payments/**"
+            - "contracts/events/payments.v1.md"
             - ".github/workflows/payments-ci.yml"
 
 permissions:
@@ -24,6 +26,27 @@ jobs:
     payments:
         runs-on: ubuntu-24.04
         timeout-minutes: 10
+        services:
+            postgres:
+                image: postgres:17.11-bookworm@sha256:858bb5e98eed02eb8cafbcdc007f9a65d1b613972028944a8ec2133ccaf80d27
+                env:
+                    POSTGRES_DB: payments_test_ci
+                    POSTGRES_PASSWORD: payments-ci-admin-only
+                ports:
+                    - 5432:5432
+                options: >-
+                    --health-cmd "pg_isready -U postgres -d payments_test_ci"
+                    --health-interval 2s --health-timeout 3s --health-retries 15
+        env:
+            APP_ENV: test
+            DB_HOST: 127.0.0.1
+            DB_PORT: "5432"
+            DB_NAME: payments_test_ci
+            DB_USER: app_pagos
+            DB_PASSWORD: payments-ci-runtime-only
+            DB_SSL: "false"
+            PAYMENTS_MIGRATION_PASSWORD: payments-ci-migration-only
+            PAYMENTS_VERIFY_POSTGRES: "true"
         defaults:
             run:
                 working-directory: services/paymentsService
@@ -41,6 +64,11 @@ jobs:
             - run: npm run typecheck
             - run: npm run lint
             - run: npm run format:check
+            - name: Initialize disposable database roles
+              run: >-
+                  docker exec -i -e DB_PASSWORD -e PAYMENTS_MIGRATION_PASSWORD
+                  ${{ job.services.postgres.id }} psql -U postgres -d payments_test_ci
+                  < ../../infra/payments/postgres/001-bootstrap.sql
             - run: npm test
             - name: Build runtime image
               working-directory: .

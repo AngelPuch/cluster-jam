@@ -11,6 +11,7 @@
         "start": "nest start",
         "start:dev": "nest start --watch",
         "start:prod": "node dist/main.js",
+        "migration:run": "npm run build && node dist/commands/migrate.js",
         "typecheck": "tsc --noEmit && tsc --noEmit -p test/tsconfig.json",
         "lint": "eslint \"{src,test}/**/*.ts\" --max-warnings=0",
         "format:check": "prettier --check \"{src,test}/**/*.ts\"",
