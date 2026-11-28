@@ -63,6 +63,13 @@ export function validateEnvironment(input: Record<string, unknown>): Record<stri
     ) {
         throw new Error('Invalid configuration: use a Stripe test key');
     }
+    if (
+        result.STRIPE_WEBHOOK_SECRET !== undefined &&
+        result.STRIPE_WEBHOOK_SECRET !== '' &&
+        (typeof result.STRIPE_WEBHOOK_SECRET !== 'string' || !/^whsec_[A-Za-z0-9]+$/.test(result.STRIPE_WEBHOOK_SECRET))
+    ) {
+        throw new Error('Invalid configuration: STRIPE_WEBHOOK_SECRET');
+    }
     for (const key of ['SERVICE_VERSION', 'INSTANCE_ID']) {
         const value = result[key];
         if (value !== undefined && (typeof value !== 'string' || !/^[a-zA-Z0-9][a-zA-Z0-9._+-]{0,127}$/.test(value))) {

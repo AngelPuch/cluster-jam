@@ -6,8 +6,8 @@ safe logs/errors and the Stripe test-mode payment preparation core. The core
 persists operation identity before calling Stripe, then saves the result with
 inbox and a pending outbox event in one transaction. RabbitMQ consumes enable
 commands with manual ACK after commit and publishes outbox every five seconds.
-Signed webhooks, cancellation/refunds and protected payment access follow separately.
-There are no public payment operations yet.
+Signed PaymentIntent webhooks are implemented; cancellation/refunds and protected
+payment access follow separately. There are no user-facing payment operations yet.
 
 ## Run locally
 
@@ -28,6 +28,16 @@ npm run start:dev
 | `http://localhost:8085/health/ready` | Database and migration readiness; 503 until ready. |
 | `http://localhost:8085/docs`         | Swagger UI.                                        |
 | `http://localhost:8085/openapi.json` | Implemented HTTP contract.                         |
+
+Stripe sends signed snapshot events to `POST /api/v1/webhooks/stripe`.
+Set its separate `STRIPE_WEBHOOK_SECRET` in the private `.env` and subscribe to
+`payment_intent.succeeded`, `payment_intent.canceled`,
+`payment_intent.payment_failed` and `payment_intent.processing`.
+The endpoint verifies the signature over the original body, reads the current
+PaymentIntent through the SDK outside SQL, then commits state, inbox and outbox.
+Repeated/late events cannot duplicate credit or undo paid/refunded money.
+A reusable card decline stays pending. Missing configuration/dependencies return
+a non-success response for retry. Refund notifications follow with compensation.
 
 The local database uses loopback port 5437, database `payments_db` and runtime
 role `app_pagos`. `migrator_pagos` owns schema `app` and applies versioned
@@ -77,6 +87,7 @@ Tests use the real Stripe SDK against a local HTTP fixture, without credentials
 or external Stripe calls. CI also runs a PostgreSQL scenario covering migrations,
 financial constraints, lost responses, SQL rollback, RabbitMQ duplicate delivery,
 reconnection, native DLQ and pending outbox recovery after an unroutable publish.
+Webhook checks cover signatures, duplicate/late events and early payment credit.
 Live Stripe sandbox verification still requires a private test key.
 To opt in locally, use an initialized local `payments_test_*` database and set
 `PAYMENTS_VERIFY_POSTGRES=true`, its connection variables and migration password.

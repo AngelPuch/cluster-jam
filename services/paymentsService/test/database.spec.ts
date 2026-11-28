@@ -8,6 +8,7 @@ import { InboxEntity } from '../src/infrastructure/database/entities/inbox.entit
 import { DatabaseReadiness } from '../src/infrastructure/database/database-readiness.service';
 import { verifyEnablePayment } from './verify-enable-payment';
 import { verifyRabbitMq } from './verify-rabbitmq';
+import { verifyPaymentWebhook } from './verify-payment-webhook';
 
 const describeDatabase = process.env.PAYMENTS_VERIFY_POSTGRES === 'true' ? describe : describe.skip;
 
@@ -89,6 +90,7 @@ describeDatabase('Payments schema on disposable PostgreSQL', () => {
             });
             await verifyEnablePayment(runtime);
             if (process.env.PAYMENTS_VERIFY_RABBITMQ === 'true') await verifyRabbitMq(runtime);
+            await verifyPaymentWebhook(runtime);
         } finally {
             if (runtime.isInitialized) await runtime.destroy();
             if (migrator.isInitialized) await migrator.destroy();
