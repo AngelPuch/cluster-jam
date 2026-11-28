@@ -6,7 +6,7 @@ safe logs/errors and the Stripe test-mode payment preparation core. The core
 persists operation identity before calling Stripe, then saves the result with
 inbox and a pending outbox event in one transaction. RabbitMQ consumes enable
 commands with manual ACK after commit and publishes outbox every five seconds.
-Signed PaymentIntent webhooks are implemented; cancellation/refunds and protected
+Signed PaymentIntent webhooks and command-driven cancellation are implemented; full refunds and protected
 payment access follow separately. There are no user-facing payment operations yet.
 
 ## Run locally
@@ -66,8 +66,11 @@ Set `RABBITMQ_ENABLED=true` and the provisioned account's `RABBITMQ_URI` in `.en
 Staging/production require AMQPS with verified TLS; a private CA is optional.
 The runtime account only reads its queue and publishes `payments.events`.
 Invalid commands or three exhausted technical attempts go to the native DLQ;
-manual replay preserves the message ID. Cancel/refund handlers follow separately
-and their commands currently go to DLQ. No financial success is invented.
+manual replay preserves the message ID. Cancellation checks Stripe before writing,
+uses `payment:cancel:<paymentId>` and resolves uncertain responses by reading the
+same intent. A concurrent charge is credited for Orders to request a refund;
+only confirmed zero-charge cancellation produces a no-charge result.
+Full refund handlers follow separately; refund commands currently go to DLQ.
 
 Use `.env.example` for configuration. Staging/production require `DB_SSL=true`
 and a trusted PostgreSQL certificate; `DB_CA_PATH` supplies a private CA when

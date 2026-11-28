@@ -9,6 +9,7 @@ import { DatabaseReadiness } from '../src/infrastructure/database/database-readi
 import { verifyEnablePayment } from './verify-enable-payment';
 import { verifyRabbitMq } from './verify-rabbitmq';
 import { verifyPaymentWebhook } from './verify-payment-webhook';
+import { verifyCancellation } from './verify-cancellation';
 
 const describeDatabase = process.env.PAYMENTS_VERIFY_POSTGRES === 'true' ? describe : describe.skip;
 
@@ -91,6 +92,7 @@ describeDatabase('Payments schema on disposable PostgreSQL', () => {
             await verifyEnablePayment(runtime);
             if (process.env.PAYMENTS_VERIFY_RABBITMQ === 'true') await verifyRabbitMq(runtime);
             await verifyPaymentWebhook(runtime);
+            await verifyCancellation(runtime);
         } finally {
             if (runtime.isInitialized) await runtime.destroy();
             if (migrator.isInitialized) await migrator.destroy();

@@ -4,8 +4,8 @@ Payments participates in the Orders-orchestrated purchase saga. Commands use
 `payments.commands` and queue `payments.commands.v1`; results use
 `payments.events` and are bound to `orders.checkout.v1`. Payment preparation
 and its transactional inbox/outbox, AMQP enable-command consumption and outbox
-publication and signed PaymentIntent webhooks are implemented. Compensation follows separately;
-cancel/refund commands currently remain in the native DLQ for manual replay.
+publication, signed PaymentIntent webhooks and cancel-command handling are implemented.
+Full refund handling follows separately; refund commands currently remain in the native DLQ.
 
 The envelope matches Catalog: `messageId` (UUID), `type` (full routing key),
 `orderId` (UUID), `occurredAt` (ISO-8601 instant) and `data`.

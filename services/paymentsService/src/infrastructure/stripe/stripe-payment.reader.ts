@@ -31,30 +31,33 @@ export class StripeCurrentPaymentReader implements StripePaymentReader {
         } catch {
             throw new PaymentProviderUnavailable();
         }
-        if (intent.id !== id || intent.object !== 'payment_intent' || intent.livemode !== false)
-            throw new PaymentProviderMismatch();
-        // An account can contain payments unrelated to Cluster JAM.
-        if (!intent.metadata?.payment_id) return null;
-        if (
-            !Number.isSafeInteger(intent.amount) ||
-            intent.amount < 1 ||
-            intent.currency !== 'mxn' ||
-            !STATUSES.has(intent.status) ||
-            !Number.isSafeInteger(intent.amount_received) ||
-            intent.amount_received < 0 ||
-            (intent.status === 'succeeded' && intent.amount_received !== intent.amount) ||
-            (intent.status === 'canceled' && intent.amount_received !== 0)
-        )
-            throw new PaymentProviderMismatch();
-        return {
-            id: intent.id,
-            paymentId: identifier(intent.metadata.payment_id),
-            orderId: identifier(intent.metadata.order_id),
-            buyerId: identifier(intent.metadata.buyer_id),
-            reservationId: identifier(intent.metadata.reservation_id),
-            amountCents: intent.amount,
-            currency: 'MXN',
-            status: intent.status,
-        };
+        return parseStripePayment(intent, id);
     }
+}
+export function parseStripePayment(intent: Stripe.PaymentIntent, id: string): StripePaymentSnapshot | null {
+    if (intent.id !== id || intent.object !== 'payment_intent' || intent.livemode !== false)
+        throw new PaymentProviderMismatch();
+    // An account can contain payments unrelated to Cluster JAM.
+    if (!intent.metadata?.payment_id) return null;
+    if (
+        !Number.isSafeInteger(intent.amount) ||
+        intent.amount < 1 ||
+        intent.currency !== 'mxn' ||
+        !STATUSES.has(intent.status) ||
+        !Number.isSafeInteger(intent.amount_received) ||
+        intent.amount_received < 0 ||
+        (intent.status === 'succeeded' && intent.amount_received !== intent.amount) ||
+        (intent.status === 'canceled' && intent.amount_received !== 0)
+    )
+        throw new PaymentProviderMismatch();
+    return {
+        id: intent.id,
+        paymentId: identifier(intent.metadata.payment_id),
+        orderId: identifier(intent.metadata.order_id),
+        buyerId: identifier(intent.metadata.buyer_id),
+        reservationId: identifier(intent.metadata.reservation_id),
+        amountCents: intent.amount,
+        currency: 'MXN',
+        status: intent.status,
+    };
 }
