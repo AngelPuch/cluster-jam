@@ -1,0 +1,42 @@
+export function validateEnvironment(input: Record<string, unknown>): Record<string, unknown> {
+    const result: Record<string, unknown> = {
+        APP_ENV: 'development',
+        HTTP_PORT: 8085,
+        DB_PORT: 5432,
+        DB_SSL: false,
+        LOG_LEVEL: 'INFO',
+        ...input,
+    };
+    if (!['development', 'test', 'staging', 'production'].includes(String(result.APP_ENV))) {
+        throw new Error('Invalid configuration: APP_ENV');
+    }
+    for (const key of ['DB_HOST', 'DB_NAME', 'DB_USER', 'DB_PASSWORD']) {
+        if (typeof result[key] !== 'string' || !result[key].trim()) {
+            throw new Error(`Invalid configuration: ${key}`);
+        }
+    }
+    for (const key of ['HTTP_PORT', 'DB_PORT']) {
+        const value = Number(result[key]);
+        if (!Number.isInteger(value) || value < 1 || value > 65535) {
+            throw new Error(`Invalid configuration: ${key}`);
+        }
+        result[key] = value;
+    }
+    if (![true, false, 'true', 'false'].includes(result.DB_SSL as boolean | string)) {
+        throw new Error('Invalid configuration: DB_SSL');
+    }
+    result.DB_SSL = result.DB_SSL === true || result.DB_SSL === 'true';
+    if (['staging', 'production'].includes(String(result.APP_ENV)) && !result.DB_SSL) {
+        throw new Error('Invalid configuration: DB_SSL is required outside local development');
+    }
+    if (!['DEBUG', 'INFO', 'WARN', 'ERROR'].includes(String(result.LOG_LEVEL))) {
+        throw new Error('Invalid configuration: LOG_LEVEL');
+    }
+    for (const key of ['SERVICE_VERSION', 'INSTANCE_ID']) {
+        const value = result[key];
+        if (value !== undefined && (typeof value !== 'string' || !/^[a-zA-Z0-9][a-zA-Z0-9._+-]{0,127}$/.test(value))) {
+            throw new Error(`Invalid configuration: ${key}`);
+        }
+    }
+    return result;
+}
