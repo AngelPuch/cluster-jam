@@ -16,6 +16,7 @@ const EVENTS: Record<string, string> = {
     'payments.command.rejected': 'Payment command rejected to the broker dead-letter queue.',
     'payments.outbox.confirmed': 'Payment event received a routed broker confirmation.',
     'payments.webhook.processed': 'Verified Stripe payment notification processed.',
+    'payments.refund.unresolved': 'Stripe refund requires review of the original financial operation.',
     'framework.error': 'Framework operation failed.',
     'framework.warning': 'Framework warning.',
     'framework.message': 'Framework diagnostic event.',

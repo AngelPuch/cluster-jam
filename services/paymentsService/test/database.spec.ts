@@ -36,7 +36,7 @@ describeDatabase('Payments schema on disposable PostgreSQL', () => {
             const readiness = new DatabaseReadiness(runtime);
             expect(await readiness.check()).toBe(false);
             await migrator.initialize();
-            expect(await migrator.runMigrations()).toHaveLength(2);
+            expect(await migrator.runMigrations()).toHaveLength(3);
             expect(await migrator.runMigrations()).toHaveLength(0);
             expect(await readiness.check()).toBe(true);
             const payments = runtime.getRepository(PaymentEntity);

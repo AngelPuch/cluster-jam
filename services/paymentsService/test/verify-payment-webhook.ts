@@ -18,6 +18,7 @@ import { ProblemDetailsFilter } from '../src/interfaces/http/common/problem-deta
 import { PaymentsModule } from '../src/payments.module';
 import { PaymentStatus } from '../src/application/payments/payment';
 import { StripeFixture } from './stripe-fixture';
+import { verifyRefunds } from './verify-refunds';
 
 export async function verifyPaymentWebhook(database: DataSource): Promise<void> {
     const fixture = new StripeFixture();
@@ -146,6 +147,7 @@ export async function verifyPaymentWebhook(database: DataSource): Promise<void> 
         const mismatchId = (JSON.parse(mismatch) as { id: string }).id;
         expect(await inbox.existsBy({ consumer: 'stripe-payment-webhook', messageId: mismatchId })).toBe(false);
         expect(await results(declined.command.orderId)).toHaveLength(1);
+        await verifyRefunds(app, database, stripe, fixture, secret);
     } finally {
         await app?.close();
         await fixture.close();

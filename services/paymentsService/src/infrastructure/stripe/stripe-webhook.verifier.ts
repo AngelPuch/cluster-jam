@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Stripe from 'stripe';
 import type { PaymentNotice } from '../../application/ports/payment-notice.port';
+import type { RefundNotice } from '../../application/ports/refund-payment.port';
 import { PaymentProviderUnavailable } from '../../application/payments/payment.error';
 import { STRIPE_CLIENT } from './stripe-intent.gateway';
 
@@ -18,7 +19,7 @@ export class StripeWebhookVerifier {
         private readonly config: ConfigService,
     ) {}
 
-    verify(body: Buffer | undefined, signature: unknown): PaymentNotice | null {
+    verify(body: Buffer | undefined, signature: unknown): PaymentNotice | RefundNotice | null {
         const secret = this.config.get<string>('STRIPE_WEBHOOK_SECRET');
         if (!this.stripe || !secret) throw new PaymentProviderUnavailable();
         if (!body || typeof signature !== 'string' || signature.length > 4096) throw new InvalidStripeWebhook();
@@ -46,6 +47,14 @@ export class StripeWebhookVerifier {
                         throw new InvalidStripeWebhook();
                     }
                     return { eventId: event.id, paymentIntentId: intent.id };
+                }
+                case 'refund.created':
+                case 'refund.updated':
+                case 'refund.failed': {
+                    const refund = event.data.object;
+                    if (refund.object !== 'refund' || !/^re_[A-Za-z0-9]+$/.test(refund.id) || refund.id.length > 255)
+                        throw new InvalidStripeWebhook();
+                    return { eventId: event.id, refundId: refund.id };
                 }
                 default:
                     return null;

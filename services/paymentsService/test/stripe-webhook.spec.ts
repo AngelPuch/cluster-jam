@@ -6,6 +6,7 @@ import { jest } from '@jest/globals';
 import Stripe from 'stripe';
 import request from 'supertest';
 import { ReceivePaymentNoticeService } from '../src/application/payments/receive-payment-notice.service';
+import { ReceiveRefundNoticeService } from '../src/application/payments/receive-refund-notice.service';
 import type { PaymentNotice } from '../src/application/ports/payment-notice.port';
 import { ObservabilityModule } from '../src/infrastructure/observability/observability.module';
 import { STRIPE_CLIENT } from '../src/infrastructure/stripe/stripe-intent.gateway';
@@ -39,6 +40,7 @@ describe('Stripe signed webhook HTTP', () => {
                 { provide: STRIPE_CLIENT, useValue: stripe },
                 { provide: ConfigService, useValue: config },
                 { provide: ReceivePaymentNoticeService, useValue: handler },
+                { provide: ReceiveRefundNoticeService, useValue: { execute: () => Promise.resolve(false) } },
                 { provide: APP_FILTER, useClass: ProblemDetailsFilter },
             ],
         }).compile();
