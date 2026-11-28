@@ -5,7 +5,7 @@ import Stripe from 'stripe';
 export class StripeFixture {
     readonly requests: Array<{ key: string; form: URLSearchParams }> = [];
     readonly intents = new Map<string, Record<string, unknown>>();
-    dropNextCreateResponse = false;
+    dropCreateResponses = 0;
     responseOverride: Record<string, unknown> = {};
     private readonly server = createServer((request, response) => {
         void this.handle(request, response).catch(() => {
@@ -61,8 +61,8 @@ export class StripeFixture {
                 };
                 this.intents.set(key, intent);
             }
-            if (this.dropNextCreateResponse) {
-                this.dropNextCreateResponse = false;
+            if (this.dropCreateResponses > 0) {
+                this.dropCreateResponses--;
                 response.destroy();
                 return;
             }

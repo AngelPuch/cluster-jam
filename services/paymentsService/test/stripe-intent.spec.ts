@@ -1,7 +1,11 @@
 import 'reflect-metadata';
 import { randomUUID } from 'node:crypto';
 import type { PreparedPayment } from '../src/application/ports/enable-payment.port';
-import { PaymentProviderMismatch, PaymentRecoveryRequired } from '../src/application/payments/payment.error';
+import {
+    PaymentProviderMismatch,
+    PaymentProviderUnavailable,
+    PaymentRecoveryRequired,
+} from '../src/application/payments/payment.error';
 import { StripeIntentGateway } from '../src/infrastructure/stripe/stripe-intent.gateway';
 import { StripeFixture } from './stripe-fixture';
 
@@ -24,11 +28,12 @@ describe('Stripe test-mode adapter using the real SDK', () => {
         try {
             const gateway = new StripeIntentGateway(await fixture.open());
             const prepared = payment();
+            fixture.dropCreateResponses = 1;
             const first = await gateway.ensure(prepared);
             expect(await gateway.ensure(prepared)).toEqual(first);
             expect(await gateway.ensure({ ...prepared, stripePaymentIntentId: first.id })).toEqual(first);
             expect(fixture.intents.size).toBe(1);
-            expect(fixture.requests).toHaveLength(2);
+            expect(fixture.requests).toHaveLength(3);
             expect(fixture.requests[0].key).toBe('payment:create:' + prepared.orderId);
             expect(Object.fromEntries(fixture.requests[0].form)).toMatchObject({
                 amount: '19900',
@@ -48,6 +53,8 @@ describe('Stripe test-mode adapter using the real SDK', () => {
         try {
             const gateway = new StripeIntentGateway(await fixture.open());
             const prepared = payment();
+            fixture.dropCreateResponses = 2;
+            await expect(gateway.ensure(prepared)).rejects.toBeInstanceOf(PaymentProviderUnavailable);
             for (const response of [{ amount: 1 }, { livemode: true }, { metadata: {} }]) {
                 fixture.responseOverride = response;
                 await expect(gateway.ensure(prepared)).rejects.toBeInstanceOf(PaymentProviderMismatch);

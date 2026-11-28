@@ -38,7 +38,8 @@ export async function verifyEnablePayment(database: DataSource): Promise<void> {
         const outbox = database.getRepository(OutboxEntity);
         const inbox = database.getRepository(InboxEntity);
         const input = command();
-        fixture.dropNextCreateResponse = true;
+        // Stripe retries one closed connection even with maxNetworkRetries=0.
+        fixture.dropCreateResponses = 2;
         await expect(service.execute(input)).rejects.toBeInstanceOf(PaymentProviderUnavailable);
         const pending = await payments.findOneByOrFail({ orderId: input.orderId });
         expect(pending.stripeCreationStartedAt).toBeInstanceOf(Date);
