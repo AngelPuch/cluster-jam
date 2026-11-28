@@ -63,7 +63,7 @@ export async function verifyRabbitMq(database: DataSource): Promise<void> {
     const runtimeUri = process.env.RABBITMQ_URI ?? '';
     for (const value of [adminUri, runtimeUri]) {
         const uri = new URL(value);
-        if (!['127.0.0.1', 'localhost'].includes(uri.hostname) || uri.pathname !== '/clusterjam') {
+        if (!['127.0.0.1', 'localhost'].includes(uri.hostname) || !/^\/payments_test_[a-z0-9_]+$/.test(uri.pathname)) {
             throw new Error('Use an explicitly enabled disposable loopback broker.');
         }
     }

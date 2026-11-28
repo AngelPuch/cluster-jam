@@ -81,6 +81,10 @@ Live Stripe sandbox verification still requires a private test key.
 To opt in locally, use an initialized local `payments_test_*` database and set
 `PAYMENTS_VERIFY_POSTGRES=true`, its connection variables and migration password.
 The integration fixture leaves records in that disposable database.
+AMQP integration also requires `PAYMENTS_VERIFY_RABBITMQ=true`, a provisioned
+loopback `payments_test_*` vhost and `PAYMENTS_TEST_RABBITMQ_URI` for its admin.
+Provision it with `PAYMENTS_RABBITMQ_VHOST` set to that test vhost name;
+its runtime user is `<test-vhost>-consumer`.
 
 From the repository root, build the non-root runtime image with:
 
