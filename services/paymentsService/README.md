@@ -7,7 +7,7 @@ persists operation identity before calling Stripe, then saves the result with
 inbox and a pending outbox event in one transaction. RabbitMQ consumes enable
 commands with manual ACK after commit and publishes outbox every five seconds.
 Signed payment/refund webhooks, cancellation and full-refund commands are implemented.
-Protected user payment access follows separately.
+Authenticated buyers can query their own payment and request PaymentSheet access.
 
 ## Run locally
 
@@ -28,6 +28,16 @@ npm run start:dev
 | `http://localhost:8085/health/ready` | Database and migration readiness; 503 until ready. |
 | `http://localhost:8085/docs`         | Swagger UI.                                        |
 | `http://localhost:8085/openapi.json` | Implemented HTTP contract.                         |
+
+`GET /api/v1/payments/:paymentId` returns the owner's payment/refund status.
+`GET /api/v1/payments/:paymentId/client-secret` returns PaymentSheet access only
+while the payment is pending, the reservation is active and Stripe is payable.
+Both require the existing Supabase access token as `Authorization: Bearer ...`.
+Set `SUPABASE_URL` to the same public project used by Auth/Profile; issuer and
+JWKS are derived from that trusted project. ES256/RS256 signatures, expiry,
+audience and authenticated user identity are checked locally with cached keys.
+Other buyers receive 404. Secrets stay out of storage/logs/AMQP and responses use
+`Cache-Control: no-store`. Missing identity configuration/keys returns 503.
 
 Stripe sends signed snapshot events to `POST /api/v1/webhooks/stripe`.
 Set its separate `STRIPE_WEBHOOK_SECRET` in the private `.env` and subscribe to

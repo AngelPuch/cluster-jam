@@ -47,7 +47,8 @@ export function configureHttpApplication(app: INestApplication): void {
     app.setGlobalPrefix('api/v1', { exclude: ['health/live', 'health/ready'] });
     const config = new DocumentBuilder()
         .setTitle('Cluster JAM Payments Service')
-        .setDescription('Payments saga participant: health and signed Stripe payment webhooks.')
+        .setDescription('Payments saga participant: owned payment access, health and signed Stripe webhooks.')
+        .addBearerAuth()
         .setVersion('0.0.1')
         .build();
     SwaggerModule.setup('docs', app, SwaggerModule.createDocument(app, config), { jsonDocumentUrl: '/openapi.json' });

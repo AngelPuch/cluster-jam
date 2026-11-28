@@ -70,6 +70,33 @@ export function validateEnvironment(input: Record<string, unknown>): Record<stri
     ) {
         throw new Error('Invalid configuration: STRIPE_WEBHOOK_SECRET');
     }
+    if (result.SUPABASE_URL !== undefined && result.SUPABASE_URL !== '') {
+        try {
+            if (typeof result.SUPABASE_URL !== 'string') throw new Error();
+            const project = new URL(result.SUPABASE_URL);
+            const local =
+                ['development', 'test'].includes(String(result.APP_ENV)) &&
+                ['localhost', '127.0.0.1', '[::1]'].includes(project.hostname);
+            if (
+                !(project.protocol === 'https:' || (local && project.protocol === 'http:')) ||
+                project.username ||
+                project.password ||
+                project.href !== project.origin + '/'
+            )
+                throw new Error();
+            const issuer = project.origin + '/auth/v1';
+            const jwks = issuer + '/.well-known/jwks.json';
+            if (
+                (result.SUPABASE_ISSUER !== undefined && result.SUPABASE_ISSUER !== issuer) ||
+                (result.SUPABASE_JWKS_URL !== undefined && result.SUPABASE_JWKS_URL !== jwks) ||
+                (result.SUPABASE_AUDIENCE !== undefined && result.SUPABASE_AUDIENCE !== 'authenticated')
+            )
+                throw new Error();
+            result.SUPABASE_URL = project.origin;
+        } catch {
+            throw new Error('Invalid configuration: trusted Supabase project');
+        }
+    }
     for (const key of ['SERVICE_VERSION', 'INSTANCE_ID']) {
         const value = result[key];
         if (value !== undefined && (typeof value !== 'string' || !/^[a-zA-Z0-9][a-zA-Z0-9._+-]{0,127}$/.test(value))) {

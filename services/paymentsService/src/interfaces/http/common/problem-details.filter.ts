@@ -6,6 +6,8 @@ import { readLogCorrelation } from '../../../infrastructure/observability/trace-
 
 const FAILURES: Record<number, { code: string; detail: string }> = {
     400: { code: 'BAD_REQUEST', detail: 'The request syntax is invalid.' },
+    401: { code: 'AUTHENTICATION_REQUIRED', detail: 'A valid authenticated session is required.' },
+    409: { code: 'PAYMENT_NOT_PAYABLE', detail: 'The payment is not currently available for payment.' },
     404: { code: 'RESOURCE_NOT_FOUND', detail: 'The requested resource was not found.' },
     413: { code: 'PAYLOAD_TOO_LARGE', detail: 'The request exceeds the allowed size.' },
     415: { code: 'UNSUPPORTED_MEDIA_TYPE', detail: 'Use a supported content type.' },

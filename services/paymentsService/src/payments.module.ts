@@ -58,6 +58,6 @@ import { StripeRefundGateway } from './infrastructure/stripe/stripe-refund.gatew
             },
         },
     ],
-    exports: [EnablePaymentService, CancelPaymentService, RefundPaymentService],
+    exports: [EnablePaymentService, CancelPaymentService, RefundPaymentService, STRIPE_CLIENT],
 })
 export class PaymentsModule {}
