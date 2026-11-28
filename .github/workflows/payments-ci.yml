@@ -27,6 +27,18 @@ jobs:
         runs-on: ubuntu-24.04
         timeout-minutes: 10
         services:
+            rabbitmq:
+                image: rabbitmq:4.3.6-management@sha256:54cb013d76cd1fd6c0a0708f34062ad61c452bb6f016b434c6c33f1a765d2b58
+                env:
+                    RABBITMQ_DEFAULT_USER: clusterjam
+                    RABBITMQ_DEFAULT_PASS: local-development-only
+                    RABBITMQ_DEFAULT_VHOST: clusterjam
+                ports:
+                    - 5672:5672
+                    - 15672:15672
+                options: >-
+                    --health-cmd "rabbitmq-diagnostics -q ping"
+                    --health-interval 5s --health-timeout 5s --health-retries 15
             postgres:
                 image: postgres:17.11-bookworm@sha256:858bb5e98eed02eb8cafbcdc007f9a65d1b613972028944a8ec2133ccaf80d27
                 env:
@@ -47,6 +59,12 @@ jobs:
             DB_SSL: "false"
             PAYMENTS_MIGRATION_PASSWORD: payments-ci-migration-only
             PAYMENTS_VERIFY_POSTGRES: "true"
+            PAYMENTS_VERIFY_RABBITMQ: "true"
+            RABBITMQ_ENABLED: "true"
+            RABBITMQ_URI: amqp://payments-consumer:payments-ci-runtime-only@127.0.0.1:5672/clusterjam
+            PAYMENTS_TEST_RABBITMQ_URI: amqp://clusterjam:local-development-only@127.0.0.1:5672/clusterjam
+            PAYMENTS_BROKER_ADMIN_PASSWORD: local-development-only
+            PAYMENTS_RABBITMQ_PASSWORD: payments-ci-runtime-only
         defaults:
             run:
                 working-directory: services/paymentsService
@@ -64,6 +82,8 @@ jobs:
             - run: npm run typecheck
             - run: npm run lint
             - run: npm run format:check
+            - name: Initialize disposable broker topology
+              run: python3 ../../infra/payments/provision-local.py
             - name: Initialize disposable database roles
               run: >-
                   docker exec -i -e DB_PASSWORD -e PAYMENTS_MIGRATION_PASSWORD

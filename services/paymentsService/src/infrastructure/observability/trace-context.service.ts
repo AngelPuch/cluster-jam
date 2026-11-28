@@ -46,4 +46,37 @@ export class TraceContextService {
         if (status >= 500) span?.setStatus({ code: SpanStatusCode.ERROR });
         span?.end();
     }
+
+    runConsumer<T>(traceparent: unknown, work: () => Promise<T>): Promise<T> {
+        const parent = propagation.extract(ROOT_CONTEXT, {
+            traceparent: typeof traceparent === 'string' && traceparent.length <= 512 ? traceparent : undefined,
+        });
+        return this.runMessaging(SpanKind.CONSUMER, parent, work);
+    }
+
+    runProducer<T>(work: () => Promise<T>): Promise<T> {
+        return this.runMessaging(SpanKind.PRODUCER, context.active(), work);
+    }
+
+    inject(): Record<string, string> {
+        const headers: Record<string, string> = {};
+        propagation.inject(context.active(), headers);
+        return headers;
+    }
+
+    private async runMessaging<T>(
+        kind: SpanKind,
+        parent: ReturnType<typeof context.active>,
+        work: () => Promise<T>,
+    ): Promise<T> {
+        const span = trace.getTracer('payments-service').startSpan('payments AMQP', { kind }, parent);
+        try {
+            return await context.with(trace.setSpan(parent, span), work);
+        } catch (error) {
+            span.setStatus({ code: SpanStatusCode.ERROR });
+            throw error;
+        } finally {
+            span.end();
+        }
+    }
 }
