@@ -14,15 +14,9 @@ import {
     validateSync,
 } from 'class-validator';
 
-export enum PaymentMessageType {
-    Enable = 'cmd.payments.enable-payment.v1',
-    Cancel = 'cmd.payments.cancel-payment.v1',
-    Refund = 'cmd.payments.refund-full.v1',
-    Enabled = 'payments.payment.enabled.v1',
-    Succeeded = 'payments.payment.succeeded.v1',
-    NotCompleted = 'payments.payment.not-completed.v1',
-    RefundSucceeded = 'payments.refund.succeeded.v1',
-}
+import { PaymentMessageType, type PaymentCommand } from '../../application/payments/payment-messages';
+export { PaymentMessageType } from '../../application/payments/payment-messages';
+export type { PaymentCommand, PaymentEvent } from '../../application/payments/payment-messages';
 
 class MoneyDto {
     @IsInt() @Min(1) @Max(Number.MAX_SAFE_INTEGER) amountCents!: number;
@@ -43,31 +37,6 @@ export class PaymentActionData {
     @MaxLength(200)
     reason!: string;
 }
-
-interface PaymentEnvelope<T extends PaymentMessageType, D> {
-    messageId: string;
-    type: T;
-    orderId: string;
-    occurredAt: string;
-    data: D;
-}
-
-export type PaymentCommand =
-    | PaymentEnvelope<PaymentMessageType.Enable, EnablePaymentData>
-    | PaymentEnvelope<PaymentMessageType.Cancel, PaymentActionData>
-    | PaymentEnvelope<PaymentMessageType.Refund, PaymentActionData>;
-
-export type PaymentEvent =
-    | PaymentEnvelope<PaymentMessageType.Enabled, { paymentId: string; reservationId: string }>
-    | PaymentEnvelope<
-          PaymentMessageType.Succeeded,
-          { paymentId: string; reservationId: string; amountCents: number; currency: 'MXN' }
-      >
-    | PaymentEnvelope<
-          PaymentMessageType.NotCompleted,
-          { paymentId: string; status: 'CANCELADO' | 'FALLIDO'; reason: string }
-      >
-    | PaymentEnvelope<PaymentMessageType.RefundSucceeded, { paymentId: string; amountCents: number; currency: 'MXN' }>;
 
 class CommandEnvelopeDto {
     @IsUUID() messageId!: string;

@@ -6,12 +6,14 @@ import { DatabaseModule } from './infrastructure/database/database.module';
 import { ObservabilityModule } from './infrastructure/observability/observability.module';
 import { HealthController } from './interfaces/http/health/health.controller';
 import { ProblemDetailsFilter } from './interfaces/http/common/problem-details.filter';
+import { PaymentsModule } from './payments.module';
 
 @Module({
     imports: [
         ConfigModule.forRoot({ isGlobal: true, validate: validateEnvironment }),
         ObservabilityModule,
         DatabaseModule,
+        PaymentsModule,
     ],
     controllers: [HealthController],
     providers: [{ provide: APP_FILTER, useClass: ProblemDetailsFilter }],

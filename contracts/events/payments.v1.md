@@ -2,8 +2,9 @@
 
 Payments participates in the Orders-orchestrated purchase saga. Commands use
 `payments.commands` and queue `payments.commands.v1`; results use
-`payments.events` and are bound to `orders.checkout.v1`. Resource provisioning,
-consumers, publication and Stripe operations follow in subsequent increments.
+`payments.events` and are bound to `orders.checkout.v1`. Payment preparation
+and its transactional inbox/outbox are implemented. Resource provisioning,
+consumption/publication, webhooks and compensation follow separately.
 
 The envelope matches Catalog: `messageId` (UUID), `type` (full routing key),
 `orderId` (UUID), `occurredAt` (ISO-8601 instant) and `data`.

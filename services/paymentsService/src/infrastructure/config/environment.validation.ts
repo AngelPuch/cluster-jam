@@ -32,6 +32,13 @@ export function validateEnvironment(input: Record<string, unknown>): Record<stri
     if (!['DEBUG', 'INFO', 'WARN', 'ERROR'].includes(String(result.LOG_LEVEL))) {
         throw new Error('Invalid configuration: LOG_LEVEL');
     }
+    if (
+        result.STRIPE_SECRET_KEY !== undefined &&
+        result.STRIPE_SECRET_KEY !== '' &&
+        (typeof result.STRIPE_SECRET_KEY !== 'string' || !/^(sk|rk)_test_[A-Za-z0-9]+$/.test(result.STRIPE_SECRET_KEY))
+    ) {
+        throw new Error('Invalid configuration: use a Stripe test key');
+    }
     for (const key of ['SERVICE_VERSION', 'INSTANCE_ID']) {
         const value = result[key];
         if (value !== undefined && (typeof value !== 'string' || !/^[a-zA-Z0-9][a-zA-Z0-9._+-]{0,127}$/.test(value))) {

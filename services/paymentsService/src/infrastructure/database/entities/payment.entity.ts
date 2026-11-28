@@ -14,6 +14,8 @@ export class PaymentEntity {
     @Column({ name: 'estado', type: 'varchar', length: 20, default: PaymentStatus.Pending }) status!: PaymentStatus;
     @Column({ name: 'stripe_payment_intent_id', type: 'varchar', length: 255, nullable: true, unique: true })
     stripePaymentIntentId!: string | null;
+    @Column({ name: 'stripe_creacion_iniciada_en', type: 'timestamptz', nullable: true })
+    stripeCreationStartedAt!: Date | null;
     @Column({ name: 'estado_proveedor', type: 'varchar', length: 64, nullable: true }) providerStatus!: string | null;
     @CreateDateColumn({ name: 'creado_en', type: 'timestamptz' }) createdAt!: Date;
     @UpdateDateColumn({ name: 'actualizado_en', type: 'timestamptz' }) updatedAt!: Date;
