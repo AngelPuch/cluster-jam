@@ -6,6 +6,7 @@ import { PaymentEntity } from '../src/infrastructure/database/entities/payment.e
 import { RefundEntity } from '../src/infrastructure/database/entities/refund.entity';
 import { InboxEntity } from '../src/infrastructure/database/entities/inbox.entity';
 import { DatabaseReadiness } from '../src/infrastructure/database/database-readiness.service';
+import { verifyEnablePayment } from './verify-enable-payment';
 
 const describeDatabase = process.env.PAYMENTS_VERIFY_POSTGRES === 'true' ? describe : describe.skip;
 
@@ -32,7 +33,7 @@ describeDatabase('Payments schema on disposable PostgreSQL', () => {
             const readiness = new DatabaseReadiness(runtime);
             expect(await readiness.check()).toBe(false);
             await migrator.initialize();
-            expect(await migrator.runMigrations()).toHaveLength(1);
+            expect(await migrator.runMigrations()).toHaveLength(2);
             expect(await migrator.runMigrations()).toHaveLength(0);
             expect(await readiness.check()).toBe(true);
             const payments = runtime.getRepository(PaymentEntity);
@@ -85,6 +86,7 @@ describeDatabase('Payments schema on disposable PostgreSQL', () => {
             await expect(runtime.query('CREATE TABLE app.forbidden_runtime_ddl(id integer)')).rejects.toMatchObject({
                 code: '42501',
             });
+            await verifyEnablePayment(runtime);
         } finally {
             if (runtime.isInitialized) await runtime.destroy();
             if (migrator.isInitialized) await migrator.destroy();

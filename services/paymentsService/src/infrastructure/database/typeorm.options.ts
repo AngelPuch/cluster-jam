@@ -6,6 +6,7 @@ import { RefundEntity } from './entities/refund.entity';
 import { InboxEntity } from './entities/inbox.entity';
 import { OutboxEntity } from './entities/outbox.entity';
 import { CreatePayments1795737600000 } from './migrations/1795737600000-create-payments';
+import { RecordStripeCreation1795741200000 } from './migrations/1795741200000-record-stripe-creation';
 
 export function createDatabaseOptions(input: Record<string, unknown> = process.env): DataSourceOptions {
     const config = validateEnvironment(input);
@@ -22,7 +23,7 @@ export function createDatabaseOptions(input: Record<string, unknown> = process.e
             : false,
         schema: 'app',
         entities: [PaymentEntity, RefundEntity, InboxEntity, OutboxEntity],
-        migrations: [CreatePayments1795737600000],
+        migrations: [CreatePayments1795737600000, RecordStripeCreation1795741200000],
         migrationsTableName: 'migrations_pagos',
         migrationsTransactionMode: 'all',
         synchronize: false,

@@ -1,10 +1,11 @@
 # Cluster JAM Payments Service
 
 NestJS/TypeScript service for the financial participant in the Orders-orchestrated
-purchase saga. This first increment provides HTTP health, PostgreSQL connectivity,
-safe errors, correlated JSON logs and Swagger. Payment/refund and inbox/outbox
-tables and command DTOs are implemented. AMQP handlers, Stripe and protected
-payment access follow in separate increments.
+purchase saga. It provides HTTP health, PostgreSQL persistence, command validation,
+safe logs/errors and the Stripe test-mode payment preparation core. The core
+persists operation identity before calling Stripe, then saves the result with
+inbox and a pending outbox event in one transaction. AMQP transport, signed
+webhooks, cancellation/refunds and protected payment access follow separately.
 There are no public payment operations yet.
 
 ## Run locally
@@ -40,6 +41,13 @@ cents and consumer/message deduplication. Stripe event IDs can use a separate
 inbox consumer. No card data, client secrets or webhook payloads are stored.
 See [the saga message contract](../../contracts/events/payments.v1.md).
 
+`STRIPE_SECRET_KEY` accepts test keys only and is optional while transport is
+not connected. No key means payment preparation fails safely; health still works.
+Creation uses a stable order idempotency key and does not confirm or accredit
+payment. An expired reservation is rejected only if no creation was attempted.
+An uncertain creation older than 23 hours requires manual recovery instead of
+reusing a potentially expired Stripe key. Client secrets are not persisted.
+
 Use `.env.example` for configuration. Staging/production require `DB_SSL=true`
 and a trusted PostgreSQL certificate; `DB_CA_PATH` supplies a private CA when
 needed. Keep credentials out of Git and leave the local Compose on development.
@@ -54,7 +62,10 @@ npm run format:check
 npm test
 ```
 
-CI also runs one PostgreSQL integration scenario on a disposable database.
+Tests use the real Stripe SDK against a local HTTP fixture, without credentials
+or external Stripe calls. CI also runs a PostgreSQL scenario covering migrations,
+financial constraints, lost responses, SQL rollback and duplicate delivery.
+Live Stripe sandbox verification still requires a private test key.
 To opt in locally, use an initialized local `payments_test_*` database and set
 `PAYMENTS_VERIFY_POSTGRES=true`, its connection variables and migration password.
 The integration fixture leaves records in that disposable database.
