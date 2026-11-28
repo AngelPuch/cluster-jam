@@ -48,4 +48,6 @@ attempts; publication failures remain pending in outbox.
 
 Client secrets, card data, tokens and credentials never appear in AMQP or logs.
 The client obtains payment access only through authenticated owner-scoped HTTP.
+Payments exposes owned status and PaymentSheet access under `/api/v1/payments`;
+the client cannot set prices or start cancellation/refund outside Orders.
 Orders owns saga state, the reservation-confirmation pivot and compensation.

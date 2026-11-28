@@ -7,6 +7,7 @@ import { ObservabilityModule } from './infrastructure/observability/observabilit
 import { HealthController } from './interfaces/http/health/health.controller';
 import { ProblemDetailsFilter } from './interfaces/http/common/problem-details.filter';
 import { PaymentsMessagingModule } from './payments-messaging.module';
+import { PaymentAccessModule } from './payment-access.module';
 
 @Module({
     imports: [
@@ -14,6 +15,7 @@ import { PaymentsMessagingModule } from './payments-messaging.module';
         ObservabilityModule,
         DatabaseModule,
         PaymentsMessagingModule,
+        PaymentAccessModule,
     ],
     controllers: [HealthController],
     providers: [{ provide: APP_FILTER, useClass: ProblemDetailsFilter }],

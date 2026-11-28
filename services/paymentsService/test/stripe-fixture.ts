@@ -57,15 +57,16 @@ export class StripeFixture {
             this.requests.push({ key, form });
             intent = this.intents.get(key);
             if (!intent) {
+                const intentId = 'pi_fixture' + randomUUID().replaceAll('-', '');
                 intent = {
-                    id: 'pi_fixture' + randomUUID().replaceAll('-', ''),
+                    id: intentId,
                     object: 'payment_intent',
                     livemode: false,
                     amount: Number(form.get('amount')),
                     amount_received: 0,
                     currency: form.get('currency'),
                     status: 'requires_payment_method',
-                    client_secret: 'pi_fixture_secret_local_only',
+                    client_secret: intentId + '_secret_local_only',
                     metadata: Object.fromEntries(
                         [...form.entries()]
                             .filter(([name]) => name.startsWith('metadata['))
