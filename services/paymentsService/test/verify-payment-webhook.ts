@@ -122,6 +122,11 @@ export async function verifyPaymentWebhook(database: DataSource): Promise<void> 
 
         const cancelled = await prepare();
         cancelled.remote.status = 'canceled';
+        cancelled.remote.amount_received = 1;
+        await post(notice(cancelled.remote, 'payment_intent.canceled')).expect(400);
+        expect((await payments.findOneByOrFail({ id: cancelled.prepared.id })).status).toBe('PENDIENTE');
+        expect(await results(cancelled.command.orderId)).toHaveLength(0);
+        cancelled.remote.amount_received = 0;
         await post(notice(cancelled.remote, 'payment_intent.canceled')).expect(200);
         await post(notice(cancelled.remote, 'payment_intent.canceled')).expect(200);
         expect((await payments.findOneByOrFail({ id: cancelled.prepared.id })).status).toBe('CANCELADO');

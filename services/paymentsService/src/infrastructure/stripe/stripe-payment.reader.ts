@@ -42,7 +42,8 @@ export class StripeCurrentPaymentReader implements StripePaymentReader {
             !STATUSES.has(intent.status) ||
             !Number.isSafeInteger(intent.amount_received) ||
             intent.amount_received < 0 ||
-            (intent.status === 'succeeded' && intent.amount_received !== intent.amount)
+            (intent.status === 'succeeded' && intent.amount_received !== intent.amount) ||
+            (intent.status === 'canceled' && intent.amount_received !== 0)
         )
             throw new PaymentProviderMismatch();
         return {
