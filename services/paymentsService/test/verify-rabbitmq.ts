@@ -5,7 +5,14 @@ import { setTimeout as delay } from 'node:timers/promises';
 import type { DataSource } from 'typeorm';
 import { PublishOutboxService } from '../src/application/outbox/publish-outbox.service';
 import { EnablePaymentService } from '../src/application/payments/enable-payment.service';
-import { PaymentMessageType, type EnablePayment } from '../src/application/payments/payment-messages';
+import { CancelPaymentService } from '../src/application/payments/cancel-payment.service';
+import { TypeormCancelPaymentStore } from '../src/infrastructure/database/typeorm-cancel-payment.store';
+import { StripeCancelGateway } from '../src/infrastructure/stripe/stripe-cancel.gateway';
+import {
+    PaymentMessageType,
+    type EnablePayment,
+    type PaymentCommand,
+} from '../src/application/payments/payment-messages';
 import { DatabaseReadiness } from '../src/infrastructure/database/database-readiness.service';
 import { InboxEntity } from '../src/infrastructure/database/entities/inbox.entity';
 import { OutboxEntity } from '../src/infrastructure/database/entities/outbox.entity';
@@ -37,7 +44,7 @@ async function take(channel: Channel, queue: string): Promise<GetMessage> {
 }
 async function send(
     channel: ConfirmChannel,
-    input: EnablePayment,
+    input: PaymentCommand,
     content = Buffer.from(JSON.stringify(input)),
 ): Promise<void> {
     await new Promise<void>((resolve, reject) =>
@@ -77,9 +84,10 @@ export async function verifyRabbitMq(database: DataSource): Promise<void> {
     let admin: ChannelModel | undefined;
     let worker: PaymentsMessagingWorker | undefined;
     try {
+        const stripe = await fixture.open();
         const service = new EnablePaymentService(
             new TypeormEnablePaymentStore(database, readiness),
-            new StripeIntentGateway(await fixture.open()),
+            new StripeIntentGateway(stripe),
         );
         const failedOrder = randomUUID();
         let attempts = 0;
@@ -95,6 +103,10 @@ export async function verifyRabbitMq(database: DataSource): Promise<void> {
             },
             logger,
             traces,
+            new CancelPaymentService(
+                new TypeormCancelPaymentStore(database, readiness),
+                new StripeCancelGateway(stripe),
+            ),
         );
         worker = new PaymentsMessagingWorker(config, broker, consumer, publication, logger);
         admin = await connect(adminUri);
@@ -170,6 +182,18 @@ export async function verifyRabbitMq(database: DataSource): Promise<void> {
         expect(await inbox.existsBy({ consumer: technical.type, messageId: technical.messageId })).toBe(false);
         expect(await outbox.countBy({ routingKey: PaymentMessageType.Enabled })).toBe(3);
         expect(fixture.requests).toHaveLength(1);
+        const cancellation: PaymentCommand = {
+            ...command,
+            messageId: randomUUID(),
+            type: PaymentMessageType.Cancel,
+            data: { paymentId: payment.id, reason: 'Cancel the prepared checkout' },
+        };
+        await send(channel, cancellation);
+        await waitFor(() => inbox.existsBy({ consumer: cancellation.type, messageId: cancellation.messageId }));
+        expect((await database.getRepository(PaymentEntity).findOneByOrFail({ id: payment.id })).status).toBe(
+            'CANCELADO',
+        );
+        expect(fixture.cancelEffects).toBe(1);
     } finally {
         await worker?.beforeApplicationShutdown();
         await broker.onApplicationShutdown();

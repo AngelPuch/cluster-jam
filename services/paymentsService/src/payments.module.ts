@@ -12,12 +12,19 @@ import { TypeormPaymentNoticeStore } from './infrastructure/database/typeorm-pay
 import { StripeCurrentPaymentReader } from './infrastructure/stripe/stripe-payment.reader';
 import { StripeWebhookVerifier } from './infrastructure/stripe/stripe-webhook.verifier';
 import { StripeWebhookController } from './interfaces/http/stripe/stripe-webhook.controller';
+import { CancelPaymentService } from './application/payments/cancel-payment.service';
+import { CANCEL_PAYMENT_STORE, CANCEL_PAYMENT_GATEWAY } from './application/ports/cancel-payment.port';
+import { TypeormCancelPaymentStore } from './infrastructure/database/typeorm-cancel-payment.store';
+import { StripeCancelGateway } from './infrastructure/stripe/stripe-cancel.gateway';
 
 @Module({
     imports: [DatabaseModule],
     controllers: [StripeWebhookController],
     providers: [
         EnablePaymentService,
+        CancelPaymentService,
+        { provide: CANCEL_PAYMENT_STORE, useClass: TypeormCancelPaymentStore },
+        { provide: CANCEL_PAYMENT_GATEWAY, useClass: StripeCancelGateway },
         ReceivePaymentNoticeService,
         StripeWebhookVerifier,
         { provide: PAYMENT_NOTICE_STORE, useClass: TypeormPaymentNoticeStore },
@@ -40,6 +47,6 @@ import { StripeWebhookController } from './interfaces/http/stripe/stripe-webhook
             },
         },
     ],
-    exports: [EnablePaymentService],
+    exports: [EnablePaymentService, CancelPaymentService],
 })
 export class PaymentsModule {}

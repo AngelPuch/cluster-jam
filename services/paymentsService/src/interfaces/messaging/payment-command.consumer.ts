@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { Channel, ConsumeMessage } from 'amqplib';
 import { setTimeout as delay } from 'node:timers/promises';
 import { EnablePaymentService } from '../../application/payments/enable-payment.service';
+import { CancelPaymentService } from '../../application/payments/cancel-payment.service';
 import {
     PaymentCommandConflict,
     PaymentProviderMismatch,
@@ -17,6 +18,7 @@ export class PaymentCommandConsumer {
         @Inject(EnablePaymentService) private readonly handler: Pick<EnablePaymentService, 'execute'>,
         private readonly logger: JsonLogger,
         private readonly traces: TraceContextService,
+        @Inject(CancelPaymentService) private readonly cancellation: Pick<CancelPaymentService, 'execute'>,
     ) {}
 
     async receive(message: ConsumeMessage, channel: Channel): Promise<void> {
@@ -40,7 +42,7 @@ export class PaymentCommandConsumer {
                     typeof orderId !== 'string' ||
                     orderId.toLowerCase() !== command.orderId.toLowerCase() ||
                     message.properties.type !== String(command.type) ||
-                    command.type !== PaymentMessageType.Enable
+                    command.type === PaymentMessageType.Refund
                 ) {
                     throw new InvalidPaymentCommand();
                 }
@@ -52,7 +54,8 @@ export class PaymentCommandConsumer {
             const metadata = { message_id: command.messageId, order_id: command.orderId, message_type: command.type };
             for (let attempt = 1; attempt <= 3; attempt++) {
                 try {
-                    await this.handler.execute(command);
+                    if (command.type === PaymentMessageType.Enable) await this.handler.execute(command);
+                    else await this.cancellation.execute(command);
                 } catch (error) {
                     const permanent =
                         error instanceof PaymentCommandConflict ||

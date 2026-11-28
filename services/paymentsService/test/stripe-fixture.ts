@@ -7,6 +7,12 @@ export class StripeFixture {
     readonly requests: Array<{ key: string; form: URLSearchParams }> = [];
     readonly intents = new Map<string, Record<string, unknown>>();
     readonly retrievals: string[] = [];
+    readonly cancellations: Array<{ id: string; key: string }> = [];
+    cancelEffects = 0;
+    dropCancelResponses = 0;
+    succeedOnNextCancel = false;
+    blockCancellation = false;
+    private readonly cancelledKeys = new Map<string, Record<string, unknown>>();
     dropCreateResponses = 0;
     responseOverride: Record<string, unknown> = {};
     private readonly server = createServer((request, response) => {
@@ -66,6 +72,39 @@ export class StripeFixture {
             }
             if (this.dropCreateResponses > 0) {
                 this.dropCreateResponses--;
+                response.destroy();
+                return;
+            }
+        } else if (request.method === 'POST' && request.url?.endsWith('/cancel')) {
+            const id = request.url.split('/')[3];
+            const key = String(request.headers['idempotency-key'] ?? '');
+            this.cancellations.push({ id, key });
+            intent = [...this.intents.values()].find((value) => value.id === id);
+            if (intent && !this.cancelledKeys.has(key)) {
+                if (this.succeedOnNextCancel) {
+                    this.succeedOnNextCancel = false;
+                    intent.status = 'succeeded';
+                    intent.amount_received = intent.amount;
+                }
+                if (this.blockCancellation) intent.status = 'processing';
+                if (intent.status === 'succeeded' || this.blockCancellation) {
+                    response.writeHead(400, { 'Content-Type': 'application/json' }).end(
+                        JSON.stringify({
+                            error: {
+                                type: 'invalid_request_error',
+                                code: 'payment_intent_unexpected_state',
+                                message: 'Fixture intent cannot be cancelled.',
+                            },
+                        }),
+                    );
+                    return;
+                }
+                intent.status = 'canceled';
+                this.cancelEffects++;
+                this.cancelledKeys.set(key, intent);
+            }
+            if (this.dropCancelResponses > 0) {
+                this.dropCancelResponses--;
                 response.destroy();
                 return;
             }

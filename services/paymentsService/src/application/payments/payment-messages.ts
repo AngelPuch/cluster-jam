@@ -28,10 +28,9 @@ interface PaymentActionData {
     reason: string;
 }
 export type EnablePayment = Envelope<PaymentMessageType.Enable, EnablePaymentData>;
-export type PaymentCommand =
-    | EnablePayment
-    | Envelope<PaymentMessageType.Cancel, PaymentActionData>
-    | Envelope<PaymentMessageType.Refund, PaymentActionData>;
+export type CancelPayment = Envelope<PaymentMessageType.Cancel, PaymentActionData>;
+export type RefundPayment = Envelope<PaymentMessageType.Refund, PaymentActionData>;
+export type PaymentCommand = EnablePayment | CancelPayment | RefundPayment;
 export type PaymentEvent =
     | Envelope<PaymentMessageType.Enabled, { paymentId: string; reservationId: string }>
     | Envelope<
