@@ -15,8 +15,8 @@ export class HealthController {
     }
 
     @Get('ready')
-    @ApiOperation({ summary: 'Check PostgreSQL access; payment processing is not implemented yet' })
-    @ApiResponse({ status: 200, description: 'Database is accessible.' })
+    @ApiOperation({ summary: 'Check PostgreSQL and the required schema migration; Stripe is not integrated yet' })
+    @ApiResponse({ status: 200, description: 'Database and schema are ready.' })
     @ApiResponse({ status: 503, description: 'Database is unavailable.' })
     async ready(): Promise<{ status: string }> {
         if (!(await this.database.check())) throw new ServiceUnavailableException();

@@ -1,5 +1,6 @@
 import { Injectable, type OnApplicationShutdown } from '@nestjs/common';
 import { DataSource } from 'typeorm';
+import { PAYMENTS_MIGRATION_NAME, PAYMENTS_SCHEMA_VERSION } from './migrations/1795737600000-create-payments';
 
 @Injectable()
 export class DatabaseReadiness implements OnApplicationShutdown {
@@ -18,8 +19,11 @@ export class DatabaseReadiness implements OnApplicationShutdown {
                 await this.opening;
             }
             if (this.stopping) return false;
-            await this.database.query('SELECT 1');
-            return true;
+            const rows = await this.database.query<Array<{ ready: boolean }>>(
+                'SELECT EXISTS(SELECT 1 FROM app.migrations_pagos WHERE timestamp = $1 AND name = $2) AS ready',
+                [PAYMENTS_SCHEMA_VERSION, PAYMENTS_MIGRATION_NAME],
+            );
+            return rows[0]?.ready === true;
         } catch {
             return false;
         }
