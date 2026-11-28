@@ -1,4 +1,5 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import { randomUUID } from 'node:crypto';
 import Stripe from 'stripe';
 
 // Local HTTP fixture exercises the real SDK without contacting Stripe.
@@ -46,7 +47,7 @@ export class StripeFixture {
             intent = this.intents.get(key);
             if (!intent) {
                 intent = {
-                    id: 'pi_fixture' + (this.intents.size + 1),
+                    id: 'pi_fixture' + randomUUID().replaceAll('-', ''),
                     object: 'payment_intent',
                     livemode: false,
                     amount: Number(form.get('amount')),

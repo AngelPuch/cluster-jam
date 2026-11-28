@@ -7,6 +7,7 @@ import { RefundEntity } from '../src/infrastructure/database/entities/refund.ent
 import { InboxEntity } from '../src/infrastructure/database/entities/inbox.entity';
 import { DatabaseReadiness } from '../src/infrastructure/database/database-readiness.service';
 import { verifyEnablePayment } from './verify-enable-payment';
+import { verifyRabbitMq } from './verify-rabbitmq';
 
 const describeDatabase = process.env.PAYMENTS_VERIFY_POSTGRES === 'true' ? describe : describe.skip;
 
@@ -87,6 +88,7 @@ describeDatabase('Payments schema on disposable PostgreSQL', () => {
                 code: '42501',
             });
             await verifyEnablePayment(runtime);
+            if (process.env.PAYMENTS_VERIFY_RABBITMQ === 'true') await verifyRabbitMq(runtime);
         } finally {
             if (runtime.isInitialized) await runtime.destroy();
             if (migrator.isInitialized) await migrator.destroy();

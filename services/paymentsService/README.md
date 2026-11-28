@@ -4,8 +4,9 @@ NestJS/TypeScript service for the financial participant in the Orders-orchestrat
 purchase saga. It provides HTTP health, PostgreSQL persistence, command validation,
 safe logs/errors and the Stripe test-mode payment preparation core. The core
 persists operation identity before calling Stripe, then saves the result with
-inbox and a pending outbox event in one transaction. AMQP transport, signed
-webhooks, cancellation/refunds and protected payment access follow separately.
+inbox and a pending outbox event in one transaction. RabbitMQ consumes enable
+commands with manual ACK after commit and publishes outbox every five seconds.
+Signed webhooks, cancellation/refunds and protected payment access follow separately.
 There are no public payment operations yet.
 
 ## Run locally
@@ -41,12 +42,22 @@ cents and consumer/message deduplication. Stripe event IDs can use a separate
 inbox consumer. No card data, client secrets or webhook payloads are stored.
 See [the saga message contract](../../contracts/events/payments.v1.md).
 
-`STRIPE_SECRET_KEY` accepts test keys only and is optional while transport is
-not connected. No key means payment preparation fails safely; health still works.
+`STRIPE_SECRET_KEY` accepts test keys only. Without it, the command consumer stays
+paused and commands remain queued; outbox publication and HTTP health still work.
 Creation uses a stable order idempotency key and does not confirm or accredit
 payment. An expired reservation is rejected only if no creation was attempted.
 An uncertain creation older than 23 hours requires manual recovery instead of
 reusing a potentially expired Stripe key. Client secrets are not persisted.
+
+To enable local AMQP, start `infra/rabbitmq/compose.yaml`, then run
+`python infra/payments/provision-local.py` from the root with
+`PAYMENTS_BROKER_ADMIN_PASSWORD` and `PAYMENTS_RABBITMQ_PASSWORD` in the shell.
+Set `RABBITMQ_ENABLED=true` and the provisioned account's `RABBITMQ_URI` in `.env`.
+Staging/production require AMQPS with verified TLS; a private CA is optional.
+The runtime account only reads its queue and publishes `payments.events`.
+Invalid commands or three exhausted technical attempts go to the native DLQ;
+manual replay preserves the message ID. Cancel/refund handlers follow separately
+and their commands currently go to DLQ. No financial success is invented.
 
 Use `.env.example` for configuration. Staging/production require `DB_SSL=true`
 and a trusted PostgreSQL certificate; `DB_CA_PATH` supplies a private CA when
@@ -64,11 +75,16 @@ npm test
 
 Tests use the real Stripe SDK against a local HTTP fixture, without credentials
 or external Stripe calls. CI also runs a PostgreSQL scenario covering migrations,
-financial constraints, lost responses, SQL rollback and duplicate delivery.
+financial constraints, lost responses, SQL rollback, RabbitMQ duplicate delivery,
+reconnection, native DLQ and pending outbox recovery after an unroutable publish.
 Live Stripe sandbox verification still requires a private test key.
 To opt in locally, use an initialized local `payments_test_*` database and set
 `PAYMENTS_VERIFY_POSTGRES=true`, its connection variables and migration password.
 The integration fixture leaves records in that disposable database.
+AMQP integration also requires `PAYMENTS_VERIFY_RABBITMQ=true`, a provisioned
+loopback `payments_test_*` vhost and `PAYMENTS_TEST_RABBITMQ_URI` for its admin.
+Provision it with `PAYMENTS_RABBITMQ_VHOST` set to that test vhost name;
+its runtime user is `<test-vhost>-consumer`.
 
 From the repository root, build the non-root runtime image with:
 

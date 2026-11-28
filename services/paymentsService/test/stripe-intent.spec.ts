@@ -42,7 +42,8 @@ describe('Stripe test-mode adapter using the real SDK', () => {
                 'allowed_payment_method_types[0]': 'card',
                 'metadata[payment_id]': prepared.id,
             });
-            expect(first).toEqual({ id: 'pi_fixture1', status: 'requires_payment_method' });
+            expect(first.id).toMatch(/^pi_fixture[0-9a-f]{32}$/);
+            expect(first).toEqual({ id: first.id, status: 'requires_payment_method' });
         } finally {
             await fixture.close();
         }
