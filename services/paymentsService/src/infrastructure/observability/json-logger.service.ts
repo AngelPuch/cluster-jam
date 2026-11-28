@@ -15,6 +15,7 @@ const EVENTS: Record<string, string> = {
     'payments.command.committed': 'Payment command committed before acknowledgement.',
     'payments.command.rejected': 'Payment command rejected to the broker dead-letter queue.',
     'payments.outbox.confirmed': 'Payment event received a routed broker confirmation.',
+    'payments.webhook.processed': 'Verified Stripe payment notification processed.',
     'framework.error': 'Framework operation failed.',
     'framework.warning': 'Framework warning.',
     'framework.message': 'Framework diagnostic event.',
@@ -79,6 +80,9 @@ export class JsonLogger implements LoggerService {
         if (typeof input.message_type === 'string' && MESSAGE_TYPES.has(input.message_type))
             metadata.message_type = input.message_type;
         if (typeof input.reason === 'string' && REASONS.has(input.reason)) metadata.reason = input.reason;
+        if (typeof input.stripe_event_id === 'string' && /^evt_[A-Za-z0-9]{1,200}$/.test(input.stripe_event_id)) {
+            metadata.stripe_event_id = input.stripe_event_id;
+        }
         const output = effective === 'ERROR' ? process.stderr : process.stdout;
         if (output.writableLength > 65536) return;
         output.write(

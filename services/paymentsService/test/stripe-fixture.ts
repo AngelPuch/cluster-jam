@@ -6,6 +6,7 @@ import Stripe from 'stripe';
 export class StripeFixture {
     readonly requests: Array<{ key: string; form: URLSearchParams }> = [];
     readonly intents = new Map<string, Record<string, unknown>>();
+    readonly retrievals: string[] = [];
     dropCreateResponses = 0;
     responseOverride: Record<string, unknown> = {};
     private readonly server = createServer((request, response) => {
@@ -51,6 +52,7 @@ export class StripeFixture {
                     object: 'payment_intent',
                     livemode: false,
                     amount: Number(form.get('amount')),
+                    amount_received: 0,
                     currency: form.get('currency'),
                     status: 'requires_payment_method',
                     client_secret: 'pi_fixture_secret_local_only',
@@ -68,6 +70,7 @@ export class StripeFixture {
                 return;
             }
         } else if (request.method === 'GET') {
+            this.retrievals.push(request.url ?? '');
             intent = [...this.intents.values()].find(
                 (value) => request.url === '/v1/payment_intents/' + String(value.id),
             );
